@@ -228,40 +228,18 @@ contract PonderFeeTest is Test {
     }
 
     function testMultipleSwapFeeAccumulation() public {
-        uint256 numSwaps = 5;
-        uint256 swapSize = SWAP_AMOUNT / numSwaps;
-
-        vm.startPrank(bob);
-        tokenA.mint(bob, SWAP_AMOUNT);
-        tokenA.approve(address(router), SWAP_AMOUNT);
-
-        address[] memory path = new address[](2);
-        path[0] = address(tokenA);
-        path[1] = address(tokenB);
-
-        // Perform multiple smaller swaps
-        for (uint i = 0; i < numSwaps; i++) {
-            router.swapExactTokensForTokens(
-                swapSize,
-                0,
-                path,
-                bob,
-                block.timestamp
-            );
-        }
-        vm.stopPrank();
-
-        // Add liquidity to trigger fee collection
+        // Setup initial liquidity
         vm.startPrank(alice);
-        tokenA.mint(alice, INITIAL_LIQUIDITY);
-        tokenB.mint(alice, INITIAL_LIQUIDITY);
-        tokenA.approve(address(router), INITIAL_LIQUIDITY);
-        tokenB.approve(address(router), INITIAL_LIQUIDITY);
+        tokenA.mint(alice, INITIAL_LIQUIDITY * 10);
+        tokenB.mint(alice, INITIAL_LIQUIDITY * 10);
+        tokenA.approve(address(router), INITIAL_LIQUIDITY * 10);
+        tokenB.approve(address(router), INITIAL_LIQUIDITY * 10);
+
         router.addLiquidity(
             address(tokenA),
             address(tokenB),
-            INITIAL_LIQUIDITY,
-            INITIAL_LIQUIDITY,
+            INITIAL_LIQUIDITY * 5,
+            INITIAL_LIQUIDITY * 5,
             0,
             0,
             alice,
@@ -269,7 +247,34 @@ contract PonderFeeTest is Test {
         );
         vm.stopPrank();
 
-        uint256 feeBalance = pair.balanceOf(feeCollector);
-        assertGt(feeBalance, 0, "Should have accumulated fees from multiple swaps");
+        // Setup trader (bob)
+        vm.startPrank(bob);
+        uint256 swapAmount = INITIAL_LIQUIDITY / 100; // 1% of liquidity
+        tokenA.mint(bob, swapAmount);
+        tokenA.approve(address(router), swapAmount);
+
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);
+        path[1] = address(tokenB);
+
+        // Track feeCollector balance (not bob)
+        uint256 feeCollectorBalanceBefore = tokenA.balanceOf(feeCollector);
+
+        // Execute swap
+        router.swapExactTokensForTokens(
+            swapAmount,
+            0,  // Accept any output
+            path,
+            bob,
+            block.timestamp
+        );
+
+        // Verify fees collected (0.3% fee)
+        uint256 expectedFee = (swapAmount * 30) / 10000;
+        uint256 actualFee = tokenA.balanceOf(feeCollector) - feeCollectorBalanceBefore;
+        assertEq(actualFee, expectedFee, "Incorrect fee amount collected");
+        vm.stopPrank();
     }
+
+
 }

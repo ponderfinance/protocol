@@ -112,45 +112,50 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         return (amount0In, amount1In);
     }
 
-
     function _handleTokenFees(address token, uint256 amountIn, bool isPonderPair) private {
+        if (amountIn == 0) return;
+
         address feeTo = IPonderFactory(factory).feeTo();
         uint256 totalFeeAmount = 0;
 
         try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
-            if (isLaunch && ILaunchToken(token).launcher() == launcher()) {
+            // Only apply special fees when launch token is input (being sold)
+            if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
                 address creator = ILaunchToken(token).creator();
 
+                // Launch token -> PONDER pair fees
                 if (isPonderPair) {
-                    // Calculate both fees from the original amount
                     if (feeTo != address(0)) {
-                        uint256 protocolFee = (amountIn * PONDER_LP_FEE) / FEE_DENOMINATOR;
+                        uint256 protocolFee = (amountIn * 15) / 10000;
                         _safeTransfer(token, feeTo, protocolFee);
                         totalFeeAmount += protocolFee;
                     }
-
-                    uint256 creatorFee = (amountIn * PONDER_CREATOR_FEE) / FEE_DENOMINATOR;
-                    _safeTransfer(token, creator, creatorFee);
-                    totalFeeAmount += creatorFee;
-                } else {
-                    if (feeTo != address(0)) {
-                        uint256 protocolFee = (amountIn * KUB_LP_FEE) / FEE_DENOMINATOR;
-                        _safeTransfer(token, feeTo, protocolFee);
-                        totalFeeAmount += protocolFee;
-                    }
-
-                    uint256 creatorFee = (amountIn * KUB_CREATOR_FEE) / FEE_DENOMINATOR;
+                    uint256 creatorFee = (amountIn * 15) / 10000;
                     _safeTransfer(token, creator, creatorFee);
                     totalFeeAmount += creatorFee;
                 }
-            } else if (feeTo != address(0)) {
-                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
+                    // Launch token -> KUB pair fees
+                else {
+                    if (feeTo != address(0)) {
+                        uint256 protocolFee = (amountIn * 20) / 10000;
+                        _safeTransfer(token, feeTo, protocolFee);
+                        totalFeeAmount += protocolFee;
+                    }
+                    uint256 creatorFee = (amountIn * 10) / 10000;
+                    _safeTransfer(token, creator, creatorFee);
+                    totalFeeAmount += creatorFee;
+                }
+            }
+                // Standard 0.3% fee for all other cases
+            else if (feeTo != address(0)) {
+                uint256 protocolFee = (amountIn * 30) / 10000;
                 _safeTransfer(token, feeTo, protocolFee);
                 totalFeeAmount += protocolFee;
             }
         } catch {
+            // Standard 0.3% fee for non-launch tokens
             if (feeTo != address(0)) {
-                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
+                uint256 protocolFee = (amountIn * 30) / 10000;
                 _safeTransfer(token, feeTo, protocolFee);
                 totalFeeAmount += protocolFee;
             }
@@ -161,37 +166,11 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         }
     }
 
-    function _validateKValue(SwapData memory data) private view returns (bool) {
-        uint256 balance0Adjusted = data.balance0 * 10000;
-        uint256 balance1Adjusted = data.balance1 * 10000;
+    function _validateKValue(SwapData memory data) private pure returns (bool) {
+        uint256 balance0Adjusted = data.balance0 * 1000 - (data.amount0In * 3);
+        uint256 balance1Adjusted = data.balance1 * 1000 - (data.amount1In * 3);
 
-        if (data.amount0In > 0) {
-            uint256 fee = STANDARD_FEE;
-            try ILaunchToken(token0).launcher() returns (address launchLauncher) {
-                if (launchLauncher == launcher()) {
-                    fee = (token1 == ponder()) ?
-                        (PONDER_LP_FEE + PONDER_CREATOR_FEE) :
-                        (KUB_LP_FEE + KUB_CREATOR_FEE);
-                }
-            } catch { }
-            balance0Adjusted -= data.amount0In * fee;
-        }
-
-        if (data.amount1In > 0) {
-            uint256 fee = STANDARD_FEE;
-            try ILaunchToken(token1).launcher() returns (address launchLauncher) {
-                if (launchLauncher == launcher()) {
-                    fee = (token0 == ponder()) ?
-                        (PONDER_LP_FEE + PONDER_CREATOR_FEE) :
-                        (KUB_LP_FEE + KUB_CREATOR_FEE);
-                }
-            } catch { }
-            balance1Adjusted -= data.amount1In * fee;
-        }
-
-        uint256 reserveProduct = uint256(data.reserve0) * uint256(data.reserve1) * 1000000;
-
-        return balance0Adjusted * balance1Adjusted >= reserveProduct;
+        return balance0Adjusted * balance1Adjusted >= uint256(data.reserve0) * uint256(data.reserve1) * 1000000;
     }
 
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override lock {

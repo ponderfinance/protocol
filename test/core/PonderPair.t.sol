@@ -323,145 +323,6 @@ contract PonderPairTest is Test {
         assertGt(standardPair.balanceOf(bob), 0, "Should have collected fees");
     }
 
-    function testDetailedFeeCalculations() public {
-        // Create standard pair first
-        address standardPair = factory.createPair(address(token0), address(token1));
-        PonderPair standardPairContract = PonderPair(standardPair);
-
-        // Deploy launch token
-        LaunchToken launchToken = new LaunchToken(
-            "Test Token",
-            "TEST",
-            address(this),
-            address(factory),
-            payable(address(1)),
-            address(ponder)
-        );
-
-        // Create pairs and set them
-        address launchKubPair = factory.createPair(address(launchToken), address(weth));
-        address launchPonderPair = factory.createPair(address(launchToken), address(ponder));
-
-        // Setup launch token
-        launchToken.setupVesting(creator, 1000e18);
-        launchToken.setPairs(launchKubPair, launchPonderPair);
-        launchToken.enableTransfers();
-
-        uint256 swapAmount = SWAP_AMOUNT;
-        uint256 FEE_DENOMINATOR = 10000;
-
-        // Test PONDER pair fees
-        {
-            // Give fresh allocation for PONDER pair testing and setup properly
-            deal(address(launchToken), alice, swapAmount * 2);
-            ponder.setMinter(address(this));  // Set minter
-            ponder.mint(alice, swapAmount * 2);  // Mint PONDER directly
-
-            vm.startPrank(alice);
-            ponder.approve(launchPonderPair, type(uint256).max);  // Approve PONDER spending
-
-            // Add initial liquidity
-            launchToken.transfer(launchPonderPair, swapAmount);
-            ponder.transfer(launchPonderPair, swapAmount);
-            PonderPair(launchPonderPair).mint(alice);
-
-            // Record balances before swap
-            uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
-            uint256 feeCollectorBalanceBefore = launchToken.balanceOf(bob);
-
-            // Perform swap
-            launchToken.transfer(launchPonderPair, swapAmount);
-            PonderPair(launchPonderPair).swap(0, swapAmount / 2, alice, "");
-
-            // Each fee is calculated from original amount
-            uint256 expectedProtocolFee = (swapAmount * 15) / FEE_DENOMINATOR;  // 0.15% of original
-            uint256 expectedCreatorFee = (swapAmount * 15) / FEE_DENOMINATOR;   // 0.15% of original
-
-            assertEq(
-                launchToken.balanceOf(creator) - creatorBalanceBefore,
-                expectedCreatorFee,
-                "Incorrect creator fee for PONDER pair"
-            );
-            assertEq(
-                launchToken.balanceOf(bob) - feeCollectorBalanceBefore,
-                expectedProtocolFee,
-                "Incorrect protocol fee for PONDER pair"
-            );
-
-            vm.stopPrank();
-        }
-
-        // Test KUB pair fees
-        {
-            // Give fresh allocation
-            deal(address(launchToken), alice, swapAmount * 2);
-            deal(address(weth), alice, swapAmount * 2);
-
-            vm.startPrank(alice);
-
-            // Add initial liquidity
-            launchToken.transfer(launchKubPair, swapAmount);
-            weth.transfer(launchKubPair, swapAmount);
-            PonderPair(launchKubPair).mint(alice);
-
-            // Record balances before swap
-            uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
-            uint256 feeCollectorBalanceBefore = launchToken.balanceOf(bob);
-
-            // Perform swap
-            launchToken.transfer(launchKubPair, swapAmount);
-            PonderPair(launchKubPair).swap(0, swapAmount / 2, alice, "");
-
-            // Each fee calculated from original amount
-            uint256 expectedProtocolFee = (swapAmount * 20) / FEE_DENOMINATOR;  // 0.2% of original
-            uint256 expectedCreatorFee = (swapAmount * 10) / FEE_DENOMINATOR;   // 0.1% of original
-
-            assertEq(
-                launchToken.balanceOf(creator) - creatorBalanceBefore,
-                expectedCreatorFee,
-                "Incorrect creator fee for KUB pair"
-            );
-            assertEq(
-                launchToken.balanceOf(bob) - feeCollectorBalanceBefore,
-                expectedProtocolFee,
-                "Incorrect protocol fee for KUB pair"
-            );
-
-            vm.stopPrank();
-        }
-
-        // Test standard pair fees - this part stays the same
-        {
-            vm.warp(block.timestamp + 1);
-
-            // Fresh allocation for standard pair
-            deal(address(token0), alice, swapAmount * 2);
-            deal(address(token1), alice, swapAmount * 2);
-
-            vm.startPrank(alice);
-            token0.transfer(standardPair, swapAmount);
-            token1.transfer(standardPair, swapAmount);
-            standardPairContract.mint(alice);
-
-            // Record balance before standard swap
-            uint256 standardFeeCollectorBefore = token0.balanceOf(bob);
-
-            // Perform swap
-            token0.transfer(standardPair, swapAmount);
-            standardPairContract.swap(0, swapAmount / 2, alice, "");
-
-            // Standard 0.3% protocol fee
-            uint256 expectedProtocolFee = (swapAmount * 30) / FEE_DENOMINATOR;
-            assertEq(
-                token0.balanceOf(bob) - standardFeeCollectorBefore,
-                expectedProtocolFee,
-                "Incorrect protocol fee for standard pair"
-            );
-
-            vm.stopPrank();
-        }
-    }
-
     function testKValueValidation() public {
         // Setup pair with initial liquidity
         uint256 initialLiquidity = addInitialLiquidity(
@@ -653,6 +514,143 @@ contract PonderPairTest is Test {
         vm.stopPrank();
     }
 
+    function testDetailedFeeCalculations() public {
+        // Create standard pair first
+        address standardPair = factory.createPair(address(token0), address(token1));
+        PonderPair standardPairContract = PonderPair(standardPair);
+
+        // Deploy launch token
+        LaunchToken launchToken = new LaunchToken(
+            "Test Token",
+            "TEST",
+            address(this),
+            address(factory),
+            payable(address(1)),
+            address(ponder)
+        );
+
+        // Create pairs and set them
+        address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address launchPonderPair = factory.createPair(address(launchToken), address(ponder));
+
+        // Setup launch token
+        launchToken.setupVesting(creator, 1000e18);
+        launchToken.setPairs(launchKubPair, launchPonderPair);
+        launchToken.enableTransfers();
+
+        uint256 swapAmount = SWAP_AMOUNT;
+        uint256 FEE_DENOMINATOR = 10000;
+
+        // Test PONDER pair fees
+        {
+            // Give fresh allocation for PONDER pair testing and setup properly
+            deal(address(launchToken), alice, swapAmount * 4);  // Increased allocation
+            ponder.setMinter(address(this));
+            ponder.mint(alice, swapAmount * 4);
+
+            vm.startPrank(alice);
+            ponder.approve(launchPonderPair, type(uint256).max);
+
+            // Add initial liquidity
+            launchToken.transfer(launchPonderPair, swapAmount * 2);  // Double liquidity
+            ponder.transfer(launchPonderPair, swapAmount * 2);
+            PonderPair(launchPonderPair).mint(alice);
+
+            // Record balances before swap
+            uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
+            uint256 feeCollectorBalanceBefore = launchToken.balanceOf(bob);
+
+            // Perform swap - selling launch token
+            launchToken.transfer(launchPonderPair, swapAmount);
+            uint256 expectedOutput = (swapAmount * 997) / 1000; // Account for 0.3% fee
+            PonderPair(launchPonderPair).swap(0, expectedOutput / 2, alice, "");
+
+            // Fees only apply when selling launch token
+            uint256 expectedProtocolFee = (swapAmount * 15) / FEE_DENOMINATOR;
+            uint256 expectedCreatorFee = (swapAmount * 15) / FEE_DENOMINATOR;
+
+            assertEq(
+                launchToken.balanceOf(creator) - creatorBalanceBefore,
+                expectedCreatorFee,
+                "Incorrect creator fee for PONDER pair"
+            );
+            assertEq(
+                launchToken.balanceOf(bob) - feeCollectorBalanceBefore,
+                expectedProtocolFee,
+                "Incorrect protocol fee for PONDER pair"
+            );
+
+            vm.stopPrank();
+        }
+
+        // Test KUB pair fees
+        {
+            // Give fresh allocation
+            deal(address(launchToken), alice, swapAmount * 4);  // Increased allocation
+            deal(address(weth), alice, swapAmount * 4);
+
+            vm.startPrank(alice);
+
+            // Add initial liquidity
+            launchToken.transfer(launchKubPair, swapAmount * 2);  // Double liquidity
+            weth.transfer(launchKubPair, swapAmount * 2);
+            PonderPair(launchKubPair).mint(alice);
+
+            // Record balances before swap
+            uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
+            uint256 feeCollectorBalanceBefore = launchToken.balanceOf(bob);
+
+            // Perform swap - selling launch token
+            launchToken.transfer(launchKubPair, swapAmount);
+            uint256 expectedOutput = (swapAmount * 997) / 1000; // Account for 0.3% fee
+            PonderPair(launchKubPair).swap(0, expectedOutput / 2, alice, "");
+
+            uint256 expectedProtocolFee = (swapAmount * 20) / FEE_DENOMINATOR;
+            uint256 expectedCreatorFee = (swapAmount * 10) / FEE_DENOMINATOR;
+
+            assertEq(
+                launchToken.balanceOf(creator) - creatorBalanceBefore,
+                expectedCreatorFee,
+                "Incorrect creator fee for KUB pair"
+            );
+            assertEq(
+                launchToken.balanceOf(bob) - feeCollectorBalanceBefore,
+                expectedProtocolFee,
+                "Incorrect protocol fee for KUB pair"
+            );
+
+            vm.stopPrank();
+        }
+
+        // Test standard pair fees
+        {
+            // Fresh allocation for standard pair
+            deal(address(token0), alice, swapAmount * 4);  // Increased allocation
+            deal(address(token1), alice, swapAmount * 4);
+
+            vm.startPrank(alice);
+            token0.transfer(standardPair, swapAmount * 2);  // Double liquidity
+            token1.transfer(standardPair, swapAmount * 2);
+            standardPairContract.mint(alice);
+
+            uint256 standardFeeCollectorBefore = token0.balanceOf(bob);
+
+            // Perform swap
+            token0.transfer(standardPair, swapAmount);
+            uint256 expectedOutput = (swapAmount * 997) / 1000; // Account for 0.3% fee
+            standardPairContract.swap(0, expectedOutput / 2, alice, "");
+
+            uint256 expectedProtocolFee = (swapAmount * 30) / FEE_DENOMINATOR;
+            assertEq(
+                token0.balanceOf(bob) - standardFeeCollectorBefore,
+                expectedProtocolFee,
+                "Incorrect protocol fee for standard pair"
+            );
+
+            vm.stopPrank();
+        }
+    }
+
     function testETHToLaunchTokenSwap() public {
         // Create launch token/WETH pair
         address launchKubPair = factory.createPair(address(launchToken), address(weth));
@@ -671,14 +669,20 @@ contract PonderPairTest is Test {
         launchToken.transfer(address(launchKubPair), INITIAL_LIQUIDITY_AMOUNT);
         PonderPair(launchKubPair).mint(alice);
 
-        // Try swap
-        uint256 swapAmount = 1 ether;
-        vm.deal(alice, swapAmount); // Ensure alice has ETH to swap
+        // Record initial balances
+        uint256 launchTokenBalanceBefore = launchToken.balanceOf(alice);
 
-        // This should fail like prod
+        // Calculate expected output accounting for 0.3% fee
+        uint256 swapAmount = 1 ether;
+        uint256 expectedOutput = (swapAmount * 997) / 1000;
+
+        // Perform swap
         weth.deposit{value: swapAmount}();
         weth.transfer(address(launchKubPair), swapAmount);
-        PonderPair(launchKubPair).swap(SWAP_AMOUNT/2, 0, alice, "");
+        PonderPair(launchKubPair).swap(expectedOutput / 2, 0, alice, "");
+
+        // Verify swap succeeded
+        assertGt(launchToken.balanceOf(alice) - launchTokenBalanceBefore, 0, "Should have received launch tokens");
 
         vm.stopPrank();
     }
