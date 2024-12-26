@@ -71,6 +71,9 @@ contract PonderFeeTest is Test {
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
         uint256 initialK = uint256(reserve0) * uint256(reserve1);
 
+        // Record initial fee collector balance
+        uint256 initialTokenABalance = tokenA.balanceOf(feeCollector);
+
         // Do swaps to generate fees
         vm.startPrank(bob);
         tokenA.mint(bob, SWAP_AMOUNT);
@@ -89,17 +92,19 @@ contract PonderFeeTest is Test {
         );
         vm.stopPrank();
 
-        // Add more liquidity to trigger fee mint
+        // Check that fee collector received protocol fees from swap
+        uint256 feeAmount = tokenA.balanceOf(feeCollector) - initialTokenABalance;
+        assertGt(feeAmount, 0, "No swap fees collected");
+        assertEq(feeAmount, (SWAP_AMOUNT * 30) / 10000, "Incorrect fee amount"); // 0.3% fee
+
+        // Add more liquidity
         vm.startPrank(alice);
         tokenA.mint(alice, INITIAL_LIQUIDITY);
         tokenB.mint(alice, INITIAL_LIQUIDITY);
         tokenA.approve(address(router), INITIAL_LIQUIDITY);
         tokenB.approve(address(router), INITIAL_LIQUIDITY);
 
-        vm.expectEmit(true, true, true, true);
-        emit Transfer(address(0), feeCollector, 247527203253285432);  // Use the actual fee amount
-
-    router.addLiquidity(
+        router.addLiquidity(
             address(tokenA),
             address(tokenB),
             INITIAL_LIQUIDITY,
@@ -111,10 +116,6 @@ contract PonderFeeTest is Test {
         );
         vm.stopPrank();
 
-        // Check fee collector balance
-        uint256 feeBalance = pair.balanceOf(feeCollector);
-        assertGt(feeBalance, 0, "No fees collected");
-
         // Verify K increased
         (reserve0, reserve1,) = pair.getReserves();
         uint256 finalK = uint256(reserve0) * uint256(reserve1);
@@ -124,6 +125,9 @@ contract PonderFeeTest is Test {
     function testFeeToggles() public {
         // Initial state - fees enabled
         assertTrue(factory.feeTo() == feeCollector);
+
+        // Record initial fee collector balance
+        uint256 initialTokenABalance = tokenA.balanceOf(feeCollector);
 
         // Do some swaps
         vm.startPrank(bob);
@@ -143,30 +147,17 @@ contract PonderFeeTest is Test {
         );
         vm.stopPrank();
 
-        // Add liquidity to collect fees
-        vm.startPrank(alice);
-        tokenA.mint(alice, INITIAL_LIQUIDITY);
-        tokenB.mint(alice, INITIAL_LIQUIDITY);
-        tokenA.approve(address(router), INITIAL_LIQUIDITY);
-        tokenB.approve(address(router), INITIAL_LIQUIDITY);
-        router.addLiquidity(
-            address(tokenA),
-            address(tokenB),
-            INITIAL_LIQUIDITY,
-            INITIAL_LIQUIDITY,
-            0,
-            0,
-            alice,
-            block.timestamp
-        );
-        vm.stopPrank();
-
-        uint256 initialFeeBalance = pair.balanceOf(feeCollector);
-        assertGt(initialFeeBalance, 0, "Should have collected initial fees");
+        // Check fees were collected
+        uint256 feesCollected = tokenA.balanceOf(feeCollector) - initialTokenABalance;
+        assertGt(feesCollected, 0, "Should have collected initial fees");
+        assertEq(feesCollected, (SWAP_AMOUNT * 30) / 10000, "Incorrect fee amount"); // 0.3% fee
 
         // Disable fees
         vm.prank(address(this));
         factory.setFeeTo(address(0));
+
+        // Record balance before next swap
+        uint256 balanceBeforeSecondSwap = tokenA.balanceOf(feeCollector);
 
         // Do more swaps
         vm.startPrank(bob);
@@ -181,26 +172,12 @@ contract PonderFeeTest is Test {
         );
         vm.stopPrank();
 
-        // Add more liquidity
-        vm.startPrank(alice);
-        tokenA.mint(alice, INITIAL_LIQUIDITY);
-        tokenB.mint(alice, INITIAL_LIQUIDITY);
-        tokenA.approve(address(router), INITIAL_LIQUIDITY);
-        tokenB.approve(address(router), INITIAL_LIQUIDITY);
-        router.addLiquidity(
-            address(tokenA),
-            address(tokenB),
-            INITIAL_LIQUIDITY,
-            INITIAL_LIQUIDITY,
-            0,
-            0,
-            alice,
-            block.timestamp
+        // Verify no new fees were collected
+        assertEq(
+            tokenA.balanceOf(feeCollector),
+            balanceBeforeSecondSwap,
+            "Should not collect fees when disabled"
         );
-        vm.stopPrank();
-
-        uint256 finalFeeBalance = pair.balanceOf(feeCollector);
-        assertEq(finalFeeBalance, initialFeeBalance, "Fee balance should not change when fees disabled");
     }
 
     function testKLastTracking() public {
@@ -275,6 +252,5 @@ contract PonderFeeTest is Test {
         assertEq(actualFee, expectedFee, "Incorrect fee amount collected");
         vm.stopPrank();
     }
-
 
 }

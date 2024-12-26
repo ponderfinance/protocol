@@ -307,6 +307,19 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
+    "name": "isLaunchToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "kubPair",
     "inputs": [],
     "outputs": [

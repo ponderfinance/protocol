@@ -72,7 +72,13 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         require(success && (data.length == 0 || abi.decode(data, (bool))), "Transfer failed");
     }
 
-    // Helper struct to hold swap data
+    function _executeTransfers(address to, uint256 amount0Out, uint256 amount1Out, bytes calldata data) private {
+        if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
+        if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
+        if (data.length > 0) IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
+    }
+
+    // Update the SwapData struct to include output flags
     struct SwapData {
         uint256 amount0Out;
         uint256 amount1Out;
@@ -84,10 +90,126 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         uint112 reserve1;
     }
 
-    function _executeTransfers(address to, uint256 amount0Out, uint256 amount1Out, bytes calldata data) private {
-        if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
-        if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
-        if (data.length > 0) IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
+    function _handleTokenFees(
+        address token,
+        uint256 amountIn,
+        bool isPonderPair,
+        address token0Address,
+        address token1Address,
+        uint256 amount0Out,
+        uint256 amount1Out
+    ) private {
+        if (amountIn == 0) return;
+
+        address feeTo = IPonderFactory(factory).feeTo();
+        uint256 totalFeeAmount = 0;
+
+        // Check if this token is being sold (input) vs bought (output)
+        bool isTokenOutput = (token == token0Address && amount0Out > 0) ||
+            (token == token1Address && amount1Out > 0);
+
+        // If token is being bought (output), only apply standard fee
+        if (isTokenOutput) {
+            if (feeTo != address(0)) {
+                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
+                _safeTransfer(token, feeTo, protocolFee);
+                totalFeeAmount += protocolFee;
+            }
+            return;
+        }
+
+        try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
+            // Only apply special fees when launch token is input (being sold)
+            if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
+                address creator = ILaunchToken(token).creator();
+
+                // Launch token -> PONDER pair fees
+                if (isPonderPair) {
+                    if (feeTo != address(0)) {
+                        uint256 protocolFee = (amountIn * PONDER_LP_FEE) / FEE_DENOMINATOR;
+                        _safeTransfer(token, feeTo, protocolFee);
+                        totalFeeAmount += protocolFee;
+                    }
+                    uint256 creatorFee = (amountIn * PONDER_CREATOR_FEE) / FEE_DENOMINATOR;
+                    _safeTransfer(token, creator, creatorFee);
+                    totalFeeAmount += creatorFee;
+                } else {
+                    // Launch token -> KUB pair fees
+                    if (feeTo != address(0)) {
+                        uint256 protocolFee = (amountIn * KUB_LP_FEE) / FEE_DENOMINATOR;
+                        _safeTransfer(token, feeTo, protocolFee);
+                        totalFeeAmount += protocolFee;
+                    }
+                    uint256 creatorFee = (amountIn * KUB_CREATOR_FEE) / FEE_DENOMINATOR;
+                    _safeTransfer(token, creator, creatorFee);
+                    totalFeeAmount += creatorFee;
+                }
+            } else if (feeTo != address(0)) {
+                // Standard 0.3% fee for all other cases
+                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
+                _safeTransfer(token, feeTo, protocolFee);
+                totalFeeAmount += protocolFee;
+            }
+        } catch {
+            // Standard 0.3% fee for non-launch tokens
+            if (feeTo != address(0)) {
+                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
+                _safeTransfer(token, feeTo, protocolFee);
+                totalFeeAmount += protocolFee;
+            }
+        }
+
+        if (totalFeeAmount > amountIn) {
+            revert FeeTooHigh(totalFeeAmount, amountIn);
+        }
+    }
+
+    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override lock {
+        require(amount0Out > 0 || amount1Out > 0, "Insufficient output amount");
+        require(to != token0 && to != token1, "Invalid to");
+
+        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
+        require(amount0Out < _reserve0 && amount1Out < _reserve1, "Insufficient liquidity");
+
+        // Execute initial transfers first
+        _executeTransfers(to, amount0Out, amount1Out, data);
+
+        // Store all our data in the struct to avoid stack too deep
+        SwapData memory swapData;
+        swapData.amount0Out = amount0Out;
+        swapData.amount1Out = amount1Out;
+        swapData.reserve0 = _reserve0;
+        swapData.reserve1 = _reserve1;
+        swapData.balance0 = IERC20(token0).balanceOf(address(this));
+        swapData.balance1 = IERC20(token1).balanceOf(address(this));
+
+        // Calculate amounts in (exactly like Uniswap V2)
+        swapData.amount0In = swapData.balance0 > swapData.reserve0 - amount0Out ?
+            swapData.balance0 - (swapData.reserve0 - amount0Out) : 0;
+        swapData.amount1In = swapData.balance1 > swapData.reserve1 - amount1Out ?
+            swapData.balance1 - (swapData.reserve1 - amount1Out) : 0;
+
+        require(swapData.amount0In > 0 || swapData.amount1In > 0, "Insufficient input amount");
+
+        // Validate K value
+        require(_validateKValue(swapData), "K value check failed");
+
+        // Handle fees after K check
+        bool isPonderPair = token0 == ponder() || token1 == ponder();
+        if (swapData.amount0In > 0) {
+            _handleTokenFees(token0, swapData.amount0In, isPonderPair, token0, token1, amount0Out, amount1Out);
+        }
+        if (swapData.amount1In > 0) {
+            _handleTokenFees(token1, swapData.amount1In, isPonderPair, token0, token1, amount0Out, amount1Out);
+        }
+
+        _update(
+            IERC20(token0).balanceOf(address(this)),
+            IERC20(token1).balanceOf(address(this)),
+            _reserve0,
+            _reserve1
+        );
+        emit Swap(msg.sender, swapData.amount0In, swapData.amount1In, amount0Out, amount1Out, to);
     }
 
     function _calculateInputAmounts(SwapData memory data) private view returns (uint256, uint256) {
@@ -101,111 +223,15 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
             revert InsufficientInputCalculated(amount0In, amount1In, data.balance0, data.balance1);
         }
 
-        // Additional validation for reserve calculations
-        if (data.amount0Out > 0 && data.balance0 < data.reserve0 - data.amount0Out) {
-            revert ReserveCalculationFailed(data.balance0, data.balance1, data.reserve0, data.reserve1);
-        }
-        if (data.amount1Out > 0 && data.balance1 < data.reserve1 - data.amount1Out) {
-            revert ReserveCalculationFailed(data.balance0, data.balance1, data.reserve0, data.reserve1);
-        }
-
         return (amount0In, amount1In);
-    }
-
-    function _handleTokenFees(address token, uint256 amountIn, bool isPonderPair) private {
-        if (amountIn == 0) return;
-
-        address feeTo = IPonderFactory(factory).feeTo();
-        uint256 totalFeeAmount = 0;
-
-        try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
-            // Only apply special fees when launch token is input (being sold)
-            if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
-                address creator = ILaunchToken(token).creator();
-
-                // Launch token -> PONDER pair fees
-                if (isPonderPair) {
-                    if (feeTo != address(0)) {
-                        uint256 protocolFee = (amountIn * 15) / 10000;
-                        _safeTransfer(token, feeTo, protocolFee);
-                        totalFeeAmount += protocolFee;
-                    }
-                    uint256 creatorFee = (amountIn * 15) / 10000;
-                    _safeTransfer(token, creator, creatorFee);
-                    totalFeeAmount += creatorFee;
-                }
-                    // Launch token -> KUB pair fees
-                else {
-                    if (feeTo != address(0)) {
-                        uint256 protocolFee = (amountIn * 20) / 10000;
-                        _safeTransfer(token, feeTo, protocolFee);
-                        totalFeeAmount += protocolFee;
-                    }
-                    uint256 creatorFee = (amountIn * 10) / 10000;
-                    _safeTransfer(token, creator, creatorFee);
-                    totalFeeAmount += creatorFee;
-                }
-            }
-                // Standard 0.3% fee for all other cases
-            else if (feeTo != address(0)) {
-                uint256 protocolFee = (amountIn * 30) / 10000;
-                _safeTransfer(token, feeTo, protocolFee);
-                totalFeeAmount += protocolFee;
-            }
-        } catch {
-            // Standard 0.3% fee for non-launch tokens
-            if (feeTo != address(0)) {
-                uint256 protocolFee = (amountIn * 30) / 10000;
-                _safeTransfer(token, feeTo, protocolFee);
-                totalFeeAmount += protocolFee;
-            }
-        }
-
-        if (totalFeeAmount > amountIn) {
-            revert FeeTooHigh(totalFeeAmount, amountIn);
-        }
     }
 
     function _validateKValue(SwapData memory data) private pure returns (bool) {
         uint256 balance0Adjusted = data.balance0 * 1000 - (data.amount0In * 3);
         uint256 balance1Adjusted = data.balance1 * 1000 - (data.amount1In * 3);
 
-        return balance0Adjusted * balance1Adjusted >= uint256(data.reserve0) * uint256(data.reserve1) * 1000000;
-    }
-
-    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override lock {
-        require(amount0Out > 0 || amount1Out > 0, "Insufficient output amount");
-        require(to != token0 && to != token1, "Invalid to");
-
-        (uint112 reserve0, uint112 reserve1,) = getReserves();
-        require(amount0Out < reserve0 && amount1Out < reserve1, "Insufficient liquidity");
-
-        // Execute initial transfers
-        _executeTransfers(to, amount0Out, amount1Out, data);
-
-        // Get balances and calculate amounts
-        SwapData memory swapData;
-        swapData.amount0Out = amount0Out;
-        swapData.amount1Out = amount1Out;
-        swapData.reserve0 = reserve0;
-        swapData.reserve1 = reserve1;
-        swapData.balance0 = IERC20(token0).balanceOf(address(this));
-        swapData.balance1 = IERC20(token1).balanceOf(address(this));
-
-        (swapData.amount0In, swapData.amount1In) = _calculateInputAmounts(swapData);
-
-        require(swapData.amount0In > 0 || swapData.amount1In > 0, "Insufficient input amount");
-
-        // Validate K value before fees
-        require(_validateKValue(swapData), "K value check failed");
-
-        // Handle fees
-        bool isPonderPair = token0 == ponder() || token1 == ponder();
-        if (swapData.amount0In > 0) _handleTokenFees(token0, swapData.amount0In, isPonderPair);
-        if (swapData.amount1In > 0) _handleTokenFees(token1, swapData.amount1In, isPonderPair);
-
-        _update(swapData.balance0, swapData.balance1, reserve0, reserve1);
-        emit Swap(msg.sender, swapData.amount0In, swapData.amount1In, amount0Out, amount1Out, to);
+        return balance0Adjusted * balance1Adjusted >=
+            uint256(data.reserve0) * uint256(data.reserve1) * (1000 * 1000);
     }
 
     function burn(address to) external override lock returns (uint256 amount0, uint256 amount1) {

@@ -253,4 +253,92 @@ contract PonderRouterTest is Test {
         assertGt(alice.balance - ethBalanceBefore, 0, "Should receive ETH");
         vm.stopPrank();
     }
+
+    function testBidirectionalLaunchTokenSwaps() public {
+        vm.startPrank(alice);
+
+        // Add liquidity
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(launchToken),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Buy launch tokens
+        uint256 launchTokenBalanceBefore = launchToken.balanceOf(alice);
+        address[] memory buyPath = new address[](2);
+        buyPath[0] = address(weth);
+        buyPath[1] = address(launchToken);
+
+        router.swapExactETHForTokens{value: 1 ether}(
+            0,
+            buyPath,
+            alice,
+            block.timestamp + 1
+        );
+
+        uint256 received = launchToken.balanceOf(alice) - launchTokenBalanceBefore;
+
+        // Sell 90% of received amount
+        uint256 sellAmount = (received * 90) / 100;
+
+        address[] memory sellPath = new address[](2);
+        sellPath[0] = address(launchToken);
+        sellPath[1] = address(weth);
+
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            sellAmount,
+            0,
+            sellPath,
+            alice,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
+
+    function testLaunchTokenFeeAmounts() public {
+        vm.startPrank(alice);
+
+        // Setup pair with initial liquidity
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(launchToken),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Record initial balances
+        uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
+        uint256 bobBalanceBefore = launchToken.balanceOf(bob);  // feeTo address
+
+        // Perform a sell of launch token
+        uint256 sellAmount = 1000e18;
+        address[] memory path = new address[](2);
+        path[0] = address(launchToken);
+        path[1] = address(weth);
+
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            sellAmount,
+            0,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Check fee distributions
+        uint256 creatorFee = launchToken.balanceOf(creator) - creatorBalanceBefore;
+        uint256 protocolFee = launchToken.balanceOf(bob) - bobBalanceBefore;
+
+        // For KUB pair: creator should get 0.1%, protocol should get 0.2%
+        assertEq(creatorFee, sellAmount * 10 / 10000, "Incorrect creator fee");
+        assertEq(protocolFee, sellAmount * 20 / 10000, "Incorrect protocol fee");
+
+        vm.stopPrank();
+    }
 }
