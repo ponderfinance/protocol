@@ -114,7 +114,7 @@ contract PonderIntegrationTest is Test {
         // Add LP pool to MasterChef
         vm.startPrank(address(this));
         ponder.setMinter(address(masterChef));
-        masterChef.add(100, address(pair), 0, 10000, true);
+        masterChef.add(100, address(pair), 0, 20000, true);
         vm.stopPrank();
 
         // Stake LP tokens

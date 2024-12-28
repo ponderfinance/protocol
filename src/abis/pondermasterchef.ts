@@ -32,6 +32,71 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "BASE_MULTIPLIER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "BASIS_POINTS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "BOOST_THRESHOLD_PERCENT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_EXTRA_BOOST_PERCENT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_BOOST_MULTIPLIER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "add",
     "inputs": [
       {
@@ -101,6 +166,35 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "calculateBoostMultiplier",
+    "inputs": [
+      {
+        "name": "ponderStaked",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lpAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxBoost",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "deposit",
     "inputs": [
       {
@@ -142,6 +236,30 @@ export const pondermasterchefAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRequiredPonderForBoost",
+    "inputs": [
+      {
+        "name": "lpAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "targetMultiplier",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -290,6 +408,35 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "previewBoostMultiplier",
+    "inputs": [
+      {
+        "name": "_pid",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ponderStaked",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lpAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "set",
     "inputs": [
       {
@@ -306,6 +453,19 @@ export const pondermasterchefAbi = [
         "name": "_withUpdate",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPonderPerSecond",
+    "inputs": [
+      {
+        "name": "_ponderPerSecond",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -530,6 +690,19 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "event",
+    "name": "PonderPerSecondUpdated",
+    "inputs": [
+      {
+        "name": "newPonderPerSecond",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PoolAdded",
     "inputs": [
       {
@@ -618,12 +791,22 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "error",
+    "name": "ExcessiveDepositFee",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "Forbidden",
     "inputs": []
   },
   {
     "type": "error",
     "name": "InsufficientAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBoostMultiplier",
     "inputs": []
   },
   {

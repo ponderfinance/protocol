@@ -38,6 +38,23 @@ contract PonderMasterChef is IPonderMasterChef {
     /// @notice Future owner in 2-step transfer
     address public pendingOwner;
 
+    /// @notice Base points for percentage calculations
+    uint256 public constant BASIS_POINTS = 10000;
+
+    /// @notice Base multiplier (1x = 10000)
+    uint256 public constant BASE_MULTIPLIER = 10000;
+
+    /// @notice Minimum boost multiplier (2x = 20000)
+    uint256 public constant MIN_BOOST_MULTIPLIER = 20000;
+
+    /// @notice Required PONDER stake relative to LP value (10%)
+    uint256 public constant BOOST_THRESHOLD_PERCENT = 1000;
+
+    /// @notice Maximum additional boost percentage (100%)
+    uint256 public constant MAX_EXTRA_BOOST_PERCENT = 10000;
+
+    error InvalidBoostMultiplier();
+    error ExcessiveDepositFee();
     error Forbidden();
     error InvalidPool();
     error InvalidPair();
@@ -91,9 +108,15 @@ contract PonderMasterChef is IPonderMasterChef {
         pending = (user.amount * accPonderPerShare) / 1e12 - user.rewardDebt;
 
         // Apply boost if user has staked PONDER
-        if (user.ponderStaked > 0 && pool.boostMultiplier > 10000) {
-            uint256 boost = (pending * (pool.boostMultiplier - 10000)) / 10000;
-            pending += boost;
+        if (user.ponderStaked > 0) {
+            uint256 boost = calculateBoostMultiplier(
+                user.ponderStaked,
+                user.amount,
+                pool.boostMultiplier
+            );
+            if (boost > BASE_MULTIPLIER) {
+                pending = (pending * boost) / BASE_MULTIPLIER;
+            }
         }
     }
 
@@ -105,9 +128,9 @@ contract PonderMasterChef is IPonderMasterChef {
         uint16 _boostMultiplier,
         bool _withUpdate
     ) external onlyOwner {
-        if (_depositFeeBP > 1000) revert InvalidPool(); // max 10% fee
-        if (_boostMultiplier < 10000) revert InvalidPool(); // min 1x boost
-        if (_boostMultiplier > 30000) revert InvalidPool(); // max 3x boost
+        if (_depositFeeBP > 1000) revert ExcessiveDepositFee(); // max 10% fee
+        if (_boostMultiplier < MIN_BOOST_MULTIPLIER) revert InvalidBoostMultiplier(); // min 2x boost
+        if (_boostMultiplier > 50000) revert InvalidBoostMultiplier(); // max 5x boost
 
         if (_withUpdate) {
             massUpdatePools();
@@ -133,6 +156,7 @@ contract PonderMasterChef is IPonderMasterChef {
 
         emit PoolAdded(poolInfo.length - 1, _lpToken, _allocPoint);
     }
+
 
     /// @notice Update reward variables for all pools
     function massUpdatePools() public {
@@ -191,10 +215,18 @@ contract PonderMasterChef is IPonderMasterChef {
 
         updatePool(_pid);
 
-        // Harvest existing rewards
+        // Harvest existing rewards with boost
         if (user.amount > 0) {
             uint256 pending = (user.amount * pool.accPonderPerShare) / 1e12 - user.rewardDebt;
             if (pending > 0) {
+                uint256 boost = calculateBoostMultiplier(
+                    user.ponderStaked,
+                    user.amount,
+                    pool.boostMultiplier
+                );
+                if (boost > BASE_MULTIPLIER) {
+                    pending = (pending * boost) / BASE_MULTIPLIER;
+                }
                 safePonderTransfer(msg.sender, pending);
             }
         }
@@ -203,10 +235,10 @@ contract PonderMasterChef is IPonderMasterChef {
             uint256 beforeBalance = IERC20(pool.lpToken).balanceOf(address(this));
             IERC20(pool.lpToken).transferFrom(msg.sender, address(this), _amount);
             uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
-            _amount = afterBalance - beforeBalance; // Handle tokens with transfer tax
+            _amount = afterBalance - beforeBalance;
 
             if (pool.depositFeeBP > 0) {
-                uint256 depositFee = (_amount * pool.depositFeeBP) / 10000;
+                uint256 depositFee = (_amount * pool.depositFeeBP) / BASIS_POINTS;
                 IERC20(pool.lpToken).transfer(treasury, depositFee);
                 _amount = _amount - depositFee;
             }
@@ -229,9 +261,17 @@ contract PonderMasterChef is IPonderMasterChef {
 
         updatePool(_pid);
 
-        // Harvest rewards
+        // Harvest rewards with boost
         uint256 pending = (user.amount * pool.accPonderPerShare) / 1e12 - user.rewardDebt;
         if (pending > 0) {
+            uint256 boost = calculateBoostMultiplier(
+                user.ponderStaked,
+                user.amount,
+                pool.boostMultiplier
+            );
+            if (boost > BASE_MULTIPLIER) {
+                pending = (pending * boost) / BASE_MULTIPLIER;
+            }
             safePonderTransfer(msg.sender, pending);
         }
 
@@ -264,20 +304,27 @@ contract PonderMasterChef is IPonderMasterChef {
     /// @notice Stake PONDER tokens to boost rewards
     function boostStake(uint256 _pid, uint256 _amount) external {
         if (_pid >= poolInfo.length) revert InvalidPool();
+        if (_amount == 0) revert ZeroAmount();
         UserInfo storage user = userInfo[_pid][msg.sender];
 
         updatePool(_pid);
 
-        // Harvest existing rewards
+        // Harvest existing rewards with current boost
         uint256 pending = (user.amount * poolInfo[_pid].accPonderPerShare) / 1e12 - user.rewardDebt;
         if (pending > 0) {
+            uint256 boost = calculateBoostMultiplier(
+                user.ponderStaked,
+                user.amount,
+                poolInfo[_pid].boostMultiplier
+            );
+            if (boost > BASE_MULTIPLIER) {
+                pending = (pending * boost) / BASE_MULTIPLIER;
+            }
             safePonderTransfer(msg.sender, pending);
         }
 
-        if (_amount > 0) {
-            ponder.transferFrom(msg.sender, address(this), _amount);
-            user.ponderStaked += _amount;
-        }
+        ponder.transferFrom(msg.sender, address(this), _amount);
+        user.ponderStaked += _amount;
 
         user.rewardDebt = (user.amount * poolInfo[_pid].accPonderPerShare) / 1e12;
         emit BoostStake(msg.sender, _pid, _amount);
@@ -286,15 +333,24 @@ contract PonderMasterChef is IPonderMasterChef {
     /// @notice Unstake PONDER tokens used for boost
     function boostUnstake(uint256 _pid, uint256 _amount) external {
         if (_pid >= poolInfo.length) revert InvalidPool();
+        if (_amount == 0) revert ZeroAmount();
         UserInfo storage user = userInfo[_pid][msg.sender];
 
         if (user.ponderStaked < _amount) revert InsufficientAmount();
 
         updatePool(_pid);
 
-        // Harvest existing rewards
+        // Harvest existing rewards with current boost
         uint256 pending = (user.amount * poolInfo[_pid].accPonderPerShare) / 1e12 - user.rewardDebt;
         if (pending > 0) {
+            uint256 boost = calculateBoostMultiplier(
+                user.ponderStaked,
+                user.amount,
+                poolInfo[_pid].boostMultiplier
+            );
+            if (boost > BASE_MULTIPLIER) {
+                pending = (pending * boost) / BASE_MULTIPLIER;
+            }
             safePonderTransfer(msg.sender, pending);
         }
 
@@ -323,5 +379,72 @@ contract PonderMasterChef is IPonderMasterChef {
         address oldTreasury = treasury;
         treasury = _treasury;
         emit TreasuryUpdated(oldTreasury, _treasury);
+    }
+
+    /// @notice Calculate boost multiplier based on PONDER stake relative to LP value
+    function calculateBoostMultiplier(
+        uint256 ponderStaked,
+        uint256 lpAmount,
+        uint256 maxBoost
+    ) public pure returns (uint256) {
+        if (ponderStaked == 0 || lpAmount == 0) {
+            return BASE_MULTIPLIER;
+        }
+
+        // Calculate required PONDER for minimum boost (10% of LP value)
+        uint256 requiredPonder = (lpAmount * BOOST_THRESHOLD_PERCENT) / BASIS_POINTS;
+
+        if (ponderStaked < requiredPonder) {
+            return BASE_MULTIPLIER;
+        }
+
+        // Calculate excess PONDER stake beyond minimum requirement
+        uint256 excessPonder = ponderStaked - requiredPonder;
+
+        // Calculate additional boost (linear scaling)
+        uint256 extraBoost = (excessPonder * MAX_EXTRA_BOOST_PERCENT) / requiredPonder;
+
+        // Cap at pool's maximum boost
+        uint256 totalBoost = MIN_BOOST_MULTIPLIER + extraBoost;
+        return totalBoost > maxBoost ? maxBoost : totalBoost;
+    }
+
+    /// @notice Calculate required PONDER stake for desired boost multiplier
+    function getRequiredPonderForBoost(
+        uint256 lpAmount,
+        uint256 targetMultiplier
+    ) external pure returns (uint256) {
+        if (targetMultiplier <= BASE_MULTIPLIER) {
+            return 0;
+        }
+        if (targetMultiplier < MIN_BOOST_MULTIPLIER) {
+            return (lpAmount * BOOST_THRESHOLD_PERCENT) / BASIS_POINTS;
+        }
+
+        uint256 extraBoost = targetMultiplier - MIN_BOOST_MULTIPLIER;
+        uint256 baseRequired = (lpAmount * BOOST_THRESHOLD_PERCENT) / BASIS_POINTS;
+        uint256 additionalRequired = (baseRequired * extraBoost) / MAX_EXTRA_BOOST_PERCENT;
+
+        return baseRequired + additionalRequired;
+    }
+
+    /// @notice Preview boost multiplier for given stake amounts
+    function previewBoostMultiplier(
+        uint256 _pid,
+        uint256 ponderStaked,
+        uint256 lpAmount
+    ) external view returns (uint256) {
+        if (_pid >= poolInfo.length) revert InvalidPool();
+        return calculateBoostMultiplier(
+            ponderStaked,
+            lpAmount,
+            poolInfo[_pid].boostMultiplier
+        );
+    }
+
+    function setPonderPerSecond(uint256 _ponderPerSecond) external onlyOwner {
+        massUpdatePools();
+        ponderPerSecond = _ponderPerSecond;
+        emit PonderPerSecondUpdated(ponderPerSecond);
     }
 }

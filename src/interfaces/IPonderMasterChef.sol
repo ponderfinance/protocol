@@ -55,4 +55,5 @@ interface IPonderMasterChef {
     event PoolAdded(uint256 indexed pid, address indexed lpToken, uint256 allocPoint);
     event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    event PonderPerSecondUpdated(uint256 newPonderPerSecond);
 }

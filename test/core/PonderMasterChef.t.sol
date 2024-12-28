@@ -146,7 +146,7 @@ contract PonderMasterChefTest is Test {
 
     function testRewards() public {
         // Add pool
-        masterChef.add(100, address(pair), 0, 10000, true);
+        masterChef.add(100, address(pair), 0, 20000, true);
         uint256 depositAmount = 100e18;
 
         // Alice deposits
@@ -198,7 +198,7 @@ contract PonderMasterChefTest is Test {
 
     function testWithdraw() public {
         // Add pool
-        masterChef.add(100, address(pair), 0, 10000, true);
+        masterChef.add(100, address(pair), 0, 20000, true);
         uint256 depositAmount = 100e18;
 
         // Setup deposit
@@ -226,7 +226,7 @@ contract PonderMasterChefTest is Test {
 
     function testEmergencyWithdraw() public {
         // Add pool
-        masterChef.add(100, address(pair), 0, 10000, true);
+        masterChef.add(100, address(pair), 0, 20000, true);
         uint256 depositAmount = 100e18;
 
         // Setup deposit
@@ -253,7 +253,7 @@ contract PonderMasterChefTest is Test {
 
     function testMultipleUsers() public {
         // Add pool
-        masterChef.add(100, address(pair), 0, 10000, true);
+        masterChef.add(100, address(pair), 0, 20000, true);
         uint256 depositAmount = 100e18;
 
         // Give Bob some LP tokens

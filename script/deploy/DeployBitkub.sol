@@ -5,6 +5,8 @@ import "../../src/core/PonderFactory.sol";
 import "../../src/core/PonderMasterChef.sol";
 import "../../src/core/PonderPriceOracle.sol";
 import "../../src/core/PonderToken.sol";
+import "../../src/core/PonderStaking.sol";
+import "../../src/core/FeeDistributor.sol";
 import "../../src/launch/FiveFiveFiveLauncher.sol";
 import "../../src/periphery/KKUBUnwrapper.sol";
 import "../../src/periphery/PonderRouter.sol";
@@ -41,6 +43,8 @@ contract DeployBitkubScript is Script {
         address ponderKubPair;
         address masterChef;
         address launcher;
+        address staking;
+        address feeDistributor;
     }
 
     function validateAddresses(
@@ -52,29 +56,10 @@ contract DeployBitkubScript is Script {
         if (treasury == address(0) ||
         teamReserve == address(0) ||
         marketing == address(0) ||
-            deployer == address(0)) {
+            deployer == address(0)
+        ) {
             revert InvalidAddress();
         }
-    }
-
-    function setupInitialPrices(
-        PonderToken ponder,
-        PonderRouter router,
-        PonderPriceOracle oracle,
-        address ponderKubPair
-    ) internal {
-        console.log("Initial timestamp:", block.timestamp);
-
-        // Add liquidity
-        ponder.approve(address(router), INITIAL_PONDER_AMOUNT);
-        router.addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
-            address(ponder),
-            INITIAL_PONDER_AMOUNT,
-            INITIAL_PONDER_AMOUNT,
-            INITIAL_KUB_AMOUNT,
-            address(this),
-            block.timestamp + 1 hours
-        );
     }
 
     function run() external {
@@ -95,12 +80,6 @@ contract DeployBitkubScript is Script {
             teamReserve,
             marketing
         );
-
-        // Final configuration
-        PonderToken(addresses.ponder).setMinter(addresses.masterChef);
-        PonderFactory(addresses.factory).setLauncher(addresses.launcher);
-        PonderFactory(addresses.factory).setPonder( addresses.ponder);
-        console.log("Factory launcher set to:", addresses.launcher);
 
         vm.stopBroadcast();
 
@@ -144,12 +123,31 @@ contract DeployBitkubScript is Script {
         // 4. Deploy oracle
         PonderPriceOracle oracle = new PonderPriceOracle(
             address(factory),
-                ponderKubPair,
-        address(USDT)
+            KKUB,
+            USDT
         );
         _verifyContract("PonderPriceOracle", address(oracle));
 
-        // 5. Deploy launcher
+        // 5. Deploy PonderStaking (xPONDER)
+        PonderStaking staking = new PonderStaking(
+            address(ponder),
+            address(router),
+            address(factory)
+        );
+        _verifyContract("PonderStaking", address(staking));
+
+        // 6. Deploy fee distributor
+        FeeDistributor feeDistributor = new FeeDistributor(
+            address(factory),
+            address(router),
+            address(ponder),
+            address(staking),
+            treasury,
+            teamReserve
+        );
+        _verifyContract("FeeDistributor", address(feeDistributor));
+
+        // 7. Deploy launcher
         FiveFiveFiveLauncher launcher = new FiveFiveFiveLauncher(
             address(factory),
             payable(address(router)),
@@ -159,11 +157,7 @@ contract DeployBitkubScript is Script {
         );
         _verifyContract("Launcher", address(launcher));
 
-        // 6. Set launcher in PONDER token
-        ponder.setLauncher(address(launcher));
-        console.log("PONDER launcher set to:", address(launcher));
-
-        // 7. Deploy MasterChef
+        // 8. Deploy MasterChef
         PonderMasterChef masterChef = new PonderMasterChef(
             ponder,
             factory,
@@ -173,10 +167,17 @@ contract DeployBitkubScript is Script {
         );
         _verifyContract("MasterChef", address(masterChef));
 
-        // 8. Setup initial prices and liquidity
+        // 9. Setup initial prices and liquidity
         setupInitialPrices(ponder, router, oracle, ponderKubPair);
 
-        return DeploymentAddresses({
+        // 10. Final configuration
+        ponder.setMinter(address(masterChef));
+        ponder.setLauncher(address(launcher));
+        factory.setLauncher(address(launcher));
+        factory.setPonder(address(ponder));
+        factory.setFeeTo(address(feeDistributor));
+
+        addresses = DeploymentAddresses({
             ponder: address(ponder),
             factory: address(factory),
             kkubUnwrapper: address(kkubUnwrapper),
@@ -184,8 +185,32 @@ contract DeployBitkubScript is Script {
             oracle: address(oracle),
             ponderKubPair: ponderKubPair,
             masterChef: address(masterChef),
-            launcher: address(launcher)
+            launcher: address(launcher),
+            staking: address(staking),
+            feeDistributor: address(feeDistributor)
         });
+
+        return addresses;
+    }
+
+    function setupInitialPrices(
+        PonderToken ponder,
+        PonderRouter router,
+        PonderPriceOracle oracle,
+        address ponderKubPair
+    ) internal {
+        console.log("Initial timestamp:", block.timestamp);
+
+        // Add liquidity
+        ponder.approve(address(router), INITIAL_PONDER_AMOUNT);
+        router.addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
+            address(ponder),
+            INITIAL_PONDER_AMOUNT,
+            INITIAL_PONDER_AMOUNT,
+            INITIAL_KUB_AMOUNT,
+            address(this),
+            block.timestamp + 1 hours
+        );
     }
 
     function _verifyContract(string memory name, address contractAddress) internal view {
@@ -209,7 +234,15 @@ contract DeployBitkubScript is Script {
         console.log("PONDER/KKUB Pair:", addresses.ponderKubPair);
         console.log("MasterChef:", addresses.masterChef);
         console.log("FiveFiveFiveLauncher:", addresses.launcher);
+        console.log("PonderStaking (xPONDER):", addresses.staking);
+        console.log("FeeDistributor:", addresses.feeDistributor);
         console.log("Treasury:", treasury);
+
+        console.log("\nProtocol Fee Configuration:");
+        console.log("--------------------------------");
+        console.log("Protocol fees enabled: Yes");
+        console.log("Fee collector: FeeDistributor");
+        console.log("Distribution: 50% xPONDER, 30% Treasury, 20% Team");
 
         console.log("\nInitial Liquidity Details:");
         console.log("--------------------------------");

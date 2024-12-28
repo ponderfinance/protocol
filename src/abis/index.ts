@@ -7,3 +7,5 @@ export * from './pondermasterchef.js';
 export * from './kkubunwrapper.js';
 export * from './fivefivefivelauncher.js';
 export * from './launchtoken.js';
+export * from './feedistributor.js';
+export * from './ponderstaking.js';

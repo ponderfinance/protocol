@@ -248,8 +248,10 @@ contract PonderRouter {
             // Get pair address
             address pair = factory.getPair(input, output);
             if (pair == address(0)) {
-                (address token0, address token1) = sortTokens(input, output);
-                pair = factory.getPair(token0, token1);
+                address sortedToken0;
+                address sortedToken1;
+                (sortedToken0, sortedToken1) = sortTokens(input, output);
+                pair = factory.getPair(sortedToken0, sortedToken1);
             }
 
             uint256 amountOut = amounts[i + 1];
