@@ -114,6 +114,19 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "function",
+    "name": "LAUNCH_DURATION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "LP_LOCK_PERIOD",
     "inputs": [],
     "outputs": [
@@ -202,6 +215,32 @@ export const fivefivefivelauncherAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelLaunch",
+    "inputs": [
+      {
+        "name": "launchId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimRefund",
+    "inputs": [
+      {
+        "name": "launchId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -510,6 +549,16 @@ export const fivefivefivelauncherAbi = [
             "name": "lpUnlockTime",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "launchDeadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cancelled",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       },
@@ -907,7 +956,27 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
+    "name": "LaunchCancelled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "LaunchNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoContributionToRefund",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RefundFailed",
     "inputs": []
   },
   {
