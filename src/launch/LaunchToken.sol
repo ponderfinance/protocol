@@ -116,13 +116,25 @@ contract LaunchToken is PonderERC20 {
     }
 
     function transfer(address to, uint256 value) external override returns (bool) {
-        if (!transfersEnabled && msg.sender != launcher) revert TransfersDisabled();
+        // Allow transfers if:
+        // 1. Transfers are enabled, OR
+        // 2. Sender is launcher, OR
+        // 3. Recipient is launcher (for refunds)
+        if (!transfersEnabled && msg.sender != launcher && to != launcher) {
+            revert TransfersDisabled();
+        }
         _transfer(msg.sender, to, value);
         return true;
     }
 
     function transferFrom(address from, address to, uint256 value) external override returns (bool) {
-        if (!transfersEnabled && from != launcher) revert TransfersDisabled();
+        // Allow transfers if:
+        // 1. Transfers are enabled, OR
+        // 2. From is launcher, OR
+        // 3. Recipient is launcher (for refunds)
+        if (!transfersEnabled && from != launcher && to != launcher) {
+            revert TransfersDisabled();
+        }
 
         uint256 currentAllowance = allowance(from, msg.sender);
         if (currentAllowance != type(uint256).max) {

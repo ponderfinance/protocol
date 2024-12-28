@@ -18,6 +18,8 @@ contract FiveFiveFiveLauncher {
         bool launched;
         address creator;
         uint256 lpUnlockTime;
+        uint256 launchDeadline;
+        bool cancelled;
     }
 
     // Track all contribution amounts
@@ -99,8 +101,13 @@ contract FiveFiveFiveLauncher {
     error ExcessiveContribution();
     error InsufficientLPTokens();
     error ExcessivePonderContribution();
+    error LaunchExpired();
+    error LaunchCancelled();
+    error NoContributionToRefund();
+    error RefundFailed();
 
     // Constants
+    uint256 public constant LAUNCH_DURATION = 7 days;
     uint256 public constant TARGET_RAISE = 5555 ether;
     uint256 public constant BASIS_POINTS = 10000;
     uint256 public constant LP_LOCK_PERIOD = 180 days;
@@ -203,6 +210,9 @@ contract FiveFiveFiveLauncher {
         // Setup creator vesting
         uint256 creatorTokens = (totalSupply * CREATOR_PERCENT) / BASIS_POINTS;
         LaunchToken(tokenAddress).setupVesting(creator, creatorTokens);
+
+        // Add deadline
+        launch.base.launchDeadline = block.timestamp + LAUNCH_DURATION;
     }
 
     function contributeKUB(uint256 launchId) external payable {
@@ -221,8 +231,10 @@ contract FiveFiveFiveLauncher {
     }
 
     function _validateLaunchState(LaunchInfo storage launch) internal view {
-        if(launch.base.tokenAddress == address(0)) revert LaunchNotFound();
-        if(launch.base.launched) revert AlreadyLaunched();
+        if (launch.base.tokenAddress == address(0)) revert LaunchNotFound();
+        if (launch.base.launched) revert AlreadyLaunched();
+        if (launch.base.cancelled) revert LaunchCancelled();
+        if (block.timestamp > launch.base.launchDeadline) revert LaunchExpired();
     }
 
     function _calculateKubContribution(
@@ -321,6 +333,63 @@ contract FiveFiveFiveLauncher {
         // Emit events
         emit TokensDistributed(launchId, contributor, result.tokensToDistribute);
         emit PonderContributed(launchId, contributor, ponderAmount, kubValue);
+    }
+
+    function claimRefund(uint256 launchId) external {
+        LaunchInfo storage launch = launches[launchId];
+
+        // Check if refund is possible
+        require(
+            block.timestamp > launch.base.launchDeadline || launch.base.cancelled,
+            "Launch still active"
+        );
+        require(
+            !launch.base.launched &&
+            launch.contributions.kubCollected + launch.contributions.ponderValueCollected < TARGET_RAISE,
+            "Launch succeeded"
+        );
+
+        ContributorInfo storage contributor = launch.contributors[msg.sender];
+        if (contributor.kubContributed == 0 && contributor.ponderContributed == 0) {
+            revert NoContributionToRefund();
+        }
+
+        // Process KUB refund
+        uint256 kubToRefund = contributor.kubContributed;
+        if (kubToRefund > 0) {
+            contributor.kubContributed = 0;
+            (bool success, ) = msg.sender.call{value: kubToRefund}("");
+            if (!success) revert RefundFailed();
+        }
+
+        // Process PONDER refund
+        uint256 ponderToRefund = contributor.ponderContributed;
+        if (ponderToRefund > 0) {
+            contributor.ponderContributed = 0;
+            ponder.transfer(msg.sender, ponderToRefund);
+        }
+
+        // Process token return
+        if (contributor.tokensReceived > 0) {
+            LaunchToken token = LaunchToken(launch.base.tokenAddress);
+            // First get approval
+            require(
+                token.allowance(msg.sender, address(this)) >= contributor.tokensReceived,
+                "Token approval required for refund"
+            );
+            // Then transfer tokens back
+            token.transferFrom(msg.sender, address(this), contributor.tokensReceived);
+            contributor.tokensReceived = 0;
+        }
+    }
+
+    // Add ability for creator to cancel launch
+    function cancelLaunch(uint256 launchId) external {
+        LaunchInfo storage launch = launches[launchId];
+        if (msg.sender != launch.base.creator) revert Unauthorized();
+        if (launch.base.launched) revert AlreadyLaunched();
+
+        launch.base.cancelled = true;
     }
 
     function _checkAndFinalizeLaunch(uint256 launchId, LaunchInfo storage launch) internal {

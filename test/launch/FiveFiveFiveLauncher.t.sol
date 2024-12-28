@@ -371,6 +371,65 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.stopPrank();
     }
 
+    function testRefundAfterDeadline() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make a contribution
+        uint256 contribution = 1000 ether;
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: contribution}(launchId);
+
+        // Fast forward past deadline
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Get launch token address and approve transfer
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+
+        // Claim refund
+        uint256 balanceBefore = alice.balance;
+        launcher.claimRefund(launchId);
+        uint256 balanceAfter = alice.balance;
+
+        assertEq(balanceAfter - balanceBefore, contribution, "Refund amount incorrect");
+
+        // Verify contribution was reset
+        (uint256 kubContributed,,,) = launcher.getContributorInfo(launchId, alice);
+        assertEq(kubContributed, 0, "Contribution not reset");
+        vm.stopPrank();
+    }
+
+    function testRefundAfterCancel() public {
+        uint256 launchId = _createTestLaunch();
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken token = LaunchToken(tokenAddress);
+
+        // Make contributions
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+        // Approve tokens for refund
+        token.approve(address(launcher), type(uint256).max);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        launcher.contributePONDER(launchId, 10000 ether);
+        // Approve tokens for refund
+        token.approve(address(launcher), type(uint256).max);
+        vm.stopPrank();
+
+        // Cancel launch
+        vm.prank(creator);
+        launcher.cancelLaunch(launchId);
+
+        // Test both KUB and PONDER refunds
+        vm.startPrank(alice);
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+    }
 
     receive() external payable {}
 }
