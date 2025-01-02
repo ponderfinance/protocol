@@ -153,24 +153,24 @@ contract FeeDistributorTest is Test {
             uint256 swapAmount = uint256(reserve0) / 5; // 20% of reserves
 
             testToken.transfer(address(pair), swapAmount);
-            pair.swap(
-                0,
-                (swapAmount * 997 * reserve1) / ((reserve0 * 1000) + (swapAmount * 997)),
-                address(this),
-                ""
-            );
+            // Calculate output amount considering total 0.3% fee (997/1000)
+            uint256 amountOut = (swapAmount * 997 * reserve1) / ((reserve0 * 1000) + (swapAmount * 997));
+
+            pair.swap(0, amountOut, address(this), "");
+
+            // Call skim after each swap to collect protocol fees
+            pair.skim(address(distributor));
 
             vm.warp(block.timestamp + 1 hours);
 
             (reserve0, reserve1,) = pair.getReserves();
             swapAmount = uint256(reserve1) / 5;
             ponder.transfer(address(pair), swapAmount);
-            pair.swap(
-                (swapAmount * 997 * reserve0) / ((reserve1 * 1000) + (swapAmount * 997)),
-                0,
-                address(this),
-                ""
-            );
+
+            pair.swap(amountOut, 0, address(this), "");
+
+            // Call skim after each swap
+            pair.skim(address(distributor));
 
             vm.warp(block.timestamp + 1 hours);
             pair.sync();
@@ -202,11 +202,18 @@ contract FeeDistributorTest is Test {
         vm.warp(block.timestamp + 1 hours);
         pair.sync();
 
-        // Do an additional trade to ensure fees
+        // Do an additional trade and skim
         testToken.mint(address(this), 1_000_000e18);
         ponder.transfer(address(this), 1_000_000e18);
         testToken.transfer(address(pair), 1_000_000e18);
-        pair.swap(0, 900_000e18, address(this), "");
+        // Calculate expected output with 0.3% total fee
+        uint112 reserve0;
+        uint112 reserve1;
+        (reserve0, reserve1,) = pair.getReserves();
+        uint256 amountIn = 1_000_000e18;
+        uint256 amountOut = (amountIn * 997 * uint256(reserve1)) / (uint256(reserve0) * 1000 + amountIn * 997);
+        pair.swap(0, amountOut, address(this), "");
+        pair.skim(address(distributor));
 
         // Collect fees
         distributor.collectFeesFromPair(address(pair));
@@ -226,12 +233,10 @@ contract FeeDistributorTest is Test {
         factory.setFeeTo(address(distributor));
         _generateTradingFees();
 
-        // Ensure some time passes and sync
+        // Ensure some time passes
         vm.warp(block.timestamp + 1 hours);
         pair.sync();
-
-        // Collect fees first
-        distributor.collectFeesFromPair(address(pair));
+        pair.skim(address(distributor));  // Make sure fees are collected
 
         // Make sure we have tokens to convert
         uint256 initialTestBalance = testToken.balanceOf(address(distributor));
@@ -240,8 +245,9 @@ contract FeeDistributorTest is Test {
         uint256 initialPonderBalance = ponder.balanceOf(address(distributor));
 
         // Approve tokens for conversion
-        vm.prank(address(distributor));
+        vm.startPrank(address(distributor));
         testToken.approve(address(router), type(uint256).max);
+        vm.stopPrank();
 
         // Convert fees
         distributor.convertFees(address(testToken));
@@ -472,27 +478,31 @@ contract FeeDistributorTest is Test {
         // Generate new fees with smaller amounts
         vm.warp(block.timestamp + 1 days);
 
-        // Do some smaller trades to generate more fees
-        uint256 smallSwapAmount = 1000e18; // Much smaller amount
-
+        // Setup smaller swaps
+        uint256 smallSwapAmount = 1000e18;
         testToken.mint(address(this), smallSwapAmount);
         vm.prank(treasury);
         ponder.transfer(address(this), smallSwapAmount);
 
-        // Do a swap to generate fees
-        testToken.approve(address(router), smallSwapAmount);
-        ponder.approve(address(router), smallSwapAmount);
+        // Setup approvals
+        vm.startPrank(address(distributor));
+        testToken.approve(address(router), type(uint256).max);
+        ponder.approve(address(router), type(uint256).max);
+        vm.stopPrank();
 
-        address[] memory path = new address[](2);
-        path[0] = address(testToken);
-        path[1] = address(ponder);
-        router.swapExactTokensForTokens(
-            smallSwapAmount,
-            0,
-            path,
-            address(this),
-            block.timestamp
-        );
+        // Do swap via pair directly to ensure fees
+        vm.startPrank(address(this));
+        testToken.transfer(address(pair), smallSwapAmount);
+
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        uint256 amountOut = (smallSwapAmount * 997 * uint256(reserve1)) /
+            (uint256(reserve0) * 1000 + smallSwapAmount * 997);
+
+        pair.swap(0, amountOut, address(this), "");
+
+        // Collect fees via skim
+        pair.skim(address(distributor));
+        vm.stopPrank();
 
         // Second distribution
         vm.warp(block.timestamp + 1 days);

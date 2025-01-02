@@ -19,12 +19,20 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     address public override token0;
     address public override token1;
 
+    // Updated fee constants
     uint256 private constant FEE_DENOMINATOR = 10000;
-    uint256 private constant STANDARD_FEE = 30;      // 0.3% (30/10000)
-    uint256 private constant KUB_LP_FEE = 20;        // 0.2% (20/10000)
-    uint256 private constant KUB_CREATOR_FEE = 10;   // 0.1% (10/10000)
-    uint256 private constant PONDER_LP_FEE = 15;     // 0.15% (15/10000)
-    uint256 private constant PONDER_CREATOR_FEE = 15; // 0.15% (15/10000)
+    uint256 private constant LP_FEE = 25;            // 0.25% for LPs
+
+    // Launch token PONDER pair fees
+    uint256 private constant PONDER_CREATOR_FEE = 4;  // 0.04% for creator
+    uint256 private constant PONDER_PROTOCOL_FEE = 1; // 0.01% for protocol
+
+    // Launch token KUB/other pair fees
+    uint256 private constant KUB_CREATOR_FEE = 1;     // 0.01% for creator
+    uint256 private constant KUB_PROTOCOL_FEE = 4;    // 0.04% for protocol
+
+    // Standard pair fees
+    uint256 private constant STANDARD_PROTOCOL_FEE = 5; // 0.05% for protocol
 
     uint112 private reserve0;
     uint112 private reserve1;
@@ -35,6 +43,10 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     uint256 public override kLast;
 
     uint256 private unlocked = 1;
+
+    // Accumulated protocol fees that need to be skimmed
+    uint256 private accumulatedFee0;
+    uint256 private accumulatedFee1;
 
     modifier lock() {
         require(unlocked == 1, "LOCKED");
@@ -54,7 +66,6 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     function ponder() public view returns (address) {
         return IPonderFactory(factory).ponder();
     }
-
     function initialize(address _token0, address _token1) external override {
         require(msg.sender == factory, "Forbidden");
         token0 = _token0;
@@ -102,65 +113,53 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         if (amountIn == 0) return;
 
         address feeTo = IPonderFactory(factory).feeTo();
-        uint256 totalFeeAmount = 0;
 
-        // Check if this token is being sold (input) vs bought (output)
+        // Early return if no fee collector
+        if (feeTo == address(0)) return;
+
+        // Determine if token is being sold (input) vs bought (output)
         bool isTokenOutput = (token == token0Address && amount0Out > 0) ||
             (token == token1Address && amount1Out > 0);
 
-        // If token is being bought (output), only apply standard fee
-        if (isTokenOutput) {
-            if (feeTo != address(0)) {
-                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
-                _safeTransfer(token, feeTo, protocolFee);
-                totalFeeAmount += protocolFee;
-            }
-            return;
-        }
+        // If token is being bought (output), don't apply fees
+        if (isTokenOutput) return;
+
+        uint256 protocolFeeAmount = 0;
+        uint256 creatorFeeAmount = 0;
 
         try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
-            // Only apply special fees when launch token is input (being sold)
+            // Special fees for launch tokens being sold
             if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
                 address creator = ILaunchToken(token).creator();
 
-                // Launch token -> PONDER pair fees
                 if (isPonderPair) {
-                    if (feeTo != address(0)) {
-                        uint256 protocolFee = (amountIn * PONDER_LP_FEE) / FEE_DENOMINATOR;
-                        _safeTransfer(token, feeTo, protocolFee);
-                        totalFeeAmount += protocolFee;
-                    }
-                    uint256 creatorFee = (amountIn * PONDER_CREATOR_FEE) / FEE_DENOMINATOR;
-                    _safeTransfer(token, creator, creatorFee);
-                    totalFeeAmount += creatorFee;
+                    // Launch token -> PONDER pair fees
+                    protocolFeeAmount = (amountIn * 1) / FEE_DENOMINATOR;  // 0.01%
+                    creatorFeeAmount = (amountIn * 4) / FEE_DENOMINATOR;   // 0.04%
                 } else {
-                    // Launch token -> KUB pair fees
-                    if (feeTo != address(0)) {
-                        uint256 protocolFee = (amountIn * KUB_LP_FEE) / FEE_DENOMINATOR;
-                        _safeTransfer(token, feeTo, protocolFee);
-                        totalFeeAmount += protocolFee;
-                    }
-                    uint256 creatorFee = (amountIn * KUB_CREATOR_FEE) / FEE_DENOMINATOR;
-                    _safeTransfer(token, creator, creatorFee);
-                    totalFeeAmount += creatorFee;
+                    // Launch token -> KUB/other pair fees
+                    protocolFeeAmount = (amountIn * 4) / FEE_DENOMINATOR;  // 0.04%
+                    creatorFeeAmount = (amountIn * 1) / FEE_DENOMINATOR;   // 0.01%
                 }
-            } else if (feeTo != address(0)) {
-                // Standard 0.3% fee for all other cases
-                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
-                _safeTransfer(token, feeTo, protocolFee);
-                totalFeeAmount += protocolFee;
+
+                // Transfer creator fee directly
+                if (creatorFeeAmount > 0) {
+                    _safeTransfer(token, creator, creatorFeeAmount);
+                }
+            } else {
+                // Standard protocol fee for non-launch tokens
+                protocolFeeAmount = (amountIn * 5) / FEE_DENOMINATOR;  // 0.05%
             }
         } catch {
-            // Standard 0.3% fee for non-launch tokens
-            if (feeTo != address(0)) {
-                uint256 protocolFee = (amountIn * STANDARD_FEE) / FEE_DENOMINATOR;
-                _safeTransfer(token, feeTo, protocolFee);
-                totalFeeAmount += protocolFee;
-            }
+            // Standard protocol fee for non-launch tokens
+            protocolFeeAmount = (amountIn * 5) / FEE_DENOMINATOR;  // 0.05%
         }
 
-        if (totalFeeAmount > amountIn) {
-            revert FeeTooHigh(totalFeeAmount, amountIn);
+        // Accumulate protocol fees for later collection via skim
+        if (token == token0) {
+            accumulatedFee0 += protocolFeeAmount;
+        } else {
+            accumulatedFee1 += protocolFeeAmount;
         }
     }
 
@@ -329,8 +328,31 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     }
 
     function skim(address to) external override lock {
-        _safeTransfer(token0, to, IERC20(token0).balanceOf(address(this)) - reserve0);
-        _safeTransfer(token1, to, IERC20(token1).balanceOf(address(this)) - reserve1);
+        address _token0 = token0;
+        address _token1 = token1;
+        address feeTo = IPonderFactory(factory).feeTo();
+
+        uint256 balance0 = IERC20(_token0).balanceOf(address(this));
+        uint256 balance1 = IERC20(_token1).balanceOf(address(this));
+
+        // First handle excess balance above reserves + accumulated fees
+        uint256 excess0 = balance0 > reserve0 + accumulatedFee0 ? balance0 - reserve0 - accumulatedFee0 : 0;
+        uint256 excess1 = balance1 > reserve1 + accumulatedFee1 ? balance1 - reserve1 - accumulatedFee1 : 0;
+
+        if (excess0 > 0) _safeTransfer(_token0, to, excess0);
+        if (excess1 > 0) _safeTransfer(_token1, to, excess1);
+
+        // Then transfer accumulated protocol fees to fee distributor if it exists
+        if (feeTo != address(0)) {
+            if (accumulatedFee0 > 0) {
+                _safeTransfer(_token0, feeTo, accumulatedFee0);
+                accumulatedFee0 = 0;
+            }
+            if (accumulatedFee1 > 0) {
+                _safeTransfer(_token1, feeTo, accumulatedFee1);
+                accumulatedFee1 = 0;
+            }
+        }
     }
 
     function sync() external override lock {

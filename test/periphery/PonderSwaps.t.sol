@@ -313,6 +313,9 @@ contract PonderRouterTest is Test {
             block.timestamp + 1
         );
 
+        // Get KUB pair address
+        address kubPair = factory.getPair(address(launchToken), address(weth));
+
         // Record initial balances
         uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
         uint256 bobBalanceBefore = launchToken.balanceOf(bob);  // feeTo address
@@ -331,13 +334,16 @@ contract PonderRouterTest is Test {
             block.timestamp + 1
         );
 
+        // Call skim to collect protocol fees
+        PonderPair(kubPair).skim(bob);
+
         // Check fee distributions
         uint256 creatorFee = launchToken.balanceOf(creator) - creatorBalanceBefore;
         uint256 protocolFee = launchToken.balanceOf(bob) - bobBalanceBefore;
 
-        // For KUB pair: creator should get 0.1%, protocol should get 0.2%
-        assertEq(creatorFee, sellAmount * 10 / 10000, "Incorrect creator fee");
-        assertEq(protocolFee, sellAmount * 20 / 10000, "Incorrect protocol fee");
+        // For KUB pair: creator should get 0.01%, protocol should get 0.04%
+        assertEq(creatorFee, sellAmount / 10000, "Incorrect creator fee");  // 0.01%
+        assertEq(protocolFee, sellAmount * 4 / 10000, "Incorrect protocol fee"); // 0.04%
 
         vm.stopPrank();
     }
