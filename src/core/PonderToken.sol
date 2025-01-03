@@ -80,7 +80,7 @@ contract PonderToken is PonderERC20 {
         address _teamReserve,
         address _marketing,
         address _launcher // Can be address(0), will be set later through setLauncher
-    ) PonderERC20("Ponder", "PONDER") {
+    ) PonderERC20("Koi", "KOI") {
         if (_treasury == address(0) || _teamReserve == address(0) || _marketing == address(0)) revert ZeroAddress();
 
 

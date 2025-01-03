@@ -516,13 +516,10 @@ contract PonderRouter {
     /// @param tokenB Second token address
     /// @return reserveA Reserve of tokenA
     /// @return reserveB Reserve of tokenB
-    function getReserves(address tokenA, address tokenB)
-    public
-    view
-    returns (uint256 reserveA, uint256 reserveB)
-    {
-        (address token0,) = sortTokens(tokenA, tokenB);
-        (uint256 reserve0, uint256 reserve1,) = IPonderPair(factory.getPair(tokenA, tokenB)).getReserves();
+    function getReserves(address tokenA, address tokenB) public view returns (uint256 reserveA, uint256 reserveB) {
+        (address token0, address token1) = sortTokens(tokenA, tokenB);
+        // Use sorted tokens to get pair
+        (uint256 reserve0, uint256 reserve1,) = IPonderPair(factory.getPair(token0, token1)).getReserves();
         (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
 

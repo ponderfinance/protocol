@@ -57,7 +57,7 @@ contract PonderStaking is PonderERC20 {
         address _ponder,
         address _router,
         address _factory
-    ) PonderERC20("Staked Ponder", "xPONDER") {
+    ) PonderERC20("Staked Koi", "xKOI") {
         if (_ponder == address(0) || _router == address(0) || _factory == address(0))
             revert ZeroAddress();
 

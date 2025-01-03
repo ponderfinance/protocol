@@ -403,4 +403,201 @@ contract PonderRouterTest is Test {
         assertEq(ethBalanceAfter - ethBalanceBefore, ethOutputDesired, "Incorrect ETH received");
     }
 
+    function testAsymmetricSwap() public {
+        // Mint tokens first
+        vm.startPrank(alice);
+        tokenA.mint(alice, 100e18);  // Mint enough for the test
+        tokenB.mint(alice, 100e18);
+
+        // Approve tokens
+        tokenA.approve(address(router), type(uint256).max);
+        tokenB.approve(address(router), type(uint256).max);
+
+        // Add asymmetric liquidity (10:1 ratio)
+        uint256 amount0 = 10e18;
+        uint256 amount1 = 1e18;
+
+        router.addLiquidity(
+            address(tokenA),
+            address(tokenB),
+            amount0,
+            amount1,
+            0,
+            0,
+            alice,
+            deadline
+        );
+
+        // Get initial reserves
+        (uint256 reserve0, uint256 reserve1) = router.getReserves(address(tokenA), address(tokenB));
+        console.log("Initial reserves:");
+        console.log("Reserve 0:", reserve0);
+        console.log("Reserve 1:", reserve1);
+
+        // Calculate exact output for swap
+        uint256 swapAmount = 1e18;
+        uint256 expectedOutput = (swapAmount * 997 * reserve1) / ((reserve0 * 1000) + (swapAmount * 997));
+        console.log("Expected output:", expectedOutput);
+
+        // Try swap with exact output requirement
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);
+        path[1] = address(tokenB);
+
+        // Approve tokens for swap
+        tokenA.approve(address(router), swapAmount);
+
+        router.swapExactTokensForTokens(
+            swapAmount,
+            expectedOutput,  // Require exact calculated output
+            path,
+            alice,
+            deadline
+        );
+
+        vm.stopPrank();
+    }
+
+    function testGetReservesOrdering() public {
+        vm.startPrank(alice);
+
+        // Create pair and add initial liquidity with known amounts
+        tokenA.approve(address(router), INITIAL_LIQUIDITY);
+        tokenB.approve(address(router), INITIAL_LIQUIDITY);
+
+        router.addLiquidity(
+            address(tokenA),
+            address(tokenB),
+            INITIAL_LIQUIDITY,
+            INITIAL_LIQUIDITY,
+            0,
+            0,
+            alice,
+            deadline
+        );
+
+        // Test reserves in both orders
+        (uint256 reserveA, uint256 reserveB) = router.getReserves(address(tokenA), address(tokenB));
+        console.log("Order (TokenA, TokenB):");
+        console.log("Reserve A:", reserveA);
+        console.log("Reserve B:", reserveB);
+
+        (uint256 reserveB2, uint256 reserveA2) = router.getReserves(address(tokenB), address(tokenA));
+        console.log("\nOrder (TokenB, TokenA):");
+        console.log("Reserve B:", reserveB2);
+        console.log("Reserve A:", reserveA2);
+
+        // Verify reserves match regardless of order
+        assertEq(reserveA, reserveA2, "TokenA reserves don't match");
+        assertEq(reserveB, reserveB2, "TokenB reserves don't match");
+
+        vm.stopPrank();
+    }
+
+    function testSwapCalculation() public {
+        vm.startPrank(alice);
+
+        // Add initial liquidity
+        tokenA.approve(address(router), INITIAL_LIQUIDITY);
+        tokenB.approve(address(router), INITIAL_LIQUIDITY);
+
+        router.addLiquidity(
+            address(tokenA),
+            address(tokenB),
+            INITIAL_LIQUIDITY,
+            INITIAL_LIQUIDITY,
+            0,
+            0,
+            alice,
+            deadline
+        );
+
+        // Test swap calculation
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);
+        path[1] = address(tokenB);
+
+        uint256 amountIn = 1e18; // 1 token
+        uint256[] memory amounts = router.getAmountsOut(amountIn, path);
+
+        console.log("\nSwap calculation:");
+        console.log("Token A in:", amountIn);
+        console.log("Token B out:", amounts[1]);
+
+        // Verify against manual calculation with 0.3% fee
+        (uint256 reserveIn, uint256 reserveOut) = router.getReserves(address(tokenA), address(tokenB));
+
+        uint256 amountInWithFee = amountIn * 997;
+        uint256 numerator = amountInWithFee * reserveOut;
+        uint256 denominator = (reserveIn * 1000) + amountInWithFee;
+        uint256 expectedOut = numerator / denominator;
+
+        console.log("\nManual calculation:");
+        console.log("Reserve in:", reserveIn);
+        console.log("Reserve out:", reserveOut);
+        console.log("Amount in with fee:", amountInWithFee);
+        console.log("Numerator:", numerator);
+        console.log("Denominator:", denominator);
+        console.log("Expected out:", expectedOut);
+
+        assertEq(amounts[1], expectedOut, "Swap calculation mismatch");
+
+        vm.stopPrank();
+    }
+
+    function testSwapExactTokensForTokensWithReserveCheck() public {
+        vm.startPrank(alice);
+
+        // Add initial liquidity
+        tokenA.approve(address(router), INITIAL_LIQUIDITY);
+        tokenB.approve(address(router), INITIAL_LIQUIDITY);
+
+        router.addLiquidity(
+            address(tokenA),
+            address(tokenB),
+            INITIAL_LIQUIDITY,
+            INITIAL_LIQUIDITY,
+            0,
+            0,
+            alice,
+            deadline
+        );
+
+        // Get initial reserves
+        (uint256 reserve0Before, uint256 reserve1Before) = router.getReserves(address(tokenA), address(tokenB));
+        console.log("\nInitial reserves:");
+        console.log("Reserve A:", reserve0Before);
+        console.log("Reserve B:", reserve1Before);
+
+        // Setup swap
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);
+        path[1] = address(tokenB);
+
+        uint256 amountIn = 1e18;
+        uint256[] memory amounts = router.getAmountsOut(amountIn, path);
+
+        // Execute swap
+        tokenA.approve(address(router), amountIn);
+        router.swapExactTokensForTokens(
+            amountIn,
+            amounts[1],
+            path,
+            alice,
+            deadline
+        );
+
+        // Check final reserves
+        (uint256 reserve0After, uint256 reserve1After) = router.getReserves(address(tokenA), address(tokenB));
+        console.log("\nFinal reserves:");
+        console.log("Reserve A:", reserve0After);
+        console.log("Reserve B:", reserve1After);
+
+        // Verify reserve changes
+        assertEq(reserve0After - reserve0Before, amountIn, "Incorrect reserve A change");
+        assertEq(reserve1Before - reserve1After, amounts[1], "Incorrect reserve B change");
+
+        vm.stopPrank();
+    }
+
 }
