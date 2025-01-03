@@ -17,6 +17,19 @@ contract ERC20Mock is PonderERC20 {
     }
 }
 
+contract MockFailingToken is PonderERC20 {
+    constructor() PonderERC20("Failing", "FAIL") {}
+
+    function transfer(address, uint256) public pure override returns (bool) {
+        return false;
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
+
+
 contract FeeDistributorTest is Test {
     FeeDistributor public distributor;
     PonderStaking public staking;
@@ -530,6 +543,60 @@ contract FeeDistributorTest is Test {
         );
     }
 
+    function test_KValueMaintenance() public {
+        // Setup and generate fees
+        factory.setFeeTo(address(distributor));
+        _generateTradingFees();
+
+        // Get initial K value
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        uint256 initialK = uint256(reserve0) * uint256(reserve1);
+
+        // Collect fees
+        distributor.collectFeesFromPair(address(pair));
+
+        // Try to swap - should work now because collectFeesFromPair includes sync
+        testToken.mint(address(this), 1000e18);
+        testToken.transfer(address(pair), 1000e18);
+
+        (reserve0, reserve1,) = pair.getReserves();
+        uint256 amountOut = (1000e18 * 997 * uint256(reserve1)) /
+            (uint256(reserve0) * 1000 + 1000e18 * 997);
+
+        // This should succeed
+        pair.swap(0, amountOut, address(this), "");
+
+        // Get final K value
+        (uint112 finalReserve0, uint112 finalReserve1,) = pair.getReserves();
+        uint256 finalK = uint256(finalReserve0) * uint256(finalReserve1);
+
+        // K should either increase or stay the same
+        assertGe(finalK, initialK, "K value should not decrease");
+    }
+
+    function test_CollectFeesAndSwap() public {
+        // Setup and generate fees
+        factory.setFeeTo(address(distributor));
+        _generateTradingFees();
+
+        // Collect fees without explicit sync
+        distributor.collectFeesFromPair(address(pair));
+
+        // Try to swap - this should work with proper syncing in collectFeesFromPair
+        uint256 swapAmount = 1000e18;
+        testToken.mint(address(this), swapAmount);
+        testToken.transfer(address(pair), swapAmount);
+
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        uint256 amountOut = (swapAmount * 997 * uint256(reserve1)) /
+            (uint256(reserve0) * 1000 + swapAmount * 997);
+
+        pair.swap(0, amountOut, address(this), "");
+
+        // Verify swap succeeded
+        assertTrue(ponder.balanceOf(address(this)) > 0, "Swap should succeed");
+    }
+
     function _getAmountOut(
         uint256 amountIn,
         uint112 reserveIn,
@@ -542,6 +609,154 @@ contract FeeDistributorTest is Test {
         uint256 numerator = amountInWithFee * uint256(reserveOut);
         uint256 denominator = (uint256(reserveIn) * 1000) + amountInWithFee;
         return numerator / denominator;
+    }
+
+    function test_GetUniqueTokensEmptyArray() public {
+        address[] memory emptyPairs = new address[](0);
+        distributor.distributePairFees(emptyPairs);
+        // If we get here without reverting, the test passed
+    }
+
+    function test_ConvertFeesWithPONDER() public {
+        // Test that converting PONDER token returns early
+        uint256 initialBalance = ponder.balanceOf(address(distributor));
+        distributor.convertFees(address(ponder));
+        assertEq(ponder.balanceOf(address(distributor)), initialBalance, "Should not convert PONDER");
+    }
+
+    function test_ConvertFeesInsufficientAmount() public {
+        // Test converting amount below MINIMUM_AMOUNT
+        testToken.mint(address(distributor), distributor.MINIMUM_AMOUNT() - 1);
+        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+        distributor.convertFees(address(testToken));
+    }
+
+    function test_DistributeZeroAmounts() public {
+        // Test distribution with amount below MINIMUM_AMOUNT
+        vm.prank(treasury);
+        ponder.transfer(address(distributor), distributor.MINIMUM_AMOUNT() - 1);
+        vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
+        distributor.distribute();
+    }
+
+    function test_DistributeTransferFailures() public {
+        // Setup mock token that fails transfers
+        MockFailingToken failingPonder = new MockFailingToken();
+        // Deploy new distributor with failing token
+        FeeDistributor failingDistributor = new FeeDistributor(
+            address(factory),
+            address(router),
+            address(failingPonder),
+            address(staking),
+            treasury,
+            teamReserve
+        );
+
+        // Mint some tokens and attempt distribution
+        failingPonder.mint(address(failingDistributor), 1000e18);
+        vm.expectRevert(abi.encodeWithSignature("TransferFailed()"));
+        failingDistributor.distribute();
+    }
+
+    function test_TransferOwnershipZeroAddress() public {
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        distributor.transferOwnership(address(0));
+    }
+
+    function test_TransferOwnershipComplete() public {
+        address newOwner = address(0x123);
+        distributor.transferOwnership(newOwner);
+
+        vm.prank(newOwner);
+        distributor.acceptOwnership();
+        assertEq(distributor.owner(), newOwner);
+        assertEq(distributor.pendingOwner(), address(0));
+    }
+
+    function test_ConstructorZeroAddressValidation() public {
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        new FeeDistributor(
+            address(0),  // _factory
+            address(router),
+            address(ponder),
+            address(staking),
+            treasury,
+            teamReserve
+        );
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        new FeeDistributor(
+            address(factory),
+            address(0),  // _router
+            address(ponder),
+            address(staking),
+            treasury,
+            teamReserve
+        );
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        new FeeDistributor(
+            address(factory),
+            address(router),
+            address(0),  // _ponder
+            address(staking),
+            treasury,
+            teamReserve
+        );
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        new FeeDistributor(
+            address(factory),
+            address(router),
+            address(ponder),
+            address(0),  // _staking
+            treasury,
+            teamReserve
+        );
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        new FeeDistributor(
+            address(factory),
+            address(router),
+            address(ponder),
+            address(staking),
+            address(0),  // _treasury
+            teamReserve
+        );
+
+        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
+        new FeeDistributor(
+            address(factory),
+            address(router),
+            address(ponder),
+            address(staking),
+            treasury,
+            address(0)  // _team
+        );
+    }
+
+    function test_SwapFailure() public {
+        // Setup scenario where swap would fail
+        factory.setFeeTo(address(distributor));
+        _generateTradingFees();
+
+        // Mock router to fail swaps
+        vm.mockCall(
+            address(router),
+            abi.encodeWithSelector(IPonderRouter.swapExactTokensForTokens.selector),
+            abi.encode()
+        );
+        // Make the mock revert
+        vm.expectRevert();
+        vm.mockCallRevert(
+            address(router),
+            abi.encodeWithSelector(IPonderRouter.swapExactTokensForTokens.selector),
+            "SWAP_FAILED"
+        );
+
+        // This should now revert with SwapFailed()
+        vm.expectRevert(abi.encodeWithSignature("SwapFailed()"));
+        distributor.convertFees(address(testToken));
     }
     // Helper function to get balance with fallback
     function _getBalance(address token, address account) internal view returns (uint256) {

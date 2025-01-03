@@ -99,6 +99,9 @@ contract FeeDistributor is IFeeDistributor {
      * @param pair Address of the pair to collect from
      */
     function collectFeesFromPair(address pair) public {
+        // First sync to ensure reserves are up to date
+        IPonderPair(pair).sync();
+
         // Get pair token addresses
         address token0 = IPonderPair(pair).token0();
         address token1 = IPonderPair(pair).token1();
@@ -109,6 +112,9 @@ contract FeeDistributor is IFeeDistributor {
 
         // Collect fees (transfer from pair to this contract)
         IPonderPair(pair).skim(address(this));
+
+        // Sync again after skim to ensure reserves are correct
+        IPonderPair(pair).sync();
 
         // Calculate collected amounts
         uint256 collected0 = IERC20(token0).balanceOf(address(this)) - balance0;

@@ -22,8 +22,8 @@ contract PonderTokenTest is Test {
     }
 
     function testInitialState() public {
-        assertEq(token.name(), "Ponder");
-        assertEq(token.symbol(), "PONDER");
+        assertEq(token.name(), "Koi");
+        assertEq(token.symbol(), "KOI");
         assertEq(token.decimals(), 18);
         assertEq(token.totalSupply(), 450_000_000e18);
         assertEq(token.owner(), address(this));
