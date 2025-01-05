@@ -88,7 +88,7 @@ contract PonderRouterTest is Test {
 
         // Deploy WETH and PONDER
         weth = new WETH9();
-        ponder = new PonderToken(treasury, treasury, treasury, ponderLauncher);
+        ponder = new PonderToken(treasury, treasury, ponderLauncher);
 
         // Set up mock factory - uses test contract as launcher for launch tokens
         factory = new MockFactory(bob, address(this), address(ponder));

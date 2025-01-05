@@ -11,38 +11,36 @@ import "../libraries/TransferHelper.sol";
 
 /**
  * @title FeeDistributor
- * @notice Handles collection and distribution of protocol fees
- * @dev Collects fees from pairs, converts to PONDER, and distributes to stakeholders
+ * @notice Handles collection and distribution of protocol fees from trading
+ * @dev Collects fees from pairs, converts to PONDER, and distributes to xPONDER stakers and team
  */
 contract FeeDistributor is IFeeDistributor {
-    /// @notice Factory contract reference
+    /// @notice Factory contract reference for pair creation and fee collection
     IPonderFactory public immutable factory;
 
-    /// @notice Router for token conversions
+    /// @notice Router contract used for token conversions
     IPonderRouter public immutable router;
 
     /// @notice PONDER token address
     address public immutable ponder;
 
-    /// @notice xPONDER staking contract
+    /// @notice xPONDER staking contract that receives 80% of fees
     IPonderStaking public immutable staking;
 
-    /// @notice Treasury address
-    address public treasury;
-
-    /// @notice Team address
+    /// @notice Team address that receives 20% of protocol fees
     address public team;
 
-    /// @notice Owner address
+    /// @notice Contract owner address
     address public owner;
 
-    /// @notice Pending owner for 2-step transfer
+    /// @notice Pending owner for 2-step ownership transfer
     address public pendingOwner;
 
-    /// @notice Distribution ratios in basis points (100 = 1%)
-    uint256 public stakingRatio = 5000;  // 50%
-    uint256 public treasuryRatio = 3000; // 30%
-    uint256 public teamRatio = 2000;     // 20%
+    /// @notice Distribution ratio for xKOI stakers (80%)
+    uint256 public stakingRatio = 8000;
+
+    /// @notice Distribution ratio for team (20%)
+    uint256 public teamRatio = 2000;
 
     /// @notice Minimum amount for conversion to prevent dust
     uint256 public constant MINIMUM_AMOUNT = 1000;
@@ -63,22 +61,20 @@ contract FeeDistributor is IFeeDistributor {
     /**
      * @notice Contract constructor
      * @param _factory Factory contract address
-     * @param _router Router contract address
-     * @param _ponder PONDER token address
-     * @param _staking xPONDER staking contract address
-     * @param _treasury Treasury address
-     * @param _team Team address
+     * @param _router Router contract address for swaps
+     * @param _ponder KOI token address
+     * @param _staking xKOI staking contract address
+     * @param _team Team address that receives 20% of fees
      */
     constructor(
         address _factory,
         address _router,
         address _ponder,
         address _staking,
-        address _treasury,
         address _team
     ) {
         if (_factory == address(0) || _router == address(0) || _ponder == address(0) ||
-        _staking == address(0) || _treasury == address(0) || _team == address(0)) {
+        _staking == address(0) || _team == address(0)) {
             revert ZeroAddress();
         }
 
@@ -86,7 +82,6 @@ contract FeeDistributor is IFeeDistributor {
         router = IPonderRouter(_router);
         ponder = _ponder;
         staking = IPonderStaking(_staking);
-        treasury = _treasury;
         team = _team;
         owner = msg.sender;
 
@@ -96,7 +91,7 @@ contract FeeDistributor is IFeeDistributor {
 
     /**
      * @notice Collects fees from a specific pair
-     * @param pair Address of the pair to collect from
+     * @param pair Address of the pair to collect fees from
      */
     function collectFeesFromPair(address pair) public {
         // First sync to ensure reserves are up to date
@@ -110,7 +105,7 @@ contract FeeDistributor is IFeeDistributor {
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
 
-        // Collect fees (transfer from pair to this contract)
+        // Collect fees via skim
         IPonderPair(pair).skim(address(this));
 
         // Sync again after skim to ensure reserves are correct
@@ -129,7 +124,7 @@ contract FeeDistributor is IFeeDistributor {
     }
 
     /**
-     * @notice Converts collected fees of a specific token to PONDER
+     * @notice Converts collected fees to PONDER
      * @param token Address of the token to convert
      */
     function convertFees(address token) external {
@@ -161,19 +156,18 @@ contract FeeDistributor is IFeeDistributor {
     }
 
     /**
-     * @notice Distributes converted fees to stakeholders
-     * @dev All fees should be converted to PONDER before distribution
+     * @notice Distributes converted fees to stakers and team
+     * @dev Splits fees 80/20 between xPONDER stakers and team
      */
     function distribute() external {
         uint256 totalAmount = IERC20(ponder).balanceOf(address(this));
         if (totalAmount < MINIMUM_AMOUNT) revert InvalidAmount();
 
-        // Calculate distribution amounts
+        // Calculate splits
         uint256 stakingAmount = (totalAmount * stakingRatio) / BASIS_POINTS;
-        uint256 treasuryAmount = (totalAmount * treasuryRatio) / BASIS_POINTS;
         uint256 teamAmount = (totalAmount * teamRatio) / BASIS_POINTS;
 
-        // Transfer to staking contract first (triggers rebase)
+        // Send to staking first (triggers rebase)
         if (stakingAmount > 0) {
             if (!IERC20(ponder).transfer(address(staking), stakingAmount)) {
                 revert TransferFailed();
@@ -181,21 +175,14 @@ contract FeeDistributor is IFeeDistributor {
             staking.rebase();
         }
 
-        // Transfer to treasury
-        if (treasuryAmount > 0) {
-            if (!IERC20(ponder).transfer(treasury, treasuryAmount)) {
-                revert TransferFailed();
-            }
-        }
-
-        // Transfer to team
+        // Send to team
         if (teamAmount > 0) {
             if (!IERC20(ponder).transfer(team, teamAmount)) {
                 revert TransferFailed();
             }
         }
 
-        emit FeesDistributed(totalAmount, stakingAmount, treasuryAmount, teamAmount);
+        emit FeesDistributed(totalAmount, stakingAmount,  teamAmount);
     }
 
     /**
@@ -224,33 +211,21 @@ contract FeeDistributor is IFeeDistributor {
 
     /**
      * @notice Updates fee distribution ratios
-     * @param _stakingRatio New staking ratio in basis points
-     * @param _treasuryRatio New treasury ratio in basis points
-     * @param _teamRatio New team ratio in basis points
+     * @param _stakingRatio New staking ratio (in basis points)
+     * @param _teamRatio New team ratio (in basis points)
      */
     function updateDistributionRatios(
         uint256 _stakingRatio,
-        uint256 _treasuryRatio,
         uint256 _teamRatio
     ) external onlyOwner {
-        if (_stakingRatio + _treasuryRatio + _teamRatio != BASIS_POINTS) {
+        if (_stakingRatio + _teamRatio != BASIS_POINTS) {
             revert RatioSumIncorrect();
         }
 
         stakingRatio = _stakingRatio;
-        treasuryRatio = _treasuryRatio;
         teamRatio = _teamRatio;
 
-        emit DistributionRatiosUpdated(_stakingRatio, _treasuryRatio, _teamRatio);
-    }
-
-    /**
-     * @notice Updates treasury address
-     * @param _treasury New treasury address
-     */
-    function setTreasury(address _treasury) external onlyOwner {
-        if (_treasury == address(0)) revert ZeroAddress();
-        treasury = _treasury;
+        emit DistributionRatiosUpdated(_stakingRatio,  _teamRatio);
     }
 
     /**
@@ -264,13 +239,14 @@ contract FeeDistributor is IFeeDistributor {
 
     /**
      * @notice Returns current distribution ratios
+     * @return _stakingRatio Current staking ratio
+     * @return _teamRatio Current team ratio
      */
     function getDistributionRatios() external view returns (
         uint256 _stakingRatio,
-        uint256 _treasuryRatio,
         uint256 _teamRatio
     ) {
-        return (stakingRatio, treasuryRatio, teamRatio);
+        return (stakingRatio, teamRatio);
     }
 
     /**
@@ -297,7 +273,6 @@ contract FeeDistributor is IFeeDistributor {
      * @return tokens Array of unique token addresses
      */
     function _getUniqueTokens(address[] calldata pairs) internal view returns (address[] memory tokens) {
-        // This is a simplified version - in production you might want to use a more gas-efficient approach
         address[] memory tempTokens = new address[](pairs.length * 2);
         uint256 count = 0;
 

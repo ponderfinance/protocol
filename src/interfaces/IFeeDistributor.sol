@@ -10,7 +10,6 @@ interface IFeeDistributor {
     event FeesDistributed(
         uint256 totalAmount,
         uint256 stakingAmount,
-        uint256 treasuryAmount,
         uint256 teamAmount
     );
 
@@ -27,7 +26,6 @@ interface IFeeDistributor {
     /// @notice Emitted when distribution ratios are updated
     event DistributionRatiosUpdated(
         uint256 stakingRatio,
-        uint256 treasuryRatio,
         uint256 teamRatio
     );
 
@@ -40,18 +38,15 @@ interface IFeeDistributor {
 
     /// @notice Updates fee distribution ratios
     /// @param _stakingRatio Percentage for xPONDER stakers (in basis points)
-    /// @param _treasuryRatio Percentage for treasury (in basis points)
     /// @param _teamRatio Percentage for team (in basis points)
     function updateDistributionRatios(
         uint256 _stakingRatio,
-        uint256 _treasuryRatio,
         uint256 _teamRatio
     ) external;
 
     /// @notice Returns current distribution ratios
     function getDistributionRatios() external view returns (
         uint256 stakingRatio,
-        uint256 treasuryRatio,
         uint256 teamRatio
     );
 }

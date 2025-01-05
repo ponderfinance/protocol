@@ -18,24 +18,24 @@ contract PonderTokenTest is Test {
     event LauncherUpdated(address indexed oldLauncher, address indexed newLauncher);
 
     function setUp() public {
-        token = new PonderToken(treasury, teamReserve, marketing, address(this));
+        token = new PonderToken(teamReserve, marketing, address(this));
     }
 
     function testInitialState() public {
         assertEq(token.name(), "Koi");
         assertEq(token.symbol(), "KOI");
         assertEq(token.decimals(), 18);
-        assertEq(token.totalSupply(), 450_000_000e18);
+        // Initial supply = Initial Liquidity + Marketing = 200M + 150M = 350M
+        assertEq(token.totalSupply(), 350_000_000e18);
         assertEq(token.owner(), address(this));
         assertEq(token.minter(), address(0));
         assertEq(token.MAXIMUM_SUPPLY(), 1_000_000_000e18);
     }
 
     function testInitialAllocations() public {
-        assertEq(token.balanceOf(token.treasury()), 250_000_000e18); // Treasury allocation
-        assertEq(token.balanceOf(token.teamReserve()), 0);          // Team allocation starts at 0
-        assertEq(token.balanceOf(token.marketing()), 100_000_000e18); // Marketing allocation
-        assertEq(token.totalSupply(), 450_000_000e18);             // Total initial supply
+        assertEq(token.balanceOf(token.teamReserve()), 0);          // Team allocation starts at 0 (vested)
+        assertEq(token.balanceOf(token.marketing()), 150_000_000e18); // Marketing allocation (15%)
+        assertEq(token.totalSupply(), 350_000_000e18);             // 200M liquidity + 150M marketing
     }
 
     function testSetMinter() public {
@@ -53,7 +53,7 @@ contract PonderTokenTest is Test {
     function testMinting() public {
         token.setMinter(address(this));
         token.mint(address(0x1), 1000e18);
-        assertEq(token.totalSupply(), 450_001_000e18);
+        assertEq(token.totalSupply(), 350_001_000e18); // 350M + 1000
         assertEq(token.balanceOf(address(0x1)), 1000e18);
     }
 
@@ -163,8 +163,9 @@ contract PonderTokenTest is Test {
         // Claim all remaining vested tokens
         vm.prank(teamReserve); // Simulate call from teamReserve
         token.claimTeamTokens();
-        assertEq(token.balanceOf(token.teamReserve()), token.TEAM_ALLOCATION());
-        assertEq(token.totalSupply(), 450_000_000e18 + token.TEAM_ALLOCATION());
+        // Total supply = Initial 350M + 250M team allocation
+        assertEq(token.balanceOf(token.teamReserve()), 250_000_000e18); // 25% team allocation
+        assertEq(token.totalSupply(), 600_000_000e18);
     }
 
 
@@ -181,18 +182,13 @@ contract PonderTokenTest is Test {
         token.mint(address(0x1), 1000e18);
     }
 
-    function testTreasuryTokenAllocation() public {
-        assertEq(token.balanceOf(token.treasury()), 250_000_000e18); // Verify treasury allocation
-    }
-
     function testMarketingTokenAllocation() public {
-        assertEq(token.balanceOf(token.marketing()), 100_000_000e18); // Verify marketing allocation
+        assertEq(token.balanceOf(token.marketing()), 150_000_000e18); // 15% marketing allocation
     }
 
     function testInitialStateWithNoLauncher() public {
         // Deploy with no launcher
         PonderToken noLauncherToken = new PonderToken(
-            treasury,
             teamReserve,
             marketing,
             address(0)

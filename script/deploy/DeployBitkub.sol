@@ -108,7 +108,6 @@ contract DeployBitkubScript is Script {
 
         // 2. Deploy PONDER with no launcher initially
         PonderToken ponder = new PonderToken(
-            treasury,
             teamReserve,
             marketing,
             address(0)  // No launcher initially
@@ -142,7 +141,6 @@ contract DeployBitkubScript is Script {
             address(router),
             address(ponder),
             address(staking),
-            treasury,
             teamReserve
         );
         _verifyContract("FeeDistributor", address(feeDistributor));
@@ -242,7 +240,7 @@ contract DeployBitkubScript is Script {
         console.log("--------------------------------");
         console.log("Protocol fees enabled: Yes");
         console.log("Fee collector: FeeDistributor");
-        console.log("Distribution: 50% xPONDER, 30% Treasury, 20% Team");
+        console.log("Distribution: 80% xPONDER, 20% Team");
 
         console.log("\nInitial Liquidity Details:");
         console.log("--------------------------------");

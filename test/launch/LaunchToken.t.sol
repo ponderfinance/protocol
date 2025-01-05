@@ -38,7 +38,7 @@ contract LaunchTokenTest is Test {
     function setUp() public {
         // Deploy core contracts
         weth = new WETH9();
-        ponder = new PonderToken(treasury, treasury, treasury, launcher);
+        ponder = new PonderToken(treasury, treasury, launcher);
         factory = new PonderFactory(address(this), launcher, address(1));
 
         MockKKUBUnwrapper unwrapper = new MockKKUBUnwrapper(address(weth));

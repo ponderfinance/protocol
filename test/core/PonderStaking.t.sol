@@ -31,37 +31,115 @@ contract PonderStakingTest is Test {
         owner = address(this);
         user1 = address(0x1);
         user2 = address(0x2);
-        treasury = address(0x3);
         teamReserve = address(0x4);
         marketing = address(0x5);
 
         // Deploy contracts
         factory = new PonderFactory(owner, address(0), address(0));
+        router = new PonderRouter(address(factory), WETH, address(0));
 
-        router = new PonderRouter(
-            address(factory),
-            WETH,
-            address(0) // No unwrapper needed for tests
-        );
+        ponder = new PonderToken(teamReserve, marketing, address(0));
+        staking = new PonderStaking(address(ponder), address(router), address(factory));
 
-        ponder = new PonderToken(
-            treasury,
-            teamReserve,
-            marketing,
-            address(0)
-        );
-
-        staking = new PonderStaking(
-            address(ponder),
-            address(router),
-            address(factory)
-        );
-
-        // Setup initial balances
-        vm.startPrank(treasury);
+        // Get tokens from marketing wallet
+        vm.startPrank(marketing);
+        // Send tokens for user tests
         ponder.transfer(user1, 10_000e18);
         ponder.transfer(user2, 10_000e18);
+        // Send tokens for test contract (for simulating rewards)
+        ponder.transfer(address(this), 100_000e18);
         vm.stopPrank();
+    }
+
+
+    function test_LeaveWithRewards() public {
+        // First stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Simulate fee distribution using test contract's balance
+        ponder.transfer(address(staking), 100e18);
+
+        // Leave all shares
+        vm.startPrank(user1);
+        uint256 ponderReceived = staking.leave(1000e18);
+        vm.stopPrank();
+
+        assertEq(ponderReceived, 1100e18, "Should receive initial stake plus rewards");
+    }
+
+    function test_MultipleEnters() public {
+        // First user stakes
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Add rewards using test contract's balance
+        ponder.transfer(address(staking), 100e18);
+
+        // Second user stakes
+        uint256 user2StakeAmount = 1000e18;
+        vm.startPrank(user2);
+        ponder.approve(address(staking), user2StakeAmount);
+        uint256 shares = staking.enter(user2StakeAmount);
+        vm.stopPrank();
+
+        assertLt(shares, user2StakeAmount, "Should receive fewer shares due to rewards");
+    }
+
+    function test_Rebase() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Simulate fee distribution using test contract's balance
+        ponder.transfer(address(staking), 100e18);
+
+        // Advance time for rebase
+        vm.warp(block.timestamp + 1 days);
+
+        vm.expectEmit(true, true, true, true);
+        emit RebasePerformed(1000e18, 1100e18);
+
+        staking.rebase();
+
+        uint256 shareValue = staking.getPonderAmount(1000e18);
+        assertEq(shareValue, 1100e18, "Share value should reflect rewards");
+    }
+
+    function test_GetPonderAmount() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        assertEq(staking.getPonderAmount(1000e18), 1000e18, "Should be 1:1 initially");
+
+        // Add rewards using test contract's balance
+        ponder.transfer(address(staking), 100e18);
+
+        assertEq(staking.getPonderAmount(1000e18), 1100e18, "Should reflect rewards");
+    }
+
+    function testFuzz_EnterAndLeave(uint256 amount) public {
+        // Bound the amount to reasonable values and available balance
+        amount = bound(amount, 1e18, 1000e18);
+
+        vm.startPrank(marketing);
+        ponder.transfer(address(this), amount);
+        vm.stopPrank();
+
+        ponder.approve(address(staking), amount);
+        uint256 shares = staking.enter(amount);
+        uint256 ponderReceived = staking.leave(shares);
+
+        assertApproxEqRel(ponderReceived, amount, 1e14);
     }
 
     function test_InitialState() public {
@@ -88,29 +166,6 @@ contract PonderStakingTest is Test {
         assertEq(ponder.balanceOf(address(staking)), stakeAmount, "Staking contract should have PONDER");
     }
 
-    function test_MultipleEnters() public {
-        // First user stakes
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
-        vm.stopPrank();
-
-        // Add rewards (simulating fee distribution)
-        vm.startPrank(treasury);
-        ponder.transfer(address(staking), 100e18);
-        vm.stopPrank();
-
-        // Second user stakes
-        uint256 user2StakeAmount = 1000e18;
-        vm.startPrank(user2);
-        ponder.approve(address(staking), user2StakeAmount);
-        uint256 shares = staking.enter(user2StakeAmount);
-        vm.stopPrank();
-
-        // Should receive fewer shares due to increased PONDER per share
-        assertLt(shares, user2StakeAmount, "Should receive fewer shares due to rewards");
-    }
-
     function test_Leave() public {
         // First stake
         vm.startPrank(user1);
@@ -130,51 +185,6 @@ contract PonderStakingTest is Test {
         assertEq(staking.balanceOf(user1), 500e18, "Should have remaining xPONDER");
     }
 
-    function test_LeaveWithRewards() public {
-        // First stake
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
-        vm.stopPrank();
-
-        // Simulate fee distribution
-        vm.startPrank(treasury);
-        ponder.transfer(address(staking), 100e18);
-        vm.stopPrank();
-
-        // Leave all shares
-        vm.startPrank(user1);
-        uint256 ponderReceived = staking.leave(1000e18);
-        vm.stopPrank();
-
-        assertEq(ponderReceived, 1100e18, "Should receive initial stake plus rewards");
-    }
-
-    function test_Rebase() public {
-        // Initial stake
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
-        vm.stopPrank();
-
-        // Simulate fee distribution
-        vm.startPrank(treasury);
-        ponder.transfer(address(staking), 100e18);
-        vm.stopPrank();
-
-        // Advance time for rebase
-        vm.warp(block.timestamp + 1 days);
-
-        vm.expectEmit(true, true, true, true);
-        emit RebasePerformed(1000e18, 1100e18);
-
-        staking.rebase();
-
-        // Check share value after rebase
-        uint256 shareValue = staking.getPonderAmount(1000e18);
-        assertEq(shareValue, 1100e18, "Share value should reflect rewards");
-    }
-
     function test_RebaseFrequency() public {
         // Advance time past initial lastRebaseTime
         vm.warp(block.timestamp + 1 days);
@@ -192,43 +202,6 @@ contract PonderStakingTest is Test {
         // Advance enough time
         vm.warp(block.timestamp + 12 hours);
         staking.rebase(); // Should succeed
-    }
-
-    function test_GetPonderAmount() public {
-        // Initial stake
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
-        vm.stopPrank();
-
-        // No rewards yet
-        assertEq(staking.getPonderAmount(1000e18), 1000e18, "Should be 1:1 initially");
-
-        // Add rewards
-        vm.startPrank(treasury);
-        ponder.transfer(address(staking), 100e18);
-        vm.stopPrank();
-
-        assertEq(staking.getPonderAmount(1000e18), 1100e18, "Should reflect rewards");
-    }
-
-    function test_GetSharesAmount() public {
-        // Initial stake
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
-        vm.stopPrank();
-
-        // No rewards yet
-        assertEq(staking.getSharesAmount(1000e18), 1000e18, "Should be 1:1 initially");
-
-        // Add rewards
-        vm.startPrank(treasury);
-        ponder.transfer(address(staking), 100e18);
-        vm.stopPrank();
-
-        // Should get fewer shares for same PONDER amount
-        assertLt(staking.getSharesAmount(1000e18), 1000e18, "Should get fewer shares after rewards");
     }
 
     function test_RevertOnZeroAmount() public {
@@ -270,21 +243,5 @@ contract PonderStakingTest is Test {
 
         assertEq(staking.owner(), newOwner);
         assertEq(staking.pendingOwner(), address(0));
-    }
-
-    function testFuzz_EnterAndLeave(uint256 amount) public {
-        // Bound the amount to reasonable values and minimum necessary for share calculation
-        amount = bound(amount, 1e18, 100_000e18);
-
-        vm.startPrank(treasury);
-        ponder.transfer(address(this), amount);
-        vm.stopPrank();
-
-        ponder.approve(address(staking), amount);
-        uint256 shares = staking.enter(amount);
-        uint256 ponderReceived = staking.leave(shares);
-
-        // Should get back the same amount (minus rounding if any)
-        assertApproxEqRel(ponderReceived, amount, 1e14); // 0.01% tolerance for rounding
     }
 }

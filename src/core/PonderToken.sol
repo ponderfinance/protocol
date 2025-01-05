@@ -28,9 +28,6 @@ contract PonderToken is PonderERC20 {
     /// @notice Future owner in 2-step transfer
     address public pendingOwner;
 
-    /// @notice Treasury/DAO address
-    address public treasury;
-
     /// @notice Team/Reserve address
     address public teamReserve;
 
@@ -44,7 +41,7 @@ contract PonderToken is PonderERC20 {
     uint256 public teamTokensClaimed;
 
     /// @notice Total amount for team vesting
-    uint256 public constant TEAM_ALLOCATION = 150_000_000e18; // 15%
+    uint256 public constant TEAM_ALLOCATION = 250_000_000e18; // 25%
 
     /// @notice Vesting duration for team allocation (1 year)
     uint256 public constant VESTING_DURATION = 365 days;
@@ -76,31 +73,26 @@ contract PonderToken is PonderERC20 {
     }
 
     constructor(
-        address _treasury,
         address _teamReserve,
         address _marketing,
         address _launcher // Can be address(0), will be set later through setLauncher
     ) PonderERC20("Koi", "KOI") {
-        if (_treasury == address(0) || _teamReserve == address(0) || _marketing == address(0)) revert ZeroAddress();
+        if (_teamReserve == address(0) || _marketing == address(0)) revert ZeroAddress();
 
 
         launcher = _launcher;
         owner = msg.sender;
         deploymentTime = block.timestamp;
-        treasury = _treasury;
         teamReserve = _teamReserve;
         marketing = _marketing;
         teamVestingStart = block.timestamp;
 
         // Initial distributions
-        // Treasury/DAO: 25% (250M)
-        _mint(treasury, 250_000_000e18);
-
         // Initial Liquidity: 10% (100M)
-        _mint(address(this), 100_000_000e18);
+        _mint(address(this), 200_000_000e18);
 
         // Marketing: 10% (100M)
-        _mint(marketing, 100_000_000e18);
+        _mint(marketing, 150_000_000e18);
 
         // Note: Team allocation (15%, 150M) is vested
         // Farming allocation (40%, 400M) will be handled by MasterChef
