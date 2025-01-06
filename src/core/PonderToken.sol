@@ -89,7 +89,7 @@ contract PonderToken is PonderERC20 {
 
         // Initial distributions
         // Initial Liquidity: 10% (100M)
-        _mint(address(this), 200_000_000e18);
+        _mint(owner, 200_000_000e18);
 
         // Marketing: 10% (100M)
         _mint(marketing, 150_000_000e18);

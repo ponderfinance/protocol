@@ -471,7 +471,12 @@ contract FiveFiveFiveLauncher {
         uint256 kubAmount,
         uint256 tokenAmount
     ) internal returns (address) {
-        address pair = factory.createPair(tokenAddress, router.WETH());
+        // Check if pair exists first
+        address pair = factory.getPair(tokenAddress, router.WETH());
+        if (pair == address(0)) {
+            pair = factory.createPair(tokenAddress, router.WETH());
+        }
+
         LaunchToken(tokenAddress).approve(address(router), tokenAmount);
 
         router.addLiquidityETH{value: kubAmount}(
@@ -491,7 +496,12 @@ contract FiveFiveFiveLauncher {
         uint256 ponderAmount,
         uint256 tokenAmount
     ) internal returns (address) {
-        address pair = factory.createPair(tokenAddress, address(ponder));
+        // Check if pair exists first
+        address pair = factory.getPair(tokenAddress, address(ponder));
+        if (pair == address(0)) {
+            pair = factory.createPair(tokenAddress, address(ponder));
+        }
+
         LaunchToken(tokenAddress).approve(address(router), tokenAmount);
         ponder.approve(address(router), ponderAmount);
 

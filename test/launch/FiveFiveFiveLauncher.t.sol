@@ -431,5 +431,96 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.stopPrank();
     }
 
+    function testPreExistingPairs() public {
+        uint256 launchId = _createTestLaunch();
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+
+        // Create pairs manually before launch is completed
+        address wethAddr = router.WETH();
+        factory.createPair(tokenAddress, wethAddr);  // Create MEME/KUB pair
+        factory.createPair(tokenAddress, address(ponder));  // Create MEME/PONDER pair
+
+        // Contribute enough to complete the launch
+        uint256 kubAmount = (TARGET_RAISE * 80) / 100;  // 80% in KUB
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+        vm.stopPrank();
+
+        // Add remaining 20% in PONDER
+        uint256 ponderValue = (TARGET_RAISE * 20) / 100;
+        uint256 ponderAmount = ponderValue * 10;  // Convert to PONDER amount at 0.1 KUB per PONDER
+
+        vm.startPrank(bob);
+        launcher.contributePONDER(launchId, ponderAmount);
+        vm.stopPrank();
+
+        // Check if launch completed successfully
+        (,,,, uint256 kubRaised, bool launched,) = launcher.getLaunchInfo(launchId);
+        assertTrue(launched, "Launch should complete even with pre-existing pairs");
+
+        // Verify pools were used correctly
+        (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
+
+        // Verify liquidity was added to existing pairs
+        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+        assertGt(PonderERC20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
+    }
+
+    function testPartialPreExistingPairs() public {
+        uint256 launchId = _createTestLaunch();
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+
+        // Only create MEME/KUB pair manually
+        address wethAddr = router.WETH();
+        factory.createPair(tokenAddress, wethAddr);
+
+        // Contribute enough to complete the launch
+        uint256 kubAmount = (TARGET_RAISE * 80) / 100;
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+        vm.stopPrank();
+
+        // Add remaining 20% in PONDER
+        uint256 ponderValue = (TARGET_RAISE * 20) / 100;
+        uint256 ponderAmount = ponderValue * 10;
+
+        vm.startPrank(bob);
+        launcher.contributePONDER(launchId, ponderAmount);
+        vm.stopPrank();
+
+        // Verify launch completed and both pools exist
+        (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
+
+        assertTrue(hasSecondaryPool, "Secondary pool should exist");
+        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+        assertGt(PonderERC20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
+        assertTrue(memePonderPair != address(0), "PONDER pair should be created");
+    }
+
+    function testLaunchWithZeroPonderContribution() public {
+        uint256 launchId = _createTestLaunch();
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+
+        // Create both pairs manually
+        factory.createPair(tokenAddress, router.WETH());
+        factory.createPair(tokenAddress, address(ponder));
+
+        // Complete launch with only KUB
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE}(launchId);
+        vm.stopPrank();
+
+        // Verify launch completed with only KUB pool
+        (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
+
+        assertFalse(hasSecondaryPool, "Should not have secondary pool with no PONDER contribution");
+        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+
+        // Check if memePonderPair exists but has no liquidity
+        if (memePonderPair != address(0)) {
+            assertEq(PonderERC20(memePonderPair).totalSupply(), 0, "Should not have PONDER pool liquidity");
+        }
+    }
+
     receive() external payable {}
 }

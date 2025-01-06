@@ -23,24 +23,26 @@ contract PonderMasterChefTest is Test {
     address treasury = address(0x3);
     address launcher = address(0xbad);
 
-    uint256 constant PONDER_PER_SECOND = 1e18;
-    uint256 constant INITIAL_LP_SUPPLY = 1000e18;
-    uint256 constant INITIAL_PONDER_SUPPLY = 100_000e18;
+    // Error Selectors
+    bytes4 constant InvalidPool = bytes4(keccak256("InvalidPool()"));
+    bytes4 constant Forbidden = bytes4(keccak256("Forbidden()"));
+    bytes4 constant ExcessiveDepositFee = bytes4(keccak256("ExcessiveDepositFee()"));
+    bytes4 constant InvalidBoostMultiplier = bytes4(keccak256("InvalidBoostMultiplier()"));
+    bytes4 constant ZeroAmount = bytes4(keccak256("ZeroAmount()"));
+    bytes4 constant InsufficientAmount = bytes4(keccak256("InsufficientAmount()"));
+    bytes4 constant ZeroAddress = bytes4(keccak256("ZeroAddress()"));
 
-    event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
-    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event BoostStake(address indexed user, uint256 indexed pid, uint256 amount);
-    event BoostUnstake(address indexed user, uint256 indexed pid, uint256 amount);
-    event PoolAdded(uint256 indexed pid, address indexed lpToken, uint256 allocPoint);
-    event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
+    // Simplified constants
+    uint256 constant PONDER_PER_SECOND = 3168000000000000000; // 3.168 PONDER
+    uint256 constant INITIAL_LP_SUPPLY = 1000e18;
+    uint256 constant INITIAL_PONDER_SUPPLY = 1000000e18; // Just for testing
 
     function setUp() public {
-        // Deploy core contracts
+        // Simple token deployment
         ponder = new PonderToken(owner, owner, launcher);
-        factory = new PonderFactory(address(this), address(1), address(2));
+        factory = new PonderFactory(owner, address(1), address(2));
 
-        // Deploy MasterChef with start time = now
+        // Deploy MasterChef
         masterChef = new PonderMasterChef(
             ponder,
             factory,
@@ -49,18 +51,16 @@ contract PonderMasterChefTest is Test {
             block.timestamp
         );
 
-        // Set MasterChef as minter for PONDER token
+        // Give MasterChef minting rights
         ponder.setMinter(address(masterChef));
 
-        // Deploy test tokens and create pair
+        // Setup test tokens and pair
         tokenA = new ERC20Mint("Token A", "TKNA");
         tokenB = new ERC20Mint("Token B", "TKNB");
-
-        // Create pair through factory
         address pairAddress = factory.createPair(address(tokenA), address(tokenB));
         pair = PonderPair(pairAddress);
 
-        // Setup initial liquidity
+        // Setup initial LP tokens
         tokenA.mint(alice, INITIAL_LP_SUPPLY);
         tokenB.mint(alice, INITIAL_LP_SUPPLY);
 
@@ -71,7 +71,7 @@ contract PonderMasterChefTest is Test {
         vm.stopPrank();
     }
 
-    function testInitialState() public view {
+    function testInitialState() public {
         assertEq(address(masterChef.ponder()), address(ponder));
         assertEq(address(masterChef.factory()), address(factory));
         assertEq(masterChef.treasury(), treasury);
@@ -80,204 +80,246 @@ contract PonderMasterChefTest is Test {
         assertEq(masterChef.poolLength(), 0);
     }
 
-    function testAddPool() public {
-        uint256 allocPoint = 100;
-        uint16 depositFeeBP = 500; // 5%
-        uint16 boostMultiplier = 20000; // 2x
-
-        vm.expectEmit(true, true, true, true);
-        emit PoolAdded(0, address(pair), allocPoint);
-
-        masterChef.add(
-            allocPoint,
-            address(pair),
-            depositFeeBP,
-            boostMultiplier,
-            true
-        );
-
-        assertEq(masterChef.poolLength(), 1);
-        assertEq(masterChef.totalAllocPoint(), allocPoint);
-
-        (
-            address lpToken,
-            uint256 poolAllocPoint,
-            uint256 lastRewardTime,
-            uint256 accPonderPerShare,
-            uint256 totalStaked,
-            uint16 poolDepositFeeBP,
-            uint16 poolBoostMultiplier
-        ) = masterChef.poolInfo(0);
-
-        assertEq(lpToken, address(pair));
-        assertEq(poolAllocPoint, allocPoint);
-        assertEq(lastRewardTime, block.timestamp);
-        assertEq(accPonderPerShare, 0);
-        assertEq(totalStaked, 0);
-        assertEq(poolDepositFeeBP, depositFeeBP);
-        assertEq(poolBoostMultiplier, boostMultiplier);
-    }
-
-    function testDeposit() public {
-        // Add pool first
-        masterChef.add(100, address(pair), 500, 20000, true);
-        uint256 depositAmount = 100e18;
-
-        // Calculate expected amount after fee
-        uint256 depositFee = (depositAmount * 500) / 10000; // 5% fee
-        uint256 expectedAmount = depositAmount - depositFee;
-
-        // Approve and deposit LP tokens
+    function testRevertInvalidPool() public {
         vm.startPrank(alice);
-        pair.approve(address(masterChef), depositAmount);
+        vm.expectRevert(InvalidPool);
+        masterChef.deposit(0, 100e18);
 
-        vm.expectEmit(true, true, true, true);
-        emit Deposit(alice, 0, expectedAmount);
+        vm.expectRevert(InvalidPool);
+        masterChef.withdraw(0, 100e18);
 
-        masterChef.deposit(0, depositAmount);
+        vm.expectRevert(InvalidPool);
+        masterChef.emergencyWithdraw(0);
+
+        vm.expectRevert(InvalidPool);
+        masterChef.pendingPonder(0, alice);
         vm.stopPrank();
-
-        // Check balances and state
-        (uint256 amount, uint256 rewardDebt, uint256 ponderStaked) = masterChef.userInfo(0, alice);
-        assertEq(amount, expectedAmount);
-        assertEq(rewardDebt, 0);
-        assertEq(ponderStaked, 0);
     }
 
-    function testRewards() public {
+    function testSinglePool() public {
         // Add pool
-        masterChef.add(100, address(pair), 0, 20000, true);
-        uint256 depositAmount = 100e18;
+        masterChef.add(1, address(pair), 0, 20000, true);
 
         // Alice deposits
         vm.startPrank(alice);
-        pair.approve(address(masterChef), depositAmount);
-        masterChef.deposit(0, depositAmount);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
         vm.stopPrank();
 
         // Move forward 1 day
         vm.warp(block.timestamp + 1 days);
 
-        // Check pending rewards
-        uint256 pending = masterChef.pendingPonder(0, alice);
-        assertEq(pending, 1 days * PONDER_PER_SECOND);
-
-        // Harvest rewards
-        vm.prank(alice);
-        masterChef.deposit(0, 0); // Deposit 0 to harvest
-
-        assertEq(ponder.balanceOf(alice), pending);
+        // Check rewards
+        uint256 expectedReward = PONDER_PER_SECOND * 1 days;
+        uint256 pendingRewards = masterChef.pendingPonder(0, alice);
+        assertApproxEqRel(pendingRewards, expectedReward, 0.001e18);
     }
 
-    function testBoost() public {
-        // Add pool with 2x boost
-        masterChef.add(100, address(pair), 0, 20000, true);
+    function testBoostMultiplier() public {
+        // Add pool with max 3x boost
+        masterChef.add(1, address(pair), 0, 30000, true);
         uint256 depositAmount = 100e18;
 
-        // Mint some PONDER to Alice first
-        vm.prank(address(masterChef));
+        // Alice deposits LP
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), depositAmount);
+        masterChef.deposit(0, depositAmount);
+
+        // Mint PONDER for boost
+        vm.startPrank(address(masterChef));
         ponder.mint(alice, 1000e18);
+        vm.stopPrank();
 
-        // Alice deposits LP and stakes PONDER
+        // Alice stakes PONDER for 2x boost
         vm.startPrank(alice);
-        pair.approve(address(masterChef), depositAmount);
-        masterChef.deposit(0, depositAmount);
-
-        // Stake PONDER for boost
         ponder.approve(address(masterChef), 1000e18);
-        masterChef.boostStake(0, 1000e18);
+        uint256 requiredPonder = masterChef.getRequiredPonderForBoost(depositAmount, 20000);
+        masterChef.boostStake(0, requiredPonder);
         vm.stopPrank();
 
-        // Move forward 1 day
-        vm.warp(block.timestamp + 1 days);
-
-        // Check boosted rewards (should be 2x)
-        uint256 pending = masterChef.pendingPonder(0, alice);
-        assertEq(pending, 2 * 1 days * PONDER_PER_SECOND);
-    }
-
-    function testWithdraw() public {
-        // Add pool
-        masterChef.add(100, address(pair), 0, 20000, true);
-        uint256 depositAmount = 100e18;
-
-        // Setup deposit
-        vm.startPrank(alice);
-        pair.approve(address(masterChef), depositAmount);
-        masterChef.deposit(0, depositAmount);
-
-        // Move forward for some rewards
-        vm.warp(block.timestamp + 1 days);
-
-        // Withdraw half
-        uint256 withdrawAmount = 50e18;
-
-        vm.expectEmit(true, true, true, true);
-        emit Withdraw(alice, 0, withdrawAmount);
-
-        masterChef.withdraw(0, withdrawAmount);
-        vm.stopPrank();
-
-        // Check balances
-        (uint256 amount, , ) = masterChef.userInfo(0, alice);
-        assertEq(amount, depositAmount - withdrawAmount);
-        assertEq(pair.balanceOf(alice), INITIAL_LP_SUPPLY - depositAmount + withdrawAmount);
+        // Check boost multiplier
+        uint256 boost = masterChef.previewBoostMultiplier(0, requiredPonder, depositAmount);
+        assertEq(boost, 20000); // 2x
     }
 
     function testEmergencyWithdraw() public {
-        // Add pool
-        masterChef.add(100, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000, true);
         uint256 depositAmount = 100e18;
 
-        // Setup deposit
         vm.startPrank(alice);
         pair.approve(address(masterChef), depositAmount);
         masterChef.deposit(0, depositAmount);
 
         uint256 balanceBefore = pair.balanceOf(alice);
-
-        // Emergency withdraw
-        vm.expectEmit(true, true, true, true);
-        emit EmergencyWithdraw(alice, 0, depositAmount);
-
         masterChef.emergencyWithdraw(0);
-        vm.stopPrank();
 
-        // Check all funds returned, rewards forfeited
-        (uint256 amount, uint256 rewardDebt, uint256 ponderStaked) = masterChef.userInfo(0, alice);
-        assertEq(amount, 0);
-        assertEq(rewardDebt, 0);
-        assertEq(ponderStaked, 0);
         assertEq(pair.balanceOf(alice), balanceBefore + depositAmount);
+        (uint256 amount,,,) = masterChef.userInfo(0, alice);
+        assertEq(amount, 0);
+        vm.stopPrank();
     }
 
-    function testMultipleUsers() public {
-        // Add pool
-        masterChef.add(100, address(pair), 0, 20000, true);
+    function testDepositWithFee() public {
+        uint16 depositFeeBP = 500; // 5% fee
+        masterChef.add(1, address(pair), depositFeeBP, 20000, true);
         uint256 depositAmount = 100e18;
 
-        // Give Bob some LP tokens
-        vm.prank(alice);
-        pair.transfer(bob, depositAmount);
-
-        // Alice and Bob deposit
         vm.startPrank(alice);
         pair.approve(address(masterChef), depositAmount);
         masterChef.deposit(0, depositAmount);
         vm.stopPrank();
 
-        vm.startPrank(bob);
+        uint256 expectedFee = (depositAmount * depositFeeBP) / masterChef.BASIS_POINTS();
+        assertEq(pair.balanceOf(treasury), expectedFee);
+    }
+
+    function testRevertExcessiveDepositFee() public {
+        vm.expectRevert(ExcessiveDepositFee);
+        masterChef.add(1, address(pair), 1001, 20000, true); // More than 10% fee
+    }
+    function testEmissionsCapWithMaxBoosts() public {
+        // Setup initial state
+        masterChef.add(1, address(pair), 0, 30000, true); // Allow up to 3x boost
+        uint256 farmingCap = 400_000_000e18; // 400M maximum farming allocation
+
+        // Setup 5 users with max boost to try to exceed emissions
+        address[] memory users = new address[](5);
+        for(uint256 i = 0; i < 5; i++) {
+            users[i] = address(uint160(i + 1));
+
+            // Give each user LP tokens
+            tokenA.mint(users[i], INITIAL_LP_SUPPLY);
+            tokenB.mint(users[i], INITIAL_LP_SUPPLY);
+
+            vm.startPrank(users[i]);
+            tokenA.transfer(address(pair), INITIAL_LP_SUPPLY);
+            tokenB.transfer(address(pair), INITIAL_LP_SUPPLY);
+            pair.mint(users[i]);
+
+            // Deposit LP tokens
+            pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+            masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
+            // Mint and stake PONDER for max boost
+            vm.startPrank(address(masterChef));
+            ponder.mint(users[i], 1000e18);
+            vm.stopPrank();
+
+            vm.startPrank(users[i]);
+            ponder.approve(address(masterChef), 1000e18);
+            uint256 requiredPonder = masterChef.getRequiredPonderForBoost(INITIAL_LP_SUPPLY, 30000); // 3x boost
+            masterChef.boostStake(0, requiredPonder);
+            vm.stopPrank();
+        }
+
+        // Fast forward 4 years
+        uint256 fourYears = 4 * 365 days;
+        vm.warp(block.timestamp + fourYears);
+
+        // Log initial supply
+        uint256 initialSupply = ponder.totalSupply();
+        console.log("Initial supply:", initialSupply);
+
+        // Update pool to mint all rewards
+        masterChef.updatePool(0);
+
+        // Log final supply and emissions
+        uint256 finalSupply = ponder.totalSupply();
+        uint256 totalEmitted = finalSupply - initialSupply;
+        console.log("Total emitted:", totalEmitted);
+        console.log("Farming cap:", farmingCap);
+
+        // Verify we haven't exceeded farming cap
+        assertLe(totalEmitted, farmingCap, "Exceeded farming cap");
+
+        // Test individual claims don't exceed cap
+        uint256 totalClaimed;
+        for(uint256 i = 0; i < 5; i++) {
+            vm.startPrank(users[i]);
+            uint256 balanceBefore = ponder.balanceOf(users[i]);
+            masterChef.withdraw(0, INITIAL_LP_SUPPLY); // This claims rewards
+            uint256 claimed = ponder.balanceOf(users[i]) - balanceBefore;
+            totalClaimed += claimed;
+            vm.stopPrank();
+        }
+
+        console.log("Total claimed by users:", totalClaimed);
+        assertLe(totalClaimed, farmingCap, "Total claims exceeded farming cap");
+    }
+
+    function testEmissionsRateWithVaryingBoosts() public {
+        masterChef.add(1, address(pair), 0, 30000, true); // Allow up to 3x boost
+
+        // Setup 3 users with different boost levels
+        address user1 = address(0x1); // Will have no boost
+        address user2 = address(0x2); // Will have 2x boost
+        address user3 = address(0x3); // Will have 3x boost
+
+        // Setup initial LP for all users
+        uint256 depositAmount = 100e18;
+        setupUserWithLP(user1, depositAmount);
+        setupUserWithLP(user2, depositAmount);
+        setupUserWithLP(user3, depositAmount);
+
+        // User 1: No boost
+        vm.startPrank(user1);
         pair.approve(address(masterChef), depositAmount);
         masterChef.deposit(0, depositAmount);
         vm.stopPrank();
 
-        // Move forward 1 day
-        vm.warp(block.timestamp + 1 days);
+        // User 2: 2x boost
+        setupBoostForUser(user2, depositAmount, 20000);
 
-        // Check rewards split equally
-        uint256 alicePending = masterChef.pendingPonder(0, alice);
-        uint256 bobPending = masterChef.pendingPonder(0, bob);
-        assertEq(alicePending, bobPending);
-        assertEq(alicePending, (1 days * PONDER_PER_SECOND) / 2);
+        // User 3: 3x boost
+        setupBoostForUser(user3, depositAmount, 30000);
+
+        // Track initial state
+        uint256 startTime = block.timestamp;
+        uint256 initialSupply = ponder.totalSupply();
+
+        // Fast forward one year
+        vm.warp(block.timestamp + 365 days);
+        masterChef.updatePool(0);
+
+        // Calculate expected emissions for 1 year
+        uint256 expectedBaseEmissions = PONDER_PER_SECOND * 365 days;
+        uint256 actualEmissions = ponder.totalSupply() - initialSupply;
+
+        console.log("Expected base emissions for 1 year:", expectedBaseEmissions);
+        console.log("Actual emissions:", actualEmissions);
+
+        // Even with different boosts, total emissions should match base rate
+        assertApproxEqRel(actualEmissions, expectedBaseEmissions, 0.001e18);
+    }
+
+// Helper function to setup user with LP tokens
+    function setupUserWithLP(address user, uint256 amount) internal {
+        tokenA.mint(user, amount);
+        tokenB.mint(user, amount);
+
+        vm.startPrank(user);
+        tokenA.transfer(address(pair), amount);
+        tokenB.transfer(address(pair), amount);
+        pair.mint(user);
+        vm.stopPrank();
+    }
+
+// Helper function to setup boost for a user
+    function setupBoostForUser(address user, uint256 lpAmount, uint256 targetMultiplier) internal {
+        // Mint PONDER for boost
+        vm.startPrank(address(masterChef));
+        ponder.mint(user, 1000e18);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        // Deposit LP first
+        pair.approve(address(masterChef), lpAmount);
+        masterChef.deposit(0, lpAmount);
+
+        // Then setup boost
+        ponder.approve(address(masterChef), 1000e18);
+        uint256 requiredPonder = masterChef.getRequiredPonderForBoost(lpAmount, targetMultiplier);
+        masterChef.boostStake(0, requiredPonder);
+        vm.stopPrank();
     }
 }

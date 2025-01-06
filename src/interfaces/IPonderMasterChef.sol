@@ -2,24 +2,25 @@
 pragma solidity ^0.8.19;
 
 interface IPonderMasterChef {
-    /// @notice Info of each user's stake in a pool
+    /// @notice Struct to track user's position in a pool
     struct UserInfo {
-        uint256 amount;           // LP tokens provided
-        uint256 rewardDebt;       // Reward debt
+        uint256 amount;           // LP tokens staked
+        uint256 rewardDebt;       // Reward debt to handle reward calculations
         uint256 ponderStaked;     // PONDER tokens staked for boost
+        uint256 weightedShares;   // User's share weight including boost
     }
 
-    /// @notice Info of each pool
+    /// @notice Struct to track pool information
     struct PoolInfo {
-        address lpToken;          // LP token address
-        uint256 allocPoint;       // Allocation points for pool
-        uint256 lastRewardTime;   // Last timestamp rewards were distributed
-        uint256 accPonderPerShare; // Accumulated PONDER per share, times 1e12
-        uint256 totalStaked;      // Total LP tokens staked
-        uint16 depositFeeBP;      // Deposit fee in basis points
-        uint16 boostMultiplier;   // Reward multiplier for PONDER staking (10000 = 1x)
+        address lpToken;           // LP token address
+        uint256 allocPoint;        // Pool's share of PONDER emissions
+        uint256 lastRewardTime;    // Last time rewards were distributed
+        uint256 accPonderPerShare; // Accumulated PONDER per weighted share, times 1e12
+        uint256 totalStaked;       // Total LP tokens staked
+        uint256 totalWeightedShares; // Total weighted shares (including all boosts)
+        uint16 depositFeeBP;       // Deposit fee in basis points
+        uint16 boostMultiplier;    // Maximum boost multiplier
     }
-
     /// @notice Returns the number of pools
     function poolLength() external view returns (uint256);
 

@@ -13,39 +13,33 @@ import "../../src/periphery/PonderRouter.sol";
 import "forge-std/Script.sol";
 
 contract DeployBitkubScript is Script {
-    // Total farming allocation is 400M PONDER over 4 years
-    // This equals approximately 3.168 PONDER per second (400M / (4 * 365 * 24 * 60 * 60))
     uint256 constant PONDER_PER_SECOND = 3168000000000000000; // 3.168 ether
-
-    address constant USDT = 0x7d984C24d2499D840eB3b7016077164e15E5faA6;
-    // testnet - 0xBa71efd94be63bD47B78eF458DE982fE29f552f7
-    // mainnet - 0x7d984C24d2499D840eB3b7016077164e15E5faA6
-
-    address constant KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
-    // testnet - 0xBa71efd94be63bD47B78eF458DE982fE29f552f7
-    // mainnet - 0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5
-
-    // Initial liquidity constants (PONDER = $0.0001, KUB = $2.80)
-    uint256 constant INITIAL_KUB_AMOUNT = 1000 ether;                 // 1000 KUB
+    uint256 constant INITIAL_KUB_AMOUNT = 1000 ether;
     uint256 constant LIQUIDITY_ALLOCATION = 200_000_000 ether;
 
+    address constant USDT = 0x7d984C24d2499D840eB3b7016077164e15E5faA6;
+    address constant KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
 
     error InvalidAddress();
     error PairCreationFailed();
     error DeploymentFailed(string name);
     error LiquidityAddFailed();
 
-    struct DeploymentAddresses {
-        address ponder;
-        address factory;
-        address kkubUnwrapper;
-        address router;
-        address oracle;
+    struct DeploymentState {
+        address deployer;
+        address treasury;
+        address teamReserve;
+        address marketing;
+        PonderToken ponder;
+        PonderFactory factory;
+        KKUBUnwrapper kkubUnwrapper;
+        PonderRouter router;
+        PonderPriceOracle oracle;
         address ponderKubPair;
-        address masterChef;
-        address launcher;
-        address staking;
-        address feeDistributor;
+        PonderMasterChef masterChef;
+        FiveFiveFiveLauncher launcher;
+        PonderStaking staking;
+        FeeDistributor feeDistributor;
     }
 
     function validateAddresses(
@@ -70,153 +64,120 @@ contract DeployBitkubScript is Script {
         address marketing = vm.envAddress("MARKETING_ADDRESS");
         address deployer = vm.addr(deployerPrivateKey);
 
-        // Validate addresses
         validateAddresses(treasury, teamReserve, marketing, deployer);
 
         vm.startBroadcast(deployerPrivateKey);
 
-        DeploymentAddresses memory addresses = deployContracts(
-            deployer,
-            treasury,
-            teamReserve,
-            marketing
-        );
+        DeploymentState memory state = deployCore(deployer, treasury, teamReserve, marketing);
+        setupInitialPrices(state);
+        finalizeConfiguration(state);
 
         vm.stopBroadcast();
 
-        logDeployment(addresses, treasury);
+        logDeployment(state, treasury);
     }
 
-    function deployContracts(
+    function deployCore(
         address deployer,
         address treasury,
         address teamReserve,
         address marketing
-    ) internal returns (DeploymentAddresses memory addresses) {
-        // 1. Deploy core factory and periphery
-        PonderFactory factory = new PonderFactory(deployer, address(0), address(0));
-        _verifyContract("PonderFactory", address(factory));
+    ) internal returns (DeploymentState memory state) {
+        state.deployer = deployer;
+        state.treasury = treasury;
+        state.teamReserve = teamReserve;
+        state.marketing = marketing;
 
-        KKUBUnwrapper kkubUnwrapper = new KKUBUnwrapper(KKUB);
-        _verifyContract("KKUBUnwrapper", address(kkubUnwrapper));
+        // Deploy factory and periphery
+        state.factory = new PonderFactory(deployer, address(0), address(0));
+        _verifyContract("PonderFactory", address(state.factory));
 
-        PonderRouter router = new PonderRouter(
-            address(factory),
+        state.kkubUnwrapper = new KKUBUnwrapper(KKUB);
+        _verifyContract("KKUBUnwrapper", address(state.kkubUnwrapper));
+
+        state.router = new PonderRouter(
+            address(state.factory),
             KKUB,
-            address(kkubUnwrapper)
+            address(state.kkubUnwrapper)
         );
-        _verifyContract("PonderRouter", address(router));
+        _verifyContract("PonderRouter", address(state.router));
 
-        // 2. Deploy PONDER with no launcher initially
-        PonderToken ponder = new PonderToken(
-            teamReserve,
-            marketing,
-            address(0)  // No launcher initially
+        // Deploy PONDER - initial liquidity will be minted to msg.sender (deployer)
+        state.ponder = new PonderToken(teamReserve, marketing, address(0));
+        _verifyContract("PonderToken", address(state.ponder));
+
+        // Create pair
+        state.factory.createPair(address(state.ponder), KKUB);
+        state.ponderKubPair = state.factory.getPair(address(state.ponder), KKUB);
+        if (state.ponderKubPair == address(0)) revert PairCreationFailed();
+
+        // Deploy remaining contracts
+        state.oracle = new PonderPriceOracle(address(state.factory), KKUB, USDT);
+        _verifyContract("PonderPriceOracle", address(state.oracle));
+
+        state.staking = new PonderStaking(
+            address(state.ponder),
+            address(state.router),
+            address(state.factory)
         );
-        _verifyContract("PonderToken", address(ponder));
+        _verifyContract("PonderStaking", address(state.staking));
 
-        // 3. Create PONDER/KKUB pair
-        factory.createPair(address(ponder), KKUB);
-        address ponderKubPair = factory.getPair(address(ponder), KKUB);
-        if (ponderKubPair == address(0)) revert PairCreationFailed();
-
-        // 4. Deploy oracle
-        PonderPriceOracle oracle = new PonderPriceOracle(
-            address(factory),
-            KKUB,
-            USDT
-        );
-        _verifyContract("PonderPriceOracle", address(oracle));
-
-        // 5. Deploy PonderStaking (xPONDER)
-        PonderStaking staking = new PonderStaking(
-            address(ponder),
-            address(router),
-            address(factory)
-        );
-        _verifyContract("PonderStaking", address(staking));
-
-        // 6. Deploy fee distributor
-        FeeDistributor feeDistributor = new FeeDistributor(
-            address(factory),
-            address(router),
-            address(ponder),
-            address(staking),
+        state.feeDistributor = new FeeDistributor(
+            address(state.factory),
+            address(state.router),
+            address(state.ponder),
+            address(state.staking),
             teamReserve
         );
-        _verifyContract("FeeDistributor", address(feeDistributor));
+        _verifyContract("FeeDistributor", address(state.feeDistributor));
 
-        // 7. Deploy launcher
-        FiveFiveFiveLauncher launcher = new FiveFiveFiveLauncher(
-            address(factory),
-            payable(address(router)),
+        state.launcher = new FiveFiveFiveLauncher(
+            address(state.factory),
+            payable(address(state.router)),
             treasury,
-            address(ponder),
-            address(oracle)
+            address(state.ponder),
+            address(state.oracle)
         );
-        _verifyContract("Launcher", address(launcher));
+        _verifyContract("Launcher", address(state.launcher));
 
-        // 8. Deploy MasterChef
-        PonderMasterChef masterChef = new PonderMasterChef(
-            ponder,
-            factory,
+        state.masterChef = new PonderMasterChef(
+            state.ponder,
+            state.factory,
             treasury,
             PONDER_PER_SECOND,
             block.timestamp
         );
-        _verifyContract("MasterChef", address(masterChef));
+        _verifyContract("MasterChef", address(state.masterChef));
 
-        // 9. Setup initial prices and liquidity
-        setupInitialPrices(ponder, router, oracle, ponderKubPair, deployer);
-
-        // 10. Final configuration
-        ponder.setMinter(address(masterChef));
-        ponder.setLauncher(address(launcher));
-        factory.setLauncher(address(launcher));
-        factory.setPonder(address(ponder));
-        factory.setFeeTo(address(feeDistributor));
-
-        addresses = DeploymentAddresses({
-            ponder: address(ponder),
-            factory: address(factory),
-            kkubUnwrapper: address(kkubUnwrapper),
-            router: address(router),
-            oracle: address(oracle),
-            ponderKubPair: ponderKubPair,
-            masterChef: address(masterChef),
-            launcher: address(launcher),
-            staking: address(staking),
-            feeDistributor: address(feeDistributor)
-        });
-
-        return addresses;
+        return state;
     }
 
-    function setupInitialPrices(
-        PonderToken ponder,
-        PonderRouter router,
-        PonderPriceOracle oracle,
-        address ponderKubPair,
-        address deployer
-    ) internal {
-
-        // Transfer minted PONDER to the deployer for pairing
-        ponder.transfer(deployer, LIQUIDITY_ALLOCATION);
+    function setupInitialPrices(DeploymentState memory state) internal {
+        // Tokens are already minted to deployer, just need to approve router
+        state.ponder.approve(address(state.router), LIQUIDITY_ALLOCATION);
 
         // Approve the router to spend PONDER
-        ponder.approve(address(router), LIQUIDITY_ALLOCATION);
+        state.ponder.approve(address(state.router), LIQUIDITY_ALLOCATION);
 
-        // Add full liquidity allocation to KUB/PONDER pair
-        router.addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
-            address(ponder),
-            LIQUIDITY_ALLOCATION,       // Use full 200M
-            LIQUIDITY_ALLOCATION,       // Min amount same as input
-            INITIAL_KUB_AMOUNT,         // 1000 KUB
-            deployer,
+        // Add liquidity
+        state.router.addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
+            address(state.ponder),
+            LIQUIDITY_ALLOCATION,
+            LIQUIDITY_ALLOCATION,
+            INITIAL_KUB_AMOUNT,
+            state.deployer,
             block.timestamp + 1 hours
         );
 
         console.log("Initial liquidity added successfully");
+    }
+
+    function finalizeConfiguration(DeploymentState memory state) internal {
+        state.ponder.setMinter(address(state.masterChef));
+        state.ponder.setLauncher(address(state.launcher));
+        state.factory.setLauncher(address(state.launcher));
+        state.factory.setPonder(address(state.ponder));
+        state.factory.setFeeTo(address(state.feeDistributor));
     }
 
     function _verifyContract(string memory name, address contractAddress) internal view {
@@ -228,20 +189,20 @@ contract DeployBitkubScript is Script {
         console.log(name, "deployed at:", contractAddress);
     }
 
-    function logDeployment(DeploymentAddresses memory addresses, address treasury) internal view {
+    function logDeployment(DeploymentState memory state, address treasury) internal view {
         console.log("\nDeployment Summary on Bitkub Chain:");
         console.log("--------------------------------");
         console.log("KKUB Address:", KKUB);
-        console.log("PonderToken:", addresses.ponder);
-        console.log("Factory:", addresses.factory);
-        console.log("KKUBUnwrapper:", addresses.kkubUnwrapper);
-        console.log("Router:", addresses.router);
-        console.log("PriceOracle:", addresses.oracle);
-        console.log("PONDER/KKUB Pair:", addresses.ponderKubPair);
-        console.log("MasterChef:", addresses.masterChef);
-        console.log("FiveFiveFiveLauncher:", addresses.launcher);
-        console.log("PonderStaking (xPONDER):", addresses.staking);
-        console.log("FeeDistributor:", addresses.feeDistributor);
+        console.log("PonderToken:", address(state.ponder));
+        console.log("Factory:", address(state.factory));
+        console.log("KKUBUnwrapper:", address(state.kkubUnwrapper));
+        console.log("Router:", address(state.router));
+        console.log("PriceOracle:", address(state.oracle));
+        console.log("PONDER/KKUB Pair:", state.ponderKubPair);
+        console.log("MasterChef:", address(state.masterChef));
+        console.log("FiveFiveFiveLauncher:", address(state.launcher));
+        console.log("PonderStaking (xPONDER):", address(state.staking));
+        console.log("FeeDistributor:", address(state.feeDistributor));
         console.log("Treasury:", treasury);
 
         console.log("\nProtocol Fee Configuration:");
