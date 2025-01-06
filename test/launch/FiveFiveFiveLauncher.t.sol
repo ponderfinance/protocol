@@ -280,20 +280,6 @@ contract FiveFiveFiveLauncherTest is Test {
         return oracle.getCurrentPrice(ponderWethPair, address(ponder), amount);
     }
 
-    function testExcessivePonderContribution() public {
-        uint256 launchId = _createTestLaunch();
-
-        // Try to contribute 25% of target raise in PONDER
-        // 25% of 5555 ETH = 1388.75 ETH worth of PONDER
-        // At 0.1 ETH per PONDER, need 13,887.5 PONDER
-        uint256 ponderAmount = (((TARGET_RAISE * 25) / 100) * 10); // Scale up by 10 for 0.1 price
-
-        vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
-        launcher.contributePONDER(launchId, ponderAmount);
-        vm.stopPrank();
-    }
-
     function testMaxPonderContribution() public {
         uint256 launchId = _createTestLaunch();
 
@@ -353,7 +339,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.stopPrank();
     }
 
-    function testExcessiveContribution() public {
+    function testExcessivePonderContribution() public {
         uint256 launchId = _createTestLaunch();
 
         // First contribute 90% in KUB
@@ -361,12 +347,35 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.prank(alice);
         launcher.contributeKUB{value: kubContribution}(launchId);
 
-        // Try to contribute 15% in PONDER (should fail due to total raise limit)
-        // Even though it's under 20% PONDER limit, it would exceed total raise
+        // Try to contribute 15% in PONDER
         uint256 ponderAmount = (((TARGET_RAISE * 15) / 100) * 10); // Scale up by 10 for 0.1 price
+        uint256 expectedPonderSpent = (((TARGET_RAISE * 10) / 100) * 10); // Should only use 10%
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        uint256 initialPonderBalance = ponder.balanceOf(bob);
+        ponder.approve(address(launcher), ponderAmount);
+        launcher.contributePONDER(launchId, ponderAmount);
+        vm.stopPrank();
+
+        // Verify only the needed amount was taken
+        uint256 finalPonderBalance = ponder.balanceOf(bob);
+        assertEq(initialPonderBalance - finalPonderBalance, expectedPonderSpent, "Should only take required PONDER amount");
+
+        // Verify launch completed
+        (,,,,, bool launched,) = launcher.getLaunchInfo(launchId);
+        assertTrue(launched, "Launch should be completed");
+    }
+
+    // Add separate test for PONDER cap
+    function testPonderExceedsMaxPercent() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Try to contribute 25% in PONDER (over 20% limit)
+        uint256 ponderAmount = (((TARGET_RAISE * 25) / 100) * 10); // Scale up by 10 for 0.1 price
+
+        vm.startPrank(bob);
+        ponder.approve(address(launcher), ponderAmount);
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }

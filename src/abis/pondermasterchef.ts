@@ -381,6 +381,11 @@ export const pondermasterchefAbi = [
         "internalType": "uint256"
       },
       {
+        "name": "totalWeightedShares",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "depositFeeBP",
         "type": "uint16",
         "internalType": "uint16"
@@ -566,6 +571,11 @@ export const pondermasterchefAbi = [
         "name": "ponderStaked",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "weightedShares",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -747,6 +757,25 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "event",
+    "name": "PoolWeightedSharesUpdated",
+    "inputs": [
+      {
+        "name": "pid",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalWeightedShares",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TreasuryUpdated",
     "inputs": [
       {
@@ -760,6 +789,37 @@ export const pondermasterchefAbi = [
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WeightedSharesUpdated",
+    "inputs": [
+      {
+        "name": "pid",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newShares",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalShares",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -788,6 +848,11 @@ export const pondermasterchefAbi = [
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BoostTooHigh",
+    "inputs": []
   },
   {
     "type": "error",

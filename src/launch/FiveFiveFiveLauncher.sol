@@ -290,20 +290,34 @@ contract FiveFiveFiveLauncher {
         uint256 amount,
         uint256 kubValue
     ) internal view returns (ContributionResult memory result) {
-        // First check if adding this contribution would exceed 20% PONDER limit
+        // Calculate what total PONDER value would be after this contribution
         uint256 totalPonderValue = launch.contributions.ponderValueCollected + kubValue;
-        if (totalPonderValue > (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS) {
+
+        // Check if it would exceed 20% PONDER limit
+        uint256 maxPonderValue = (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS;
+        if (totalPonderValue > maxPonderValue) {
             revert ExcessivePonderContribution();
         }
 
-        // Then check if it exceeds total remaining
+        // Calculate remaining raise needed
         uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
+
+        // If kubValue exceeds remaining, calculate partial amount
         if (kubValue > remaining) {
-            revert ExcessiveContribution();
+            // Calculate what portion of the PONDER contribution we'll accept
+            result.contribution = remaining;
+            result.tokensToDistribute = (remaining * launch.allocation.tokensForContributors) / TARGET_RAISE;
+
+            // Calculate refund in PONDER terms
+            uint256 ponderToAccept = (amount * remaining) / kubValue;
+            result.refund = amount - ponderToAccept;
+        } else {
+            // Accept full contribution
+            result.contribution = kubValue;
+            result.tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) / TARGET_RAISE;
+            result.refund = 0;
         }
 
-        result.contribution = kubValue;
-        result.tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) / TARGET_RAISE;
         return result;
     }
 
@@ -312,27 +326,34 @@ contract FiveFiveFiveLauncher {
         LaunchInfo storage launch,
         ContributionResult memory result,
         uint256 kubValue,
-        uint256 ponderAmount,
+        uint256 amount,
         address contributor
     ) internal {
+        // Calculate actual PONDER amount to accept (total - refund)
+        uint256 ponderToAccept = amount - result.refund;
+
         // Update contribution state
-        launch.contributions.ponderCollected += ponderAmount;
-        launch.contributions.ponderValueCollected += kubValue;
+        launch.contributions.ponderCollected += ponderToAccept;
+        launch.contributions.ponderValueCollected += result.contribution;  // Using adjusted kubValue
         launch.contributions.tokensDistributed += result.tokensToDistribute;
 
         // Update contributor info
         ContributorInfo storage contributorInfo = launch.contributors[contributor];
-        contributorInfo.ponderContributed += ponderAmount;
-        contributorInfo.ponderValue += kubValue;
+        contributorInfo.ponderContributed += ponderToAccept;
+        contributorInfo.ponderValue += result.contribution;  // Using adjusted kubValue
         contributorInfo.tokensReceived += result.tokensToDistribute;
 
-        // Transfer tokens
-        ponder.transferFrom(contributor, address(this), ponderAmount);
+        // Transfer accepted amount of PONDER
+        ponder.transferFrom(contributor, address(this), ponderToAccept);
+
+        // If there's a refund, don't transfer it - just leave it in contributor's wallet
+
+        // Transfer launch tokens
         LaunchToken(launch.base.tokenAddress).transfer(contributor, result.tokensToDistribute);
 
         // Emit events
         emit TokensDistributed(launchId, contributor, result.tokensToDistribute);
-        emit PonderContributed(launchId, contributor, ponderAmount, kubValue);
+        emit PonderContributed(launchId, contributor, ponderToAccept, result.contribution);
     }
 
     function claimRefund(uint256 launchId) external {
