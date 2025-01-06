@@ -46,16 +46,67 @@ The 555 Launch platform introduces a novel token launch mechanism designed to cr
 - 20% (111,111,111 tokens) - Initial liquidity
 - 10% (55,555,555 tokens) - Creator vesting (180 days)
 
-### Launch Contribution Phase
-1. Target Raise:
-- Fixed at 5,555 KUB value
-- Price determined via KOI/KUB oracle
-- Contributions in KUB and KOI
+### Launch Rules & Mechanics
 
-2. Launch Fee Structure:
-- KUB Pairs: 0.04% protocol, 0.01% creator
-- KOI Pairs: 0.01% protocol, 0.04% creator
-- 0.25% always to LPs
+1. Target Raise:
+- Fixed at 5,555 KUB total value
+- Contributions accepted in:
+  - KUB (direct)
+  - KOI (valued via KOI/KUB oracle)
+- Maximum 20% of total value can be in KOI
+- Minimum contribution: 1 KUB equivalent
+- No maximum contribution per wallet
+
+2. Time Constraints:
+- Launch period: 7 days maximum
+- Launches complete instantly if target is met
+- All contributions refunded if target not met
+- No partial fills - must reach full 5,555 KUB value
+
+3. Pool Creation Upon Success:
+- KUB contributions (example: 5,000 KUB):
+  - 60% (3,000 KUB) to launch token/KUB LP
+  - 20% (1,000 KUB) to KOI/KUB LP
+  - 20% (1,000 KUB) to launch token/KOI LP
+
+- KOI contributions (example: 555 KUB worth):
+  - 80% to launch token/KOI LP
+  - 20% burned permanently
+
+4. LP Token Distribution:
+- All LP tokens locked for 180 days
+- Creator receives 100% of LP tokens after lock
+- No early withdrawal mechanisms
+- Lock period starts from launch completion
+
+5. Trading Begins:
+- Trading enabled immediately upon pool creation
+- Initial price set by pool ratios
+- Special fee structure for launch tokens:
+  - KUB Pairs: 0.04% protocol, 0.01% creator
+  - KOI Pairs: 0.01% protocol, 0.04% creator
+  - 0.25% always to LPs
+
+### Launch Creation Rules
+1. Required Parameters:
+- Name and symbol cannot be empty
+- Name limited to 32 characters
+- Symbol limited to 8 characters
+- IPFS metadata URI required
+- Cannot use address(0) for any parameters
+
+### Launch Failure Handling
+1. Target not met within 7 days:
+- KUB Contributions: Users must manually claim refunds using `claimRefund(launchId)`
+- KOI Contributions: Users must manually claim refunds using `claimRefund(launchId)`
+- Launch remains in failed state
+- Creator receives nothing
+
+2. Contract-Level Restrictions:
+- Cannot start new launch if previous one exists
+- Cannot contribute after deadline
+- Cannot contribute if target already met
+- Cannot contribute with amount that would exceed target
 
 ## Tokenomics
 
