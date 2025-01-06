@@ -23,11 +23,6 @@ export const feedistributorAbi = [
         "internalType": "address"
       },
       {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "_team",
         "type": "address",
         "internalType": "address"
@@ -138,11 +133,6 @@ export const feedistributorAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "_treasuryRatio",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "_teamRatio",
         "type": "uint256",
         "internalType": "uint256"
@@ -217,19 +207,6 @@ export const feedistributorAbi = [
   },
   {
     "type": "function",
-    "name": "setTreasury",
-    "inputs": [
-      {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "staking",
     "inputs": [],
     "outputs": [
@@ -295,41 +272,10 @@ export const feedistributorAbi = [
   },
   {
     "type": "function",
-    "name": "treasury",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "treasuryRatio",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "updateDistributionRatios",
     "inputs": [
       {
         "name": "_stakingRatio",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_treasuryRatio",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -348,12 +294,6 @@ export const feedistributorAbi = [
     "inputs": [
       {
         "name": "stakingRatio",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "treasuryRatio",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -423,12 +363,6 @@ export const feedistributorAbi = [
       },
       {
         "name": "stakingAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "treasuryAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

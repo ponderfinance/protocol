@@ -27,7 +27,8 @@ contract DeployBitkubScript is Script {
 
     // Initial liquidity constants (PONDER = $0.0001, KUB = $2.80)
     uint256 constant INITIAL_KUB_AMOUNT = 1000 ether;                 // 1000 KUB
-    uint256 constant INITIAL_PONDER_AMOUNT = 28_000_000 ether;       // 28M PONDER
+    uint256 constant LIQUIDITY_ALLOCATION = 200_000_000 ether;
+
 
     error InvalidAddress();
     error PairCreationFailed();
@@ -166,7 +167,7 @@ contract DeployBitkubScript is Script {
         _verifyContract("MasterChef", address(masterChef));
 
         // 9. Setup initial prices and liquidity
-        setupInitialPrices(ponder, router, oracle, ponderKubPair);
+        setupInitialPrices(ponder, router, oracle, ponderKubPair, deployer);
 
         // 10. Final configuration
         ponder.setMinter(address(masterChef));
@@ -195,20 +196,27 @@ contract DeployBitkubScript is Script {
         PonderToken ponder,
         PonderRouter router,
         PonderPriceOracle oracle,
-        address ponderKubPair
+        address ponderKubPair,
+        address deployer
     ) internal {
-        console.log("Initial timestamp:", block.timestamp);
 
-        // Add liquidity
-        ponder.approve(address(router), INITIAL_PONDER_AMOUNT);
+        // Transfer minted PONDER to the deployer for pairing
+        ponder.transfer(deployer, LIQUIDITY_ALLOCATION);
+
+        // Approve the router to spend PONDER
+        ponder.approve(address(router), LIQUIDITY_ALLOCATION);
+
+        // Add full liquidity allocation to KUB/PONDER pair
         router.addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
             address(ponder),
-            INITIAL_PONDER_AMOUNT,
-            INITIAL_PONDER_AMOUNT,
-            INITIAL_KUB_AMOUNT,
-            address(this),
+            LIQUIDITY_ALLOCATION,       // Use full 200M
+            LIQUIDITY_ALLOCATION,       // Min amount same as input
+            INITIAL_KUB_AMOUNT,         // 1000 KUB
+            deployer,
             block.timestamp + 1 hours
         );
+
+        console.log("Initial liquidity added successfully");
     }
 
     function _verifyContract(string memory name, address contractAddress) internal view {
@@ -245,16 +253,14 @@ contract DeployBitkubScript is Script {
         console.log("\nInitial Liquidity Details:");
         console.log("--------------------------------");
         console.log("Initial KUB:", INITIAL_KUB_AMOUNT / 1e18);
-        console.log("Initial PONDER:", INITIAL_PONDER_AMOUNT / 1e18);
-        console.log("Initial PONDER Price in USD: $0.0001");
-        console.log("Initial PONDER/KUB Rate:", INITIAL_PONDER_AMOUNT / INITIAL_KUB_AMOUNT);
+        console.log("Initial PONDER:", LIQUIDITY_ALLOCATION / 1e18);
+        console.log("Initial PONDER/KUB Rate:", LIQUIDITY_ALLOCATION / INITIAL_KUB_AMOUNT);
 
         console.log("\nToken Allocation Summary:");
         console.log("--------------------------------");
         console.log("Liquidity Mining (40%):", uint256(400_000_000 * 1e18));
-        console.log("Team/Reserve (15%):", uint256(150_000_000 * 1e18));
-        console.log("Marketing/Community (10%):", uint256(100_000_000 * 1e18));
-        console.log("Treasury/DAO (25%):", uint256(250_000_000 * 1e18));
+        console.log("Team/Reserve (25%):", uint256(250_000_000 * 1e18));
+        console.log("Marketing/Community (15%):", uint256(150_000_000 * 1e18));
     }
 
     receive() external payable {}

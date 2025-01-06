@@ -3,11 +3,6 @@ export const pondertokenAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "_teamReserve",
         "type": "address",
         "internalType": "address"
@@ -550,19 +545,6 @@ export const pondertokenAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "treasury",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "event",
