@@ -15,12 +15,13 @@ contract PonderMasterChefTest is Test {
     PonderFactory factory;
     ERC20Mint tokenA;
     ERC20Mint tokenB;
+    ERC20Mint tokenC;
     PonderPair pair;
 
     address owner = address(this);
     address alice = address(0x1);
     address bob = address(0x2);
-    address treasury = address(0x3);
+    address teamReserve = address(0x3);
     address launcher = address(0xbad);
 
     // Error Selectors
@@ -35,10 +36,10 @@ contract PonderMasterChefTest is Test {
     // Simplified constants
     uint256 constant PONDER_PER_SECOND = 3168000000000000000; // 3.168 PONDER
     uint256 constant INITIAL_LP_SUPPLY = 1000e18;
-    uint256 constant INITIAL_PONDER_SUPPLY = 1000000e18; // Just for testing
+    uint256 constant LP2_SUPPLY = 999999999999999999000; // Adjusted to match mint calculation
 
     function setUp() public {
-        // Simple token deployment
+        // Deploy tokens and factory
         ponder = new PonderToken(owner, owner, launcher);
         factory = new PonderFactory(owner, address(1), address(2));
 
@@ -46,21 +47,25 @@ contract PonderMasterChefTest is Test {
         masterChef = new PonderMasterChef(
             ponder,
             factory,
-            treasury,
-            PONDER_PER_SECOND,
-            block.timestamp
+            teamReserve,
+            PONDER_PER_SECOND
         );
 
-        // Give MasterChef minting rights
+        // Set minter
+        vm.startPrank(owner);
         ponder.setMinter(address(masterChef));
+        vm.stopPrank();
 
-        // Setup test tokens and pair
+        // Setup test tokens
         tokenA = new ERC20Mint("Token A", "TKNA");
         tokenB = new ERC20Mint("Token B", "TKNB");
+        tokenC = new ERC20Mint("Token C", "TKNC");
+
+        // Create first pair
         address pairAddress = factory.createPair(address(tokenA), address(tokenB));
         pair = PonderPair(pairAddress);
 
-        // Setup initial LP tokens
+        // Setup initial LP tokens for first pair
         tokenA.mint(alice, INITIAL_LP_SUPPLY);
         tokenB.mint(alice, INITIAL_LP_SUPPLY);
 
@@ -74,7 +79,7 @@ contract PonderMasterChefTest is Test {
     function testInitialState() public {
         assertEq(address(masterChef.ponder()), address(ponder));
         assertEq(address(masterChef.factory()), address(factory));
-        assertEq(masterChef.treasury(), treasury);
+        assertEq(masterChef.teamReserve(), teamReserve);
         assertEq(masterChef.ponderPerSecond(), PONDER_PER_SECOND);
         assertEq(masterChef.totalAllocPoint(), 0);
         assertEq(masterChef.poolLength(), 0);
@@ -170,7 +175,7 @@ contract PonderMasterChefTest is Test {
         vm.stopPrank();
 
         uint256 expectedFee = (depositAmount * depositFeeBP) / masterChef.BASIS_POINTS();
-        assertEq(pair.balanceOf(treasury), expectedFee);
+        assertEq(pair.balanceOf(teamReserve), expectedFee);
     }
 
     function testRevertExcessiveDepositFee() public {
@@ -304,7 +309,7 @@ contract PonderMasterChefTest is Test {
         vm.stopPrank();
     }
 
-// Helper function to setup boost for a user
+    // Helper function to setup boost for a user
     function setupBoostForUser(address user, uint256 lpAmount, uint256 targetMultiplier) internal {
         // Mint PONDER for boost
         vm.startPrank(address(masterChef));
@@ -320,6 +325,175 @@ contract PonderMasterChefTest is Test {
         ponder.approve(address(masterChef), 1000e18);
         uint256 requiredPonder = masterChef.getRequiredPonderForBoost(lpAmount, targetMultiplier);
         masterChef.boostStake(0, requiredPonder);
+        vm.stopPrank();
+    }
+
+
+    function testDynamicStartTime() public {
+        // Add pool
+        masterChef.add(1, address(pair), 0, 20000, true);
+
+        // Verify farming hasn't started
+        assertEq(masterChef.farmingStarted(), false);
+        assertEq(masterChef.startTime(), 0);
+
+        // Move time forward 1 week
+        vm.warp(block.timestamp + 7 days);
+        uint256 firstDepositTime = block.timestamp;
+
+        // Alice makes first deposit
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+        vm.stopPrank();
+
+        // Verify farming has started and start time is set
+        assertEq(masterChef.farmingStarted(), true);
+        assertEq(masterChef.startTime(), firstDepositTime);
+
+        // Move forward 1 day
+        vm.warp(block.timestamp + 1 days);
+
+        // Check rewards - should be exactly 1 day worth
+        uint256 expectedReward = PONDER_PER_SECOND * 1 days;
+        uint256 pendingRewards = masterChef.pendingPonder(0, alice);
+        assertApproxEqRel(pendingRewards, expectedReward, 0.001e18);
+    }
+
+    function testNoRewardsBeforeFirstDeposit() public {
+        // Add pool
+        masterChef.add(1, address(pair), 0, 20000, true);
+
+        // Move time forward 30 days
+        vm.warp(block.timestamp + 30 days);
+
+        // Verify no rewards have been minted
+        uint256 initialSupply = ponder.totalSupply();
+
+        // Alice makes first deposit
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+        vm.stopPrank();
+
+        // Move forward 1 day
+        vm.warp(block.timestamp + 1 days);
+
+        // Claim rewards
+        vm.prank(alice);
+        masterChef.withdraw(0, 0); // withdraw 0 to claim rewards
+
+        // Check only 1 day of rewards were minted despite 31 days passing
+        uint256 finalSupply = ponder.totalSupply();
+        uint256 expectedReward = PONDER_PER_SECOND * 1 days;
+        assertApproxEqRel(finalSupply - initialSupply, expectedReward, 0.001e18);
+    }
+
+    function testFullEmissionPeriod() public {
+        // Add pool
+        masterChef.add(1, address(pair), 0, 20000, true);
+
+        // Get initial timestamp and supply
+        uint256 startTime = block.timestamp;
+        uint256 initialSupply = ponder.totalSupply();
+
+        // Move forward 30 days and make first deposit
+        vm.warp(startTime + 30 days);
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+        vm.stopPrank();
+
+        // Move forward 1 year (within minting period)
+        vm.warp(block.timestamp + 365 days);
+
+        // Update pool to trigger rewards
+        masterChef.updatePool(0);
+
+        // Calculate expected emissions for 1 year
+        uint256 expectedEmissions = PONDER_PER_SECOND * 365 days;
+        uint256 actualEmissions = ponder.totalSupply() - initialSupply;
+
+        // Allow 0.1% variance for rounding
+        assertApproxEqRel(actualEmissions, expectedEmissions, 0.001e18);
+    }
+
+    function testMultiplePoolsStartTimes() public {
+        // Add first pool
+        vm.startPrank(owner);
+        masterChef.add(100, address(pair), 0, 20000, true);
+        vm.stopPrank();
+
+        // Move forward 1 week
+        vm.warp(block.timestamp + 7 days);
+
+        // First deposit in pool 0
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+        vm.stopPrank();
+
+        uint256 farmStartTime = masterChef.startTime();
+
+        // Update pool before adding new one to handle accumulated rewards
+        masterChef.updatePool(0);
+
+        // Create and setup second pair
+        vm.startPrank(owner);
+        address pair2 = factory.createPair(address(tokenA), address(tokenC));
+        masterChef.add(100, pair2, 0, 20000, true);
+
+        // Setup liquidity for second pair
+        tokenA.mint(bob, INITIAL_LP_SUPPLY);
+        tokenC.mint(bob, INITIAL_LP_SUPPLY);
+        vm.stopPrank();
+
+        // Bob provides liquidity
+        vm.startPrank(bob);
+        tokenA.transfer(pair2, INITIAL_LP_SUPPLY);
+        tokenC.transfer(pair2, INITIAL_LP_SUPPLY);
+        PonderPair(pair2).mint(bob);
+
+        // The LP amount needs to match what was minted
+        uint256 lpBalance = PonderPair(pair2).balanceOf(bob);
+        PonderPair(pair2).approve(address(masterChef), lpBalance);
+        masterChef.deposit(1, lpBalance);
+        vm.stopPrank();
+
+        // Update both pools before checking rewards
+        masterChef.updatePool(0);
+        masterChef.updatePool(1);
+
+        // Move forward 1 day to accumulate new rewards
+        vm.warp(block.timestamp + 1 days);
+
+        // Check rewards distribution
+        uint256 alicePending = masterChef.pendingPonder(0, alice);
+        uint256 bobPending = masterChef.pendingPonder(1, bob);
+
+        // Since both pools have equal allocation points (100), their rewards over this period should be equal
+        // Allow for a 1% difference due to rounding
+        assertApproxEqRel(alicePending, bobPending, 0.01e18);
+    }
+
+    function testEmergencyWithdrawBeforeStart() public {
+        // Add pool
+        masterChef.add(1, address(pair), 0, 20000, true);
+
+        // Alice deposits
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
+        // Emergency withdraw
+        uint256 balanceBefore = pair.balanceOf(alice);
+        masterChef.emergencyWithdraw(0);
+
+        // Check LP tokens returned
+        assertEq(pair.balanceOf(alice), balanceBefore + INITIAL_LP_SUPPLY);
+
+        // Verify farming status remains started
+        assertEq(masterChef.farmingStarted(), true);
         vm.stopPrank();
     }
 }

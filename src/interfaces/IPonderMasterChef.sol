@@ -55,6 +55,6 @@ interface IPonderMasterChef {
     event BoostUnstake(address indexed user, uint256 indexed pid, uint256 amount);
     event PoolAdded(uint256 indexed pid, address indexed lpToken, uint256 allocPoint);
     event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
-    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    event TeamReserveUpdated(address indexed oldTeamReserve, address indexed newTeamReserve);
     event PonderPerSecondUpdated(uint256 newPonderPerSecond);
 }

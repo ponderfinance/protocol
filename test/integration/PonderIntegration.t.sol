@@ -49,8 +49,7 @@ contract PonderIntegrationTest is Test {
             ponder,
             factory,
             treasury,
-            1e18, // 1 PONDER per second
-            block.timestamp
+            1e18 // 1 PONDER per second
         );
 
         // Setup tokens

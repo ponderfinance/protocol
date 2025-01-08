@@ -27,7 +27,6 @@ contract DeployBitkubScript is Script {
 
     struct DeploymentState {
         address deployer;
-        address treasury;
         address teamReserve;
         address marketing;
         PonderToken ponder;
@@ -43,12 +42,11 @@ contract DeployBitkubScript is Script {
     }
 
     function validateAddresses(
-        address treasury,
         address teamReserve,
         address marketing,
         address deployer
     ) internal pure {
-        if (treasury == address(0) ||
+        if (
         teamReserve == address(0) ||
         marketing == address(0) ||
             deployer == address(0)
@@ -59,32 +57,29 @@ contract DeployBitkubScript is Script {
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address treasury = vm.envAddress("TREASURY_ADDRESS");
         address teamReserve = vm.envAddress("TEAM_RESERVE_ADDRESS");
         address marketing = vm.envAddress("MARKETING_ADDRESS");
         address deployer = vm.addr(deployerPrivateKey);
 
-        validateAddresses(treasury, teamReserve, marketing, deployer);
+        validateAddresses(teamReserve, marketing, deployer);
 
         vm.startBroadcast(deployerPrivateKey);
 
-        DeploymentState memory state = deployCore(deployer, treasury, teamReserve, marketing);
+        DeploymentState memory state = deployCore(deployer, teamReserve, marketing);
         setupInitialPrices(state);
         finalizeConfiguration(state);
 
         vm.stopBroadcast();
 
-        logDeployment(state, treasury);
+        logDeployment(state);
     }
 
     function deployCore(
         address deployer,
-        address treasury,
         address teamReserve,
         address marketing
     ) internal returns (DeploymentState memory state) {
         state.deployer = deployer;
-        state.treasury = treasury;
         state.teamReserve = teamReserve;
         state.marketing = marketing;
 
@@ -134,7 +129,7 @@ contract DeployBitkubScript is Script {
         state.launcher = new FiveFiveFiveLauncher(
             address(state.factory),
             payable(address(state.router)),
-            treasury,
+            teamReserve,
             address(state.ponder),
             address(state.oracle)
         );
@@ -143,9 +138,8 @@ contract DeployBitkubScript is Script {
         state.masterChef = new PonderMasterChef(
             state.ponder,
             state.factory,
-            treasury,
-            PONDER_PER_SECOND,
-            block.timestamp
+            teamReserve,
+            PONDER_PER_SECOND
         );
         _verifyContract("MasterChef", address(state.masterChef));
 
@@ -189,7 +183,7 @@ contract DeployBitkubScript is Script {
         console.log(name, "deployed at:", contractAddress);
     }
 
-    function logDeployment(DeploymentState memory state, address treasury) internal view {
+    function logDeployment(DeploymentState memory state) internal view {
         console.log("\nDeployment Summary on Bitkub Chain:");
         console.log("--------------------------------");
         console.log("KKUB Address:", KKUB);
@@ -203,7 +197,6 @@ contract DeployBitkubScript is Script {
         console.log("FiveFiveFiveLauncher:", address(state.launcher));
         console.log("PonderStaking (xPONDER):", address(state.staking));
         console.log("FeeDistributor:", address(state.feeDistributor));
-        console.log("Treasury:", treasury);
 
         console.log("\nProtocol Fee Configuration:");
         console.log("--------------------------------");

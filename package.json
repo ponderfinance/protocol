@@ -1,6 +1,6 @@
 {
   "name": "@ponderfinance/dex",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "type": "module",
   "description": "Core smart contracts for Ponder Protocol",
   "files": [

@@ -32,11 +32,8 @@ contract PonderMasterChef is IPonderMasterChef {
     /// @notice Total allocation points across all pools
     uint256 public totalAllocPoint;
 
-    /// @notice Start time of rewards distribution
-    uint256 public immutable startTime;
-
     /// @notice Treasury address for deposit fees
-    address public treasury;
+    address public teamReserve;
 
     /// @notice Contract owner address
     address public owner;
@@ -58,6 +55,12 @@ contract PonderMasterChef is IPonderMasterChef {
 
     /// @notice Maximum additional boost percentage (100%)
     uint256 public constant MAX_EXTRA_BOOST_PERCENT = 10000;
+
+    /// @notice Start time of rewards distribution
+    uint256 public startTime;
+
+    /// @notice Flag to track if farming has started
+    bool public farmingStarted;
 
     /// @notice Custom errors
     error InvalidBoostMultiplier();
@@ -83,23 +86,20 @@ contract PonderMasterChef is IPonderMasterChef {
      * @notice Constructor initializes PonderMasterChef contract
     * @param _ponder PONDER token contract address
     * @param _factory Factory contract address
-    * @param _treasury Treasury address to receive deposit fees
+    * @param _teamReserve TeamReserve address to receive deposit fees
     * @param _ponderPerSecond PONDER tokens minted per second
-    * @param _startTime Start time for rewards distribution
     */
     constructor(
         PonderToken _ponder,
         IPonderFactory _factory,
-        address _treasury,
-        uint256 _ponderPerSecond,
-        uint256 _startTime
+        address _teamReserve,
+        uint256 _ponderPerSecond
     ) {
-        if (_treasury == address(0)) revert ZeroAddress();
+        if (_teamReserve == address(0)) revert ZeroAddress();
         ponder = _ponder;
         factory = _factory;
-        treasury = _treasury;
+        teamReserve = _teamReserve;
         ponderPerSecond = _ponderPerSecond;
-        startTime = _startTime;
         owner = msg.sender;
     }
 
@@ -164,7 +164,7 @@ contract PonderMasterChef is IPonderMasterChef {
         address token1 = IPonderPair(_lpToken).token1();
         if (factory.getPair(token0, token1) != _lpToken) revert InvalidPair();
 
-        uint256 lastRewardTime = block.timestamp > startTime ? block.timestamp : startTime;
+        uint256 lastRewardTime = farmingStarted ? block.timestamp : 0;
         totalAllocPoint += _allocPoint;
 
         poolInfo.push(PoolInfo({
@@ -199,6 +199,10 @@ contract PonderMasterChef is IPonderMasterChef {
     function updatePool(uint256 _pid) public {
         if (_pid >= poolInfo.length) revert InvalidPool();
         PoolInfo storage pool = poolInfo[_pid];
+
+        if (!farmingStarted) {
+            return;
+        }
 
         if (block.timestamp <= pool.lastRewardTime) {
             return;
@@ -282,6 +286,12 @@ contract PonderMasterChef is IPonderMasterChef {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
 
+        // Set start time on first deposit if farming hasn't started
+        if (!farmingStarted && _amount > 0) {
+            startTime = block.timestamp;
+            farmingStarted = true;
+        }
+
         updatePool(_pid);
 
         if (user.amount > 0) {
@@ -299,7 +309,7 @@ contract PonderMasterChef is IPonderMasterChef {
 
             if (pool.depositFeeBP > 0) {
                 uint256 depositFee = (_amount * pool.depositFeeBP) / BASIS_POINTS;
-                IERC20(pool.lpToken).transfer(treasury, depositFee);
+                IERC20(pool.lpToken).transfer(teamReserve, depositFee);
                 _amount = _amount - depositFee;
             }
 
@@ -434,14 +444,14 @@ if (pending > 0) {
     }
 
     /**
-     * @notice Update treasury address
-     * @param _treasury New treasury address
+     * @notice Update teamReserve address
+     * @param _teamReserve New teamReserve address
      */
-    function setTreasury(address _treasury) external onlyOwner {
-        if (_treasury == address(0)) revert ZeroAddress();
-        address oldTreasury = treasury;
-        treasury = _treasury;
-        emit TreasuryUpdated(oldTreasury, _treasury);
+    function setTeamReserve(address _teamReserve) external onlyOwner {
+        if (_teamReserve == address(0)) revert ZeroAddress();
+        address oldTeamReserve = teamReserve;
+        teamReserve = _teamReserve;
+        emit TeamReserveUpdated(oldTeamReserve, _teamReserve);
     }
 
     /**
