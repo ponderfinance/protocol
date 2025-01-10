@@ -599,5 +599,57 @@ contract PonderRouterTest is Test {
 
         vm.stopPrank();
     }
+    function testKKUBAsRegularToken() public {
+        vm.startPrank(alice);
+
+        // First deposit ETH to get WETH tokens
+        weth.deposit{value: INITIAL_LIQUIDITY}();
+
+        // Add liquidity to KKUB-TokenA pair
+        tokenA.approve(address(router), INITIAL_LIQUIDITY);
+        IERC20(address(weth)).approve(address(router), INITIAL_LIQUIDITY);
+
+        router.addLiquidity(
+            address(tokenA),
+            address(weth),  // KKUB
+            INITIAL_LIQUIDITY,
+            INITIAL_LIQUIDITY,
+            0,
+            0,
+            alice,
+            deadline
+        );
+
+        // Setup swap parameters
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);
+        path[1] = address(weth);  // KKUB
+
+        uint256 kkubBalanceBefore = IERC20(address(weth)).balanceOf(alice);
+
+        // Calculate expected output
+        uint256[] memory expectedAmounts = router.getAmountsOut(SWAP_AMOUNT, path);
+
+        // Approve and execute swap
+        tokenA.approve(address(router), SWAP_AMOUNT);
+        router.swapExactTokensForTokens(
+            SWAP_AMOUNT,
+            expectedAmounts[1], // minimum output
+            path,
+            alice,
+            deadline
+        );
+
+        uint256 kkubBalanceAfter = IERC20(address(weth)).balanceOf(alice);
+
+        // Assert KKUB was received directly
+        assertEq(
+            kkubBalanceAfter - kkubBalanceBefore,
+            expectedAmounts[1],
+            "KKUB should be received directly when using swapExactTokensForTokens"
+        );
+
+        vm.stopPrank();
+    }
 
 }

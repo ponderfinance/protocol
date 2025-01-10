@@ -13,17 +13,12 @@ export const pondermasterchefAbi = [
         "internalType": "contract IPonderFactory"
       },
       {
-        "name": "_treasury",
+        "name": "_teamReserve",
         "type": "address",
         "internalType": "address"
       },
       {
         "name": "_ponderPerSecond",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_startTime",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -233,6 +228,19 @@ export const pondermasterchefAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IPonderFactory"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "farmingStarted",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -478,10 +486,10 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
-    "name": "setTreasury",
+    "name": "setTeamReserve",
     "inputs": [
       {
-        "name": "_treasury",
+        "name": "_teamReserve",
         "type": "address",
         "internalType": "address"
       }
@@ -504,6 +512,19 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "teamReserve",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "totalAllocPoint",
     "inputs": [],
     "outputs": [
@@ -511,19 +532,6 @@ export const pondermasterchefAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "treasury",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -776,16 +784,16 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "event",
-    "name": "TreasuryUpdated",
+    "name": "TeamReserveUpdated",
     "inputs": [
       {
-        "name": "oldTreasury",
+        "name": "oldTeamReserve",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newTreasury",
+        "name": "newTeamReserve",
         "type": "address",
         "indexed": true,
         "internalType": "address"

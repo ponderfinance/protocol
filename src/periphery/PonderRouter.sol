@@ -265,7 +265,7 @@ contract PonderRouter {
                 : (amountOut, uint256(0)); // input is token1, so output goes to token0
 
             // Determine recipient
-            address to = i < path.length - 2 ? factory.getPair(output, path[i + 2]) : (output == WETH ? address(this) : _to);
+            address to = i < path.length - 2 ? factory.getPair(output, path[i + 2]) : _to;
 
             // Execute the swap
             IPonderPair(pair).swap(amount0Out, amount1Out, to, new bytes(0));
