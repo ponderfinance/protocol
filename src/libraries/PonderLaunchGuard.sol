@@ -7,28 +7,42 @@ import "../interfaces/IPonderPriceOracle.sol";
 import "../interfaces/IERC20.sol";
 
 library PonderLaunchGuard {
-    uint256 public constant TWAP_PERIOD = 24 hours;
-    uint256 public constant PRICE_STALENESS_THRESHOLD = 1 hours;
+    // Existing constants
     uint256 public constant BASIS_POINTS = 10000;
     uint256 public constant MIN_LIQUIDITY = 1000 ether;
     uint256 public constant MAX_LIQUIDITY = 5000 ether;
     uint256 public constant MIN_PONDER_PERCENT = 500;   // 5%
     uint256 public constant MAX_PONDER_PERCENT = 2000;  // 20%
     uint256 public constant MAX_PRICE_IMPACT = 500;     // 5%
-    uint256 public constant CRITICAL_PRICE_IMPACT = 1000; // 10%
 
-    error InsufficientLiquidity();
-    error ExcessivePriceImpact();
-    error InvalidPrice();
-    error StalePrice();
-    error ContributionTooLarge();
-    error ZeroAmount();
+    // New TWAP-related constants
+    uint256 public constant TWAP_PERIOD = 30 minutes;
+    uint256 public constant SPOT_TWAP_DEVIATION_LIMIT = 300; // 3% max deviation between spot and TWAP
+    uint256 public constant PRICE_CHECK_PERIOD = 5 minutes;
+    uint256 public constant RESERVE_CHANGE_LIMIT = 2000; // 20% max reserve change in PRICE_CHECK_PERIOD
 
     struct ValidationResult {
         uint256 kubValue;          // Value in KUB terms
         uint256 priceImpact;       // Impact in basis points
         uint256 maxPonderPercent;  // Maximum PONDER acceptance
     }
+
+    struct PriceState {
+        uint256 spotPrice;
+        uint256 twapPrice;
+        uint112 reserve0;
+        uint112 reserve1;
+        uint32 timestamp;
+    }
+
+    error InsufficientLiquidity();
+    error ExcessivePriceImpact();
+    error InvalidPrice();
+    error ExcessivePriceDeviation();
+    error StalePrice();
+    error SuddenReserveChange();
+    error ContributionTooLarge();
+    error ZeroAmount();
 
     function validatePonderContribution(
         address pair,
@@ -37,40 +51,28 @@ library PonderLaunchGuard {
     ) external view returns (ValidationResult memory result) {
         if (amount == 0) revert ZeroAmount();
 
-        // Get pair reserves
-        (uint112 reserve0, uint112 reserve1,) = IPonderPair(pair).getReserves();
-        uint256 ponderReserve;
-        uint256 kubReserve;
-
-        // Determine token ordering
-        if (IPonderPair(pair).token0() == IPonderPriceOracle(oracle).baseToken()) {
-            kubReserve = reserve0;
-            ponderReserve = reserve1;
-        } else {
-            kubReserve = reserve1;
-            ponderReserve = reserve0;
-        }
+        PriceState memory state = _getPriceState(pair, oracle);
 
         // Check minimum liquidity
-        uint256 totalLiquidity = kubReserve * 2;
+        uint256 totalLiquidity = uint256(state.reserve0) * state.reserve1;
         if (totalLiquidity < MIN_LIQUIDITY) revert InsufficientLiquidity();
 
         // Calculate max PONDER acceptance based on liquidity
         result.maxPonderPercent = _calculatePonderCap(totalLiquidity);
 
-        // Calculate spot price first
-        result.kubValue = IPonderPriceOracle(oracle).getCurrentPrice(
-            pair,
-            IPonderPriceOracle(oracle).baseToken(),
-            amount
-        );
+        // Validate TWAP vs spot price
+        if (_calculateDeviation(state.spotPrice, state.twapPrice) > SPOT_TWAP_DEVIATION_LIMIT) {
+            revert ExcessivePriceDeviation();
+        }
 
+        // Use TWAP for valuation
+        result.kubValue = state.twapPrice * amount / 1e18;
         if (result.kubValue == 0) revert InvalidPrice();
 
-        // Calculate price impact
+        // Calculate and validate price impact
         result.priceImpact = _calculatePriceImpact(
-            ponderReserve,
-            kubReserve,
+            state.reserve1, // ponder reserve
+            state.reserve0, // kub reserve
             amount
         );
 
@@ -79,6 +81,46 @@ library PonderLaunchGuard {
         return result;
     }
 
+    function _getPriceState(
+        address pair,
+        address oracle
+    ) internal view returns (PriceState memory state) {
+        // Get current reserves and timestamp
+        (state.reserve0, state.reserve1, state.timestamp) = IPonderPair(pair).getReserves();
+
+        // Check for staleness
+        if (block.timestamp - state.timestamp > PRICE_CHECK_PERIOD) revert StalePrice();
+
+        // Get TWAP price
+        state.twapPrice = IPonderPriceOracle(oracle).consult(
+            pair,
+            IPonderPair(pair).token0(),
+            1e18,
+            uint32(TWAP_PERIOD)
+        );
+
+        // Get spot price
+        state.spotPrice = IPonderPriceOracle(oracle).getCurrentPrice(
+            pair,
+            IPonderPair(pair).token0(),
+            1e18
+        );
+
+        return state;
+    }
+
+    function _calculateDeviation(
+        uint256 price1,
+        uint256 price2
+    ) internal pure returns (uint256) {
+        if (price1 == 0 || price2 == 0) revert InvalidPrice();
+
+        return price1 > price2 ?
+            ((price1 - price2) * BASIS_POINTS) / price1 :
+            ((price2 - price1) * BASIS_POINTS) / price2;
+    }
+
+    // Existing functions remain unchanged
     function validateKubContribution(
         uint256 amount,
         uint256 totalRaised,

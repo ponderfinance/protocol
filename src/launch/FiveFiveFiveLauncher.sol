@@ -105,6 +105,9 @@ contract FiveFiveFiveLauncher {
     error LaunchCancelled();
     error NoContributionToRefund();
     error RefundFailed();
+    error ContributionTooSmall();
+    error InsufficientPoolLiquidity();
+
 
     // Constants
     uint256 public constant LAUNCH_DURATION = 7 days;
@@ -125,6 +128,11 @@ contract FiveFiveFiveLauncher {
     uint256 public constant CREATOR_PERCENT = 1000; // 10%
     uint256 public constant LP_PERCENT = 2000;      // 20%
     uint256 public constant CONTRIBUTOR_PERCENT = 7000; // 70%
+
+    uint256 public constant MIN_KUB_CONTRIBUTION = 0.01 ether;  // Minimum 0.01 KUB
+    uint256 public constant MIN_PONDER_CONTRIBUTION = 0.1 ether; // Minimum 0.1 PONDER
+    uint256 public constant MIN_POOL_LIQUIDITY = 1 ether;       // Minimum 1 KUB worth for pool creation
+
 
     // Core protocol references
     IPonderFactory public immutable factory;
@@ -147,6 +155,7 @@ contract FiveFiveFiveLauncher {
     event LPTokensWithdrawn(uint256 indexed launchId, address indexed creator, uint256 amount);
     event PonderBurned(uint256 indexed launchId, uint256 amount);
     event DualPoolsCreated(uint256 indexed launchId, address memeKubPair, address memePonderPair, uint256 kubLiquidity, uint256 ponderLiquidity);
+    event PonderPoolSkipped(uint256 indexed launchId, uint256 ponderAmount, uint256 ponderValueInKub);
 
     constructor(
         address _factory,
@@ -218,15 +227,12 @@ contract FiveFiveFiveLauncher {
     function contributeKUB(uint256 launchId) external payable {
         LaunchInfo storage launch = launches[launchId];
         _validateLaunchState(launch);
-        if(msg.value == 0) revert InvalidAmount();
 
-        ContributionResult memory result = _calculateKubContribution(launch, msg.value);
-        _processKubContribution(launchId, launch, result, msg.sender);
+        uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
+        if(msg.value > remaining) revert ExcessiveContribution();
+        if(msg.value < MIN_KUB_CONTRIBUTION) revert ContributionTooSmall();
 
-        if (result.refund > 0) {
-            payable(msg.sender).transfer(result.refund);
-        }
-
+        _processKubContribution(launchId, launch, msg.value, msg.sender);
         _checkAndFinalizeLaunch(launchId, launch);
     }
 
@@ -244,8 +250,12 @@ contract FiveFiveFiveLauncher {
         uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
         result.contribution = amount > remaining ? remaining : amount;
 
-        result.tokensToDistribute = (result.contribution * launch.allocation.tokensForContributors) / TARGET_RAISE;
+        // Only check minimum contribution, not pool liquidity
+        if (result.contribution < MIN_KUB_CONTRIBUTION) {
+            revert ContributionTooSmall();
+        }
 
+        result.tokensToDistribute = (result.contribution * launch.allocation.tokensForContributors) / TARGET_RAISE;
         result.refund = amount > remaining ? amount - remaining : 0;
         return result;
     }
@@ -253,35 +263,65 @@ contract FiveFiveFiveLauncher {
     function _processKubContribution(
         uint256 launchId,
         LaunchInfo storage launch,
-        ContributionResult memory result,
+        uint256 amount,
         address contributor
     ) internal {
         // Update contribution state
-        launch.contributions.kubCollected += result.contribution;
-        launch.contributions.tokensDistributed += result.tokensToDistribute;
+        launch.contributions.kubCollected += amount;
+        uint256 tokensToDistribute = (amount * launch.allocation.tokensForContributors) / TARGET_RAISE;
+        launch.contributions.tokensDistributed += tokensToDistribute;
 
         // Update contributor info
         ContributorInfo storage contributorInfo = launch.contributors[contributor];
-        contributorInfo.kubContributed += result.contribution;
-        contributorInfo.tokensReceived += result.tokensToDistribute;
+        contributorInfo.kubContributed += amount;
+        contributorInfo.tokensReceived += tokensToDistribute;
 
         // Transfer tokens
-        LaunchToken(launch.base.tokenAddress).transfer(contributor, result.tokensToDistribute);
+        LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute);
 
         // Emit events
-        emit TokensDistributed(launchId, contributor, result.tokensToDistribute);
-        emit KUBContributed(launchId, contributor, result.contribution);
+        emit TokensDistributed(launchId, contributor, tokensToDistribute);
+        emit KUBContributed(launchId, contributor, amount);
     }
 
     function contributePONDER(uint256 launchId, uint256 amount) external {
         LaunchInfo storage launch = launches[launchId];
         _validateLaunchState(launch);
-        if(amount == 0) revert InvalidAmount();
+        if(amount < MIN_PONDER_CONTRIBUTION) revert ContributionTooSmall();
 
         uint256 kubValue = _getPonderValue(amount);
-        ContributionResult memory result = _calculatePonderContribution(launch, amount, kubValue);
 
-        _processPonderContribution(launchId, launch, result, kubValue, amount, msg.sender);
+        // Check against 20% PONDER cap
+        uint256 totalPonderValue = launch.contributions.ponderValueCollected + kubValue;
+        if (totalPonderValue > (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS) {
+            revert ExcessivePonderContribution();
+        }
+
+        // Check against remaining needed
+        uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
+        if (kubValue > remaining) revert ExcessiveContribution();
+
+        uint256 tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) / TARGET_RAISE;
+
+        // Transfer exact amount needed
+        ponder.transferFrom(msg.sender, address(this), amount);
+
+        // Update state
+        launch.contributions.ponderCollected += amount;
+        launch.contributions.ponderValueCollected += kubValue;
+        launch.contributions.tokensDistributed += tokensToDistribute;
+
+        // Update contributor info
+        ContributorInfo storage contributorInfo = launch.contributors[msg.sender];
+        contributorInfo.ponderContributed += amount;
+        contributorInfo.ponderValue += kubValue;
+        contributorInfo.tokensReceived += tokensToDistribute;
+
+        // Transfer tokens and emit events
+        LaunchToken(launch.base.tokenAddress).transfer(msg.sender, tokensToDistribute);
+        emit TokensDistributed(launchId, msg.sender, tokensToDistribute);
+        emit PonderContributed(launchId, msg.sender, amount, kubValue);
+
         _checkAndFinalizeLaunch(launchId, launch);
     }
 
@@ -290,32 +330,33 @@ contract FiveFiveFiveLauncher {
         uint256 amount,
         uint256 kubValue
     ) internal view returns (ContributionResult memory result) {
-        // Calculate what total PONDER value would be after this contribution
+        // First check if this would exceed the 20% PONDER limit
         uint256 totalPonderValue = launch.contributions.ponderValueCollected + kubValue;
-
-        // Check if it would exceed 20% PONDER limit
         uint256 maxPonderValue = (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS;
         if (totalPonderValue > maxPonderValue) {
             revert ExcessivePonderContribution();
         }
 
-        // Calculate remaining raise needed
+        // Calculate remaining raise needed in KUB terms
         uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
 
         // If kubValue exceeds remaining, calculate partial amount
         if (kubValue > remaining) {
-            // Calculate what portion of the PONDER contribution we'll accept
+            // Calculate in KUB terms first
             result.contribution = remaining;
             result.tokensToDistribute = (remaining * launch.allocation.tokensForContributors) / TARGET_RAISE;
 
-            // Calculate refund in PONDER terms
-            uint256 ponderToAccept = (amount * remaining) / kubValue;
-            result.refund = amount - ponderToAccept;
+            // Convert remaining from KUB to PONDER amount
+            result.refund = amount - (amount * remaining / kubValue);
         } else {
-            // Accept full contribution
             result.contribution = kubValue;
             result.tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) / TARGET_RAISE;
             result.refund = 0;
+        }
+
+        // Verify minimum contribution
+        if (amount - result.refund < MIN_PONDER_CONTRIBUTION) {
+            revert ContributionTooSmall();
         }
 
         return result;
@@ -329,29 +370,24 @@ contract FiveFiveFiveLauncher {
         uint256 amount,
         address contributor
     ) internal {
-        // Calculate actual PONDER amount to accept (total - refund)
         uint256 ponderToAccept = amount - result.refund;
 
-        // Update contribution state
+        // Transfer exact amount needed first
+        ponder.transferFrom(contributor, address(this), ponderToAccept);
+
+        // Update state after transfer
         launch.contributions.ponderCollected += ponderToAccept;
-        launch.contributions.ponderValueCollected += result.contribution;  // Using adjusted kubValue
+        launch.contributions.ponderValueCollected += result.contribution;
         launch.contributions.tokensDistributed += result.tokensToDistribute;
 
         // Update contributor info
         ContributorInfo storage contributorInfo = launch.contributors[contributor];
         contributorInfo.ponderContributed += ponderToAccept;
-        contributorInfo.ponderValue += result.contribution;  // Using adjusted kubValue
+        contributorInfo.ponderValue += result.contribution;
         contributorInfo.tokensReceived += result.tokensToDistribute;
 
-        // Transfer accepted amount of PONDER
-        ponder.transferFrom(contributor, address(this), ponderToAccept);
-
-        // If there's a refund, don't transfer it - just leave it in contributor's wallet
-
-        // Transfer launch tokens
+        // Distribute tokens and emit events
         LaunchToken(launch.base.tokenAddress).transfer(contributor, result.tokensToDistribute);
-
-        // Emit events
         emit TokensDistributed(launchId, contributor, result.tokensToDistribute);
         emit PonderContributed(launchId, contributor, ponderToAccept, result.contribution);
     }
@@ -414,7 +450,8 @@ contract FiveFiveFiveLauncher {
     }
 
     function _checkAndFinalizeLaunch(uint256 launchId, LaunchInfo storage launch) internal {
-        if (launch.contributions.kubCollected + launch.contributions.ponderValueCollected >= TARGET_RAISE) {
+        uint256 totalValue = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
+        if (totalValue >= TARGET_RAISE) {
             _finalizeLaunch(launchId);
         }
     }
@@ -426,13 +463,52 @@ contract FiveFiveFiveLauncher {
 
         launch.base.launched = true;
         PoolConfig memory pools = _calculatePoolAmounts(launch);
-        _createPools(launchId, launch, pools);
+
+        // First check KUB pool amount meets minimum
+        if (pools.kubAmount < MIN_POOL_LIQUIDITY) {
+            revert InsufficientPoolLiquidity();
+        }
+
+        // Create KUB pool first
+        launch.pools.memeKubPair = _createKubPool(
+            launch.base.tokenAddress,
+            pools.kubAmount,
+            pools.tokenAmount
+        );
+
+        // Handle PONDER if any was contributed
+        if (launch.contributions.ponderCollected > 0) {
+            uint256 ponderPoolValue = _getPonderValue(pools.ponderAmount);
+
+            if (ponderPoolValue >= MIN_POOL_LIQUIDITY) {
+                // If enough value, create pool and burn standard percentage
+                launch.pools.memePonderPair = _createPonderPool(
+                    launch.base.tokenAddress,
+                    pools.ponderAmount,
+                    pools.tokenAmount
+                );
+                _burnPonderTokens(launchId, launch, false);
+            } else {
+                // If insufficient value, burn all PONDER and skip pool creation
+                emit PonderPoolSkipped(launchId, pools.ponderAmount, ponderPoolValue);
+                _burnPonderTokens(launchId, launch, true);
+            }
+        }
+
         _enableTrading(launch);
 
         emit LaunchCompleted(
             launchId,
             launch.contributions.kubCollected,
             launch.contributions.ponderCollected
+        );
+
+        emit DualPoolsCreated(
+            launchId,
+            launch.pools.memeKubPair,
+            launch.pools.memePonderPair,
+            pools.kubAmount,
+            pools.ponderAmount
         );
     }
 
@@ -448,6 +524,11 @@ contract FiveFiveFiveLauncher {
         LaunchInfo storage launch,
         PoolConfig memory pools
     ) internal {
+        // First check KUB pool amount meets minimum
+        if (pools.kubAmount < MIN_POOL_LIQUIDITY) {
+            revert InsufficientPoolLiquidity();
+        }
+
         // Create KUB pool
         launch.pools.memeKubPair = _createKubPool(
             launch.base.tokenAddress,
@@ -455,14 +536,25 @@ contract FiveFiveFiveLauncher {
             pools.tokenAmount
         );
 
-        // Create PONDER pool if needed
+        // Handle PONDER if any was contributed
         if (launch.contributions.ponderCollected > 0) {
-            launch.pools.memePonderPair = _createPonderPool(
-                launch.base.tokenAddress,
-                pools.ponderAmount,
-                pools.tokenAmount
-            );
-            _burnPonderTokens(launchId, launch);
+            // Calculate PONDER pool value in KUB terms
+            uint256 ponderPoolValue = _getPonderValue(pools.ponderAmount);
+
+            if (ponderPoolValue >= MIN_POOL_LIQUIDITY) {
+                // If enough value, create pool
+                launch.pools.memePonderPair = _createPonderPool(
+                    launch.base.tokenAddress,
+                    pools.ponderAmount,
+                    pools.tokenAmount
+                );
+                // Burn standard percentage
+                _burnPonderTokens(launchId, launch, false);
+            } else {
+                // If insufficient value, burn all PONDER and skip pool
+                emit PonderPoolSkipped(launchId, pools.ponderAmount, ponderPoolValue);
+                _burnPonderTokens(launchId, launch, true);
+            }
         }
 
         emit DualPoolsCreated(
@@ -474,12 +566,21 @@ contract FiveFiveFiveLauncher {
         );
     }
 
-    function _burnPonderTokens(uint256 launchId, LaunchInfo storage launch) internal {
-        uint256 ponderToBurn = (launch.contributions.ponderCollected * PONDER_TO_BURN) / BASIS_POINTS;
-        ponder.burn(ponderToBurn);
-        emit PonderBurned(launchId, ponderToBurn);
-    }
+    function _burnPonderTokens(uint256 launchId, LaunchInfo storage launch, bool burnAll) internal {
+        uint256 ponderToBurn;
+        if (burnAll) {
+            // Burn all PONDER that was collected
+            ponderToBurn = launch.contributions.ponderCollected;
+        } else {
+            // Burn standard percentage for pool creation
+            ponderToBurn = (launch.contributions.ponderCollected * PONDER_TO_BURN) / BASIS_POINTS;
+        }
 
+        if (ponderToBurn > 0) {
+            ponder.burn(ponderToBurn);
+            emit PonderBurned(launchId, ponderToBurn);
+        }
+    }
     function _enableTrading(LaunchInfo storage launch) internal {
         LaunchToken token = LaunchToken(launch.base.tokenAddress);
         token.setPairs(launch.pools.memeKubPair, launch.pools.memePonderPair);
@@ -500,6 +601,7 @@ contract FiveFiveFiveLauncher {
 
         LaunchToken(tokenAddress).approve(address(router), tokenAmount);
 
+        // At this point, we only have the exact KUB amount we need in the contract
         router.addLiquidityETH{value: kubAmount}(
             tokenAddress,
             tokenAmount,
@@ -642,6 +744,31 @@ contract FiveFiveFiveLauncher {
             base.launched,
             base.lpUnlockTime
         );
+    }
+
+    function getMinimumRequirements() external pure returns (
+        uint256 minKub,
+        uint256 minPonder,
+        uint256 minPoolLiquidity
+    ) {
+        return (MIN_KUB_CONTRIBUTION, MIN_PONDER_CONTRIBUTION, MIN_POOL_LIQUIDITY);
+    }
+
+    function getRemainingToRaise(uint256 launchId) external view returns (
+        uint256 remainingTotal,
+        uint256 remainingPonderValue
+    ) {
+        LaunchInfo storage launch = launches[launchId];
+        uint256 total = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
+        uint256 remaining = total >= TARGET_RAISE ? 0 : TARGET_RAISE - total;
+
+        uint256 maxPonderValue = (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS;
+        uint256 currentPonderValue = launch.contributions.ponderValueCollected;
+        uint256 remainingPonder = currentPonderValue >= maxPonderValue ?
+            0 : maxPonderValue - currentPonderValue;
+
+        // Return minimum of overall remaining and remaining PONDER capacity
+        return (remaining, remainingPonder < remaining ? remainingPonder : remaining);
     }
 
     receive() external payable {}
