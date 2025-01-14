@@ -496,4 +496,485 @@ contract PonderMasterChefTest is Test {
         assertEq(masterChef.farmingStarted(), true);
         vm.stopPrank();
     }
+
+    function testFrontRunningPrevention() public {
+        // Add pool
+        masterChef.add(1, address(pair), 0, 20000, true);
+
+        // Setup Alice's LP tokens
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), 100e18);
+        masterChef.deposit(0, 100e18);
+        vm.stopPrank();
+
+        // Move forward 1 day
+        vm.warp(block.timestamp + 1 days);
+
+        // Check Alice's pending rewards
+        uint256 pendingRewardsAlice = masterChef.pendingPonder(0, alice);
+        uint256 expectedRewards = PONDER_PER_SECOND * 1 days;
+        assertApproxEqRel(pendingRewardsAlice, expectedRewards, 0.001e18);
+
+        // Setup Bob's LP tokens
+        tokenA.mint(bob, 1000e18);
+        tokenB.mint(bob, 1000e18);
+
+        vm.startPrank(bob);
+        tokenA.transfer(address(pair), 1000e18);
+        tokenB.transfer(address(pair), 1000e18);
+        pair.mint(bob);  // This will give Bob LP tokens
+
+        pair.approve(address(masterChef), 1000e18);
+        masterChef.deposit(0, 1000e18);
+        vm.stopPrank();
+
+        // Alice claims rewards
+        vm.startPrank(alice);
+        masterChef.withdraw(0, 0);
+        vm.stopPrank();
+
+        // Verify Alice got proper rewards
+        uint256 aliceBalance = ponder.balanceOf(alice);
+        assertApproxEqRel(aliceBalance, expectedRewards, 0.001e18);
+
+        // Also verify Bob didn't get rewards he shouldn't have
+        uint256 bobPending = masterChef.pendingPonder(0, bob);
+        assertLt(bobPending, expectedRewards / 10, "Bob got too many rewards");
+    }
+
+    function testBoostShareManipulation() public {
+        // Add pool with 3x max boost
+        masterChef.add(1, address(pair), 0, 30000, true);  // 3x max boost
+
+        // Setup Alice's LP tokens
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), 100e18);
+        masterChef.deposit(0, 100e18);
+        vm.stopPrank();
+
+        // Mint PONDER tokens for boost
+        vm.startPrank(address(masterChef));
+        ponder.mint(alice, 1000e18);
+        vm.stopPrank();
+
+        // Alice boosts with excessive PONDER trying to game shares
+        vm.startPrank(alice);
+        ponder.approve(address(masterChef), 1000e18);
+
+        // Should revert if trying to boost beyond max multiplier
+        vm.expectRevert(abi.encodeWithSignature("BoostTooHigh()"));
+        masterChef.boostStake(0, 1000e18);
+        vm.stopPrank();
+
+        // Verify shares didn't exceed max boost
+        (uint256 amount, , , uint256 weightedShares) = masterChef.userInfo(0, alice);
+        uint256 maxBoostMultiplier = 30000; // 3x
+        uint256 maxExpectedShares = (amount * maxBoostMultiplier) / masterChef.BASE_MULTIPLIER();
+        assertLe(weightedShares, maxExpectedShares, "Weighted shares exceeded max boost");
+
+        // Try to game shares by repeated boost/unboost
+        vm.startPrank(alice);
+        uint256 validBoostAmount = masterChef.getRequiredPonderForBoost(amount, 30000);
+        masterChef.boostStake(0, validBoostAmount);
+        masterChef.boostUnstake(0, validBoostAmount/2);
+        masterChef.boostStake(0, validBoostAmount/2);
+        vm.stopPrank();
+
+        // Verify shares still don't exceed max after manipulation
+        (, , , uint256 finalShares) = masterChef.userInfo(0, alice);
+        assertLe(finalShares, maxExpectedShares, "Shares exceeded max after manipulation");
+    }
+
+    function testBoostWithoutLP() public {
+        // Setup pool
+        masterChef.add(1, address(pair), 0, 30000, true);
+
+        // Try to boost without LP tokens
+        vm.startPrank(alice);
+        ponder.approve(address(masterChef), 100e18);
+        vm.expectRevert(abi.encodeWithSignature("InsufficientAmount()"));
+        masterChef.boostStake(0, 100e18);
+        vm.stopPrank();
+    }
+
+    function testBoostWithFakeTransfer() public {
+        masterChef.add(1, address(pair), 0, 30000, true);
+
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), 100e18);
+        masterChef.deposit(0, 100e18);
+
+        // Setup initial PONDER balance mock
+        vm.mockCall(
+            address(ponder),
+            abi.encodeWithSelector(IERC20.balanceOf.selector),
+            abi.encode(0)
+        );
+
+        // Mock the balance checks before and after transfer to show no change
+        vm.mockCall(
+            address(ponder),
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(masterChef)),
+            abi.encode(0)
+        );
+
+        // Calculate required PONDER for valid boost amount
+        uint256 boostAmount = masterChef.getRequiredPonderForBoost(100e18, 20000); // 2x boost
+        ponder.approve(address(masterChef), boostAmount);
+
+        // Mock transferFrom to return success
+        vm.mockCall(
+            address(ponder),
+            abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(masterChef), boostAmount),
+            abi.encode(true)
+        );
+
+        // Mock balance check after transfer to still show 0
+        vm.mockCall(
+            address(ponder),
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(masterChef)),
+            abi.encode(0)
+        );
+
+        // Should revert with ZeroAmount since no actual tokens were transferred
+        vm.expectRevert(PonderMasterChef.ZeroAmount.selector);
+        masterChef.boostStake(0, boostAmount);
+        vm.stopPrank();
+    }
+
+    function testSequentialBoostManipulation() public {
+        masterChef.add(1, address(pair), 0, 30000, true);  // 3x max boost
+
+        vm.startPrank(alice);
+        // Deposit LP tokens first
+        uint256 lpAmount = 100e18;
+        pair.approve(address(masterChef), lpAmount);
+        masterChef.deposit(0, lpAmount);
+
+        // Calculate exact boost amounts
+        uint256 maxBoostAmount = masterChef.getRequiredPonderForBoost(lpAmount, 30000); // For 3x boost
+        uint256 smallBoostAmount = maxBoostAmount / 8; // Split into 8 parts to ensure last boost will exceed
+
+        // Setup PONDER for alice
+        vm.startPrank(address(masterChef));
+        ponder.mint(alice, maxBoostAmount * 2);  // Mint extra to ensure enough balance
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        ponder.approve(address(masterChef), maxBoostAmount * 2);
+
+        // Do 8 boosts that should succeed
+        for(uint i = 0; i < 8; i++) {
+            masterChef.boostStake(0, smallBoostAmount);
+            (,, uint256 ponderStaked,) = masterChef.userInfo(0, alice);
+            // Verify each stake is within limits
+            assertLe(ponderStaked, maxBoostAmount, "Staked amount exceeded max allowable");
+        }
+
+        // The next boost should fail as it would exceed max boost
+        vm.expectRevert(abi.encodeWithSignature("BoostTooHigh()"));
+        masterChef.boostStake(0, smallBoostAmount);
+        vm.stopPrank();
+    }
+
+    function testPendingPonderAccuracy() public {
+        // Add pool with high allocation points to get meaningful rewards
+        masterChef.add(1000, address(pair), 0, 20000, true);
+
+        vm.startPrank(alice);
+        // Approve and deposit LP tokens
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
+        // Move forward 1 day
+        vm.warp(block.timestamp + 1 days);
+
+        // Calculate expected rewards using masterChef's ponderPerSecond
+        uint256 expectedRewards = masterChef.ponderPerSecond() * 1 days;
+        uint256 pendingRewards = masterChef.pendingPonder(0, alice);
+
+        assertApproxEqRel(pendingRewards, expectedRewards, 0.001e18, "Rewards calculation incorrect");
+        vm.stopPrank();
+    }
+
+    function testPendingPonderWithWeightChange() public {
+        // Add pool and initial deposit
+        masterChef.add(1000, address(pair), 0, 20000, true);
+
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
+        // Move forward 12 hours
+        vm.warp(block.timestamp + 12 hours);
+
+        // Get pending before weight change
+        uint256 pendingBefore = masterChef.pendingPonder(0, alice);
+
+        // Change pool weight
+        vm.stopPrank();
+        masterChef.set(0, 500, true); // Reduce allocation points by half
+
+        vm.prank(alice);
+        uint256 pendingAfter = masterChef.pendingPonder(0, alice);
+
+        // Verify rewards before change were preserved
+        assertApproxEqRel(
+            pendingAfter,
+            pendingBefore,
+            0.001e18,
+            "Rewards significantly changed after weight update"
+        );
+    }
+
+    function testPendingPonderAfterMintingEnd() public {
+        masterChef.add(1000, address(pair), 0, 20000, true);
+
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
+        // Move time to just before minting end
+        uint256 mintingEnd = block.timestamp + ponder.MINTING_END();
+        vm.warp(mintingEnd - 1 days);
+
+        // Should still have pending rewards
+        uint256 pendingBefore = masterChef.pendingPonder(0, alice);
+        assertGt(pendingBefore, 0, "Should have rewards before minting end");
+
+        // Move past minting end
+        vm.warp(mintingEnd + 1);
+
+        // Should now return 0 rewards
+        uint256 pendingAfter = masterChef.pendingPonder(0, alice);
+        assertEq(pendingAfter, 0, "Should have no rewards after minting end");
+        vm.stopPrank();
+    }
+
+    function testPendingPonderMaxSupply() public {
+        masterChef.add(1000, address(pair), 0, 20000, true);
+
+        // Mint tokens to get close to max supply
+        uint256 maxSupply = ponder.MAXIMUM_SUPPLY();
+        uint256 currentSupply = ponder.totalSupply();
+        uint256 toMint = maxSupply - currentSupply - 100e18; // Leave 100 tokens space
+
+        vm.startPrank(address(masterChef));
+        ponder.mint(address(this), toMint);
+        vm.stopPrank();
+
+        // Now add liquidity and check pending rewards
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
+        masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
+        // Move forward significant time
+        vm.warp(block.timestamp + 30 days);
+
+        // Pending rewards should be capped at remaining supply
+        uint256 pending = masterChef.pendingPonder(0, alice);
+        uint256 remainingSupply = maxSupply - ponder.totalSupply();
+        assertLe(pending, remainingSupply, "Rewards exceeded max supply");
+        vm.stopPrank();
+    }
+
+    function testBoostShareExploitPrevention() public {
+        // Add pool with 3x max boost
+        masterChef.add(1000, address(pair), 0, 30000, true); // 3x max boost
+
+        // Setup three users with equal LP amounts
+        uint256 lpAmount = 100e18;
+        address attacker = address(0x1);
+        address user1 = address(0x2);
+        address user2 = address(0x3);
+
+        // Give each user LP tokens
+        setupUserWithLP(attacker, lpAmount);
+        setupUserWithLP(user1, lpAmount);
+        setupUserWithLP(user2, lpAmount);
+
+        // All users deposit same LP amount
+        vm.startPrank(attacker);
+        pair.approve(address(masterChef), lpAmount);
+        masterChef.deposit(0, lpAmount);
+        vm.stopPrank();
+
+        vm.startPrank(user1);
+        pair.approve(address(masterChef), lpAmount);
+        masterChef.deposit(0, lpAmount);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        pair.approve(address(masterChef), lpAmount);
+        masterChef.deposit(0, lpAmount);
+        vm.stopPrank();
+
+        // Mint PONDER for boosts
+        vm.startPrank(address(masterChef));
+        ponder.mint(attacker, 1000e18);
+        ponder.mint(user1, 1000e18);
+        ponder.mint(user2, 1000e18);
+        vm.stopPrank();
+
+        // Regular user adds normal 2x boost
+        vm.startPrank(user1);
+        ponder.approve(address(masterChef), 1000e18);
+        uint256 normalBoostAmount = masterChef.getRequiredPonderForBoost(lpAmount, 20000); // 2x boost
+        masterChef.boostStake(0, normalBoostAmount);
+        vm.stopPrank();
+
+        // Attacker tries to exploit by:
+        // 1. Adding max boost
+        // 2. Unstaking some PONDER to get under required amount
+        // 3. Trying to keep boosted shares while reducing PONDER stake
+        vm.startPrank(attacker);
+        ponder.approve(address(masterChef), 1000e18);
+        uint256 maxBoostAmount = masterChef.getRequiredPonderForBoost(lpAmount, 30000); // 3x boost
+
+        // First add max boost
+        masterChef.boostStake(0, maxBoostAmount);
+
+        // Try to unstake half the PONDER while keeping boost
+        masterChef.boostUnstake(0, maxBoostAmount / 2);
+
+        // Try to restake a small amount to trigger share recalculation
+        masterChef.boostStake(0, normalBoostAmount / 10);
+        vm.stopPrank();
+
+        // Move forward to accumulate rewards
+        vm.warp(block.timestamp + 1 days);
+
+        // Get shares and rewards for all users
+        (,,,uint256 attackerShares) = masterChef.userInfo(0, attacker);
+        (,,,uint256 user1Shares) = masterChef.userInfo(0, user1);
+        (,,,uint256 user2Shares) = masterChef.userInfo(0, user2);
+
+        uint256 attackerRewards = masterChef.pendingPonder(0, attacker);
+        uint256 user1Rewards = masterChef.pendingPonder(0, user1);
+        uint256 user2Rewards = masterChef.pendingPonder(0, user2);
+
+        console.log("Attacker shares:", attackerShares);
+        console.log("User1 shares (2x boost):", user1Shares);
+        console.log("User2 shares (no boost):", user2Shares);
+
+        console.log("\nRewards after 1 day:");
+        console.log("Attacker rewards:", attackerRewards);
+        console.log("User1 rewards:", user1Rewards);
+        console.log("User2 rewards:", user2Rewards);
+
+        // Verify attacker didn't get excessive shares
+        uint256 maxAllowableShares = lpAmount * 30000 / masterChef.BASE_MULTIPLIER(); // 3x max
+        assertLe(attackerShares, maxAllowableShares, "Attacker got excessive shares");
+
+        // Verify attacker's rewards aren't disproportionate
+        uint256 totalShares = attackerShares + user1Shares + user2Shares;
+        uint256 expectedAttackerRewards = (PONDER_PER_SECOND * 1 days * attackerShares) / totalShares;
+        assertApproxEqRel(
+            attackerRewards,
+            expectedAttackerRewards,
+            0.01e18,
+            "Attacker got disproportionate rewards"
+        );
+
+        // Verify proper reward distribution ratios
+        // User1 should get 2x the base rewards, Attacker max 3x
+        assertLe(
+            attackerRewards,
+            user2Rewards * 3,
+            "Attacker rewards exceeded 3x unbosted"
+        );
+        assertApproxEqRel(
+            user1Rewards,
+            user2Rewards * 2,
+            0.01e18,
+            "User1 rewards not properly 2x boosted"
+        );
+    }
+
+    bytes4 constant ExcessiveAllocation = bytes4(keccak256("ExcessiveAllocation()"));
+    bytes4 constant DuplicatePool = bytes4(keccak256("DuplicatePool()"));
+
+    function testAddPoolZeroAddress() public {
+        // Should revert when trying to add pool with zero address LP token
+        vm.expectRevert(ZeroAddress);
+        masterChef.add(100, address(0), 0, 20000, true);
+    }
+
+    function testAddPoolExcessiveAllocation() public {
+        // Should revert when allocation points exceed MAX_ALLOC_POINT
+        vm.expectRevert(ExcessiveAllocation);
+        masterChef.add(10001, address(pair), 0, 20000, true);
+    }
+
+    function testAddPoolDuplicatePrevention() public {
+        // First add should succeed
+        masterChef.add(100, address(pair), 0, 20000, true);
+
+        // Second add with same LP token should fail
+        vm.expectRevert(DuplicatePool);
+        masterChef.add(100, address(pair), 0, 20000, true);
+    }
+
+    function testAddPoolRewardPreservation() public {
+        // Setup initial pool
+        masterChef.add(1000, address(pair), 0, 20000, true);
+
+        // Alice deposits in first pool
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), 100e18);
+        masterChef.deposit(0, 100e18);
+        vm.stopPrank();
+
+        // Accumulate rewards
+        vm.warp(block.timestamp + 1 days);
+
+        // Check pending rewards before adding new pool
+        uint256 pendingBefore = masterChef.pendingPonder(0, alice);
+
+        // Create and add new pool
+        address pair2 = factory.createPair(address(tokenA), address(tokenC));
+        masterChef.add(1000, pair2, 0, 20000, true);
+
+        // Verify rewards weren't diluted
+        uint256 pendingAfter = masterChef.pendingPonder(0, alice);
+        assertEq(pendingAfter, pendingBefore, "Rewards were diluted by new pool");
+    }
+
+    function testAddPoolForcedUpdate() public {
+        // Setup initial pool
+        masterChef.add(1000, address(pair), 0, 20000, true);
+
+        // Alice deposits
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), 100e18);
+        masterChef.deposit(0, 100e18);
+        vm.stopPrank();
+
+        // Move time forward
+        vm.warp(block.timestamp + 1 days);
+
+        // Create new pair
+        address pair2 = factory.createPair(address(tokenA), address(tokenC));
+
+        // Add new pool with withUpdate = false (should still update due to fix)
+        masterChef.add(1000, pair2, 0, 20000, false);
+
+        // Verify rewards were properly accounted
+        uint256 pendingRewards = masterChef.pendingPonder(0, alice);
+        uint256 expectedRewards = PONDER_PER_SECOND * 1 days;
+        assertApproxEqRel(pendingRewards, expectedRewards, 0.001e18, "Rewards not properly updated");
+    }
+
+    function testAddPoolAllocationTracking() public {
+        // Add first pool
+        masterChef.add(1000, address(pair), 0, 20000, true);
+        assertEq(masterChef.totalAllocPoint(), 1000, "Initial allocation incorrect");
+
+        // Create and add second pool
+        address pair2 = factory.createPair(address(tokenA), address(tokenC));
+        masterChef.add(500, pair2, 0, 20000, true);
+
+        // Verify total allocation
+        assertEq(masterChef.totalAllocPoint(), 1500, "Total allocation tracking incorrect");
+    }
 }

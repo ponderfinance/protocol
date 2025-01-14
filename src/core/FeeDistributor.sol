@@ -9,12 +9,35 @@ import "../interfaces/IPonderStaking.sol";
 import "../interfaces/IERC20.sol";
 import "../libraries/TransferHelper.sol";
 
+
+abstract contract ReentrancyGuard {
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+    uint256 private _status;
+
+
+    constructor() {
+        _status = _NOT_ENTERED;
+    }
+
+    modifier nonReentrant() {
+        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
+        _status = _ENTERED;
+        _;
+        _status = _NOT_ENTERED;
+    }
+}
+
+
 /**
  * @title FeeDistributor
  * @notice Handles collection and distribution of protocol fees from trading
  * @dev Collects fees from pairs, converts to PONDER, and distributes to xPONDER stakers and team
  */
-contract FeeDistributor is IFeeDistributor {
+contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
+    mapping(address => uint256) public lastPairDistribution;
+    mapping(address => bool) private processedPairs;
+
     /// @notice Factory contract reference for pair creation and fee collection
     IPonderFactory public immutable factory;
 
@@ -48,6 +71,10 @@ contract FeeDistributor is IFeeDistributor {
     /// @notice Basis points denominator
     uint256 public constant BASIS_POINTS = 10000;
 
+    uint256 public constant DISTRIBUTION_COOLDOWN = 1 hours;
+    uint256 public constant MAX_PAIRS_PER_DISTRIBUTION = 10;
+    uint256 public lastDistributionTimestamp; // Rename for clarity
+
     /// @notice Custom errors
     error InvalidRatio();
     error RatioSumIncorrect();
@@ -57,6 +84,12 @@ contract FeeDistributor is IFeeDistributor {
     error InvalidAmount();
     error SwapFailed();
     error TransferFailed();
+    error InsufficientOutputAmount();
+    error PairNotFound();
+    error InvalidPairCount();
+    error InvalidPair();
+    error DistributionTooFrequent();
+    error InsufficientAccumulation();
 
     /**
      * @notice Contract constructor
@@ -93,28 +126,39 @@ contract FeeDistributor is IFeeDistributor {
      * @notice Collects fees from a specific pair
      * @param pair Address of the pair to collect fees from
      */
-    function collectFeesFromPair(address pair) public {
-        // First sync to ensure reserves are up to date
-        IPonderPair(pair).sync();
+    /**
+        * @notice Safely collects fees from a specific pair using CEI pattern
+     * @param pair Address of the pair to collect fees from
+     * @dev Implements Checks-Effects-Interactions pattern with reentrancy guard
+     */
+    function collectFeesFromPair(address pair) public nonReentrant {
+        // CHECKS
+        require(pair != address(0), "Invalid pair address");
+        IPonderPair pairContract = IPonderPair(pair);
+        address token0 = pairContract.token0();
+        address token1 = pairContract.token1();
 
-        // Get pair token addresses
-        address token0 = IPonderPair(pair).token0();
-        address token1 = IPonderPair(pair).token1();
+        // Cache initial balances
+        uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
+        uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
 
-        // Check balances before transfer
-        uint256 balance0 = IERC20(token0).balanceOf(address(this));
-        uint256 balance1 = IERC20(token1).balanceOf(address(this));
+        // EFFECTS - None for this function
 
-        // Collect fees via skim
-        IPonderPair(pair).skim(address(this));
+        // INTERACTIONS - Performed last
+        // Single sync call instead of multiple
+        pairContract.sync();
 
-        // Sync again after skim to ensure reserves are correct
-        IPonderPair(pair).sync();
+        // Collect fees
+        pairContract.skim(address(this));
 
-        // Calculate collected amounts
-        uint256 collected0 = IERC20(token0).balanceOf(address(this)) - balance0;
-        uint256 collected1 = IERC20(token1).balanceOf(address(this)) - balance1;
+        // CHECKS - Verify collection success
+        uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
+        uint256 finalBalance1 = IERC20(token1).balanceOf(address(this));
 
+        uint256 collected0 = finalBalance0 - initialBalance0;
+        uint256 collected1 = finalBalance1 - initialBalance1;
+
+        // Emit events after all state changes and interactions
         if (collected0 > 0) {
             emit FeesCollected(token0, collected0);
         }
@@ -127,24 +171,27 @@ contract FeeDistributor is IFeeDistributor {
      * @notice Converts collected fees to PONDER
      * @param token Address of the token to convert
      */
-    function convertFees(address token) external {
-        if (token == ponder) return; // No need to convert PONDER
+    function convertFees(address token) external nonReentrant {
+        if (token == ponder) return;
 
         uint256 amount = IERC20(token).balanceOf(address(this));
         if (amount < MINIMUM_AMOUNT) revert InvalidAmount();
 
-        // Approve router if needed
+        // Reuse same protection as distributePairFees
+        uint256 minOutAmount = _calculateMinimumPonderOut(token, amount);
+
+        // Approve router
         IERC20(token).approve(address(router), amount);
 
-        // Setup path for swap
+        // Setup path
         address[] memory path = new address[](2);
         path[0] = token;
         path[1] = ponder;
 
-        // Perform swap
+        // Perform swap with strict output requirements
         try router.swapExactTokensForTokens(
             amount,
-            0, // Accept any amount of PONDER
+            minOutAmount,
             path,
             address(this),
             block.timestamp
@@ -155,59 +202,198 @@ contract FeeDistributor is IFeeDistributor {
         }
     }
 
+    event DistributionAttempt(uint256 currentTime, uint256 lastDistribution, uint256 timeSinceLastDistribution);
+
     /**
      * @notice Distributes converted fees to stakers and team
      * @dev Splits fees 80/20 between xPONDER stakers and team
      */
-    function distribute() external {
+    function _distribute() internal {
+        // Check cooldown first
+        if (lastDistributionTimestamp != 0) {
+            uint256 timeElapsed = block.timestamp - lastDistributionTimestamp;
+            if (timeElapsed < DISTRIBUTION_COOLDOWN) {
+                revert DistributionTooFrequent();
+            }
+        }
+
         uint256 totalAmount = IERC20(ponder).balanceOf(address(this));
         if (totalAmount < MINIMUM_AMOUNT) revert InvalidAmount();
+
+        // Update timestamp BEFORE transfers
+        lastDistributionTimestamp = block.timestamp;
 
         // Calculate splits
         uint256 stakingAmount = (totalAmount * stakingRatio) / BASIS_POINTS;
         uint256 teamAmount = (totalAmount * teamRatio) / BASIS_POINTS;
 
-        // Send to staking first (triggers rebase)
+        // Transfer to staking
         if (stakingAmount > 0) {
             if (!IERC20(ponder).transfer(address(staking), stakingAmount)) {
                 revert TransferFailed();
             }
-            staking.rebase();
         }
 
-        // Send to team
+        // Transfer to team
         if (teamAmount > 0) {
             if (!IERC20(ponder).transfer(team, teamAmount)) {
                 revert TransferFailed();
             }
         }
 
-        emit FeesDistributed(totalAmount, stakingAmount,  teamAmount);
+        emit FeesDistributed(totalAmount, stakingAmount, teamAmount);
+    }
+
+    function distribute() external nonReentrant {
+        _distribute();
     }
 
     /**
      * @notice Distributes fees from specific pairs
      * @param pairs Array of pair addresses to collect and distribute fees from
      */
-    function distributePairFees(address[] calldata pairs) external {
-        // First collect from all pairs
-        for (uint256 i = 0; i < pairs.length; i++) {
-            collectFeesFromPair(pairs[i]);
-        }
+    function distributePairFees(address[] calldata pairs) external nonReentrant {
+        // Check array bounds
+        if (pairs.length == 0 || pairs.length > MAX_PAIRS_PER_DISTRIBUTION)
+            revert InvalidPairCount();
 
-        // Convert collected fees to PONDER
-        address[] memory uniqueTokens = _getUniqueTokens(pairs);
-        for (uint256 i = 0; i < uniqueTokens.length; i++) {
-            if (IERC20(uniqueTokens[i]).balanceOf(address(this)) >= MINIMUM_AMOUNT) {
-                this.convertFees(uniqueTokens[i]);
+        // First collect from all pairs with safety checks
+        for (uint256 i = 0; i < pairs.length; i++) {
+            address currentPair = pairs[i];
+
+            // Validate pair
+            if (currentPair == address(0) || processedPairs[currentPair])
+                revert InvalidPair();
+
+            // Check if enough time has passed since last distribution
+            if (block.timestamp - lastPairDistribution[currentPair] < DISTRIBUTION_COOLDOWN)
+                revert DistributionTooFrequent();
+
+            // Mark as processed
+            processedPairs[currentPair] = true;
+
+            // Update last distribution time
+            lastPairDistribution[currentPair] = block.timestamp;
+
+            // Try to collect fees
+            try this.collectFeesFromPair(currentPair) {
+                // Reset processed flag after successful collection
+                processedPairs[currentPair] = false;
+            } catch {
+                // Reset processed flag and continue if collection fails
+                processedPairs[currentPair] = false;
+                continue;
             }
         }
 
+        // Convert collected fees to PONDER with slippage protection
+        address[] memory uniqueTokens = _getUniqueTokens(pairs);
+        uint256 preBalance = IERC20(ponder).balanceOf(address(this));
+
+        for (uint256 i = 0; i < uniqueTokens.length; i++) {
+            address token = uniqueTokens[i];
+            uint256 tokenBalance = IERC20(token).balanceOf(address(this));
+
+            if (tokenBalance >= MINIMUM_AMOUNT) {
+                // Add slippage check for conversion
+                uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
+                _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
+            }
+        }
+
+        // Verify minimum accumulated PONDER
+        uint256 postBalance = IERC20(ponder).balanceOf(address(this));
+        if (postBalance - preBalance < MINIMUM_AMOUNT) revert InsufficientAccumulation();
+
         // Distribute converted PONDER
         if (IERC20(ponder).balanceOf(address(this)) >= MINIMUM_AMOUNT) {
-            this.distribute();
+            _distribute();
         }
     }
+
+    /**
+ * @notice Calculates minimum PONDER output for a given token input with 1% max slippage
+ * @param token Input token address
+ * @param amountIn Amount of input tokens
+ * @return minOut Minimum amount of PONDER to receive
+ */
+    function _calculateMinimumPonderOut(
+        address token,
+        uint256 amountIn
+    ) internal view returns (uint256 minOut) {
+        address pair = factory.getPair(token, ponder);
+        if (pair == address(0)) revert PairNotFound();
+
+        (uint112 reserve0, uint112 reserve1, ) = IPonderPair(pair).getReserves();
+
+        (uint112 tokenReserve, uint112 ponderReserve) =
+            IPonderPair(pair).token0() == token ?
+                (reserve0, reserve1) :
+                (reserve1, reserve0);
+
+        // Add check for extreme reserve imbalance
+        if (tokenReserve == 0 || ponderReserve == 0) revert("Invalid reserves");
+
+        uint256 reserveRatio = (uint256(tokenReserve) * 1e18) / uint256(ponderReserve);
+        if (reserveRatio > 100e18 || reserveRatio < 1e16) revert SwapFailed();
+
+        uint256 amountOut = router.getAmountsOut(
+            amountIn,
+            _getPath(token, ponder)
+        )[1];
+
+        // Make slippage tolerance more strict - 0.5% instead of 1%
+        return (amountOut * 995) / 1000;
+    }
+
+/**
+ * @notice Helper to create path array for swaps
+ */
+    function _getPath(address tokenIn, address tokenOut)
+    internal
+    pure
+    returns (address[] memory path)
+    {
+        path = new address[](2);
+        path[0] = tokenIn;
+        path[1] = tokenOut;
+    }
+
+
+    /**
+     * @notice Helper function to convert fees with slippage protection
+     * @param token Input token to convert
+     * @param amountIn Amount of input tokens
+     * @param minOutAmount Minimum amount of PONDER to receive
+     */
+    function _convertFeesWithSlippage(
+        address token,
+        uint256 amountIn,
+        uint256 minOutAmount
+    ) internal {
+        if (token == ponder) return;
+
+        // Approve router if needed
+        IERC20(token).approve(address(router), amountIn);
+
+        // Setup path for swap
+        address[] memory path = new address[](2);
+        path[0] = token;
+        path[1] = ponder;
+
+        try router.swapExactTokensForTokens(
+            amountIn,
+            minOutAmount,
+            path,
+            address(this),
+            block.timestamp
+        ) returns (uint256[] memory amounts) {
+            emit FeesConverted(token, amountIn, amounts[1]);
+        } catch {
+            revert SwapFailed();
+        }
+    }
+
 
     /**
      * @notice Updates fee distribution ratios
@@ -301,6 +487,23 @@ contract FeeDistributor is IFeeDistributor {
             tokens[i] = tempTokens[i];
         }
     }
+
+    /**
+   * @notice Emergency function to rescue tokens in case of failed collection
+     * @dev Only callable by owner with timelock
+     */
+    function emergencyTokenRecover(
+        address token,
+        address to,
+        uint256 amount
+    ) external onlyOwner {
+        require(to != address(0), "Invalid recipient");
+        require(amount > 0, "Invalid amount");
+
+        IERC20(token).transfer(to, amount);
+        emit EmergencyTokenRecovered(token, to, amount);
+    }
+
 
     /// @notice Modifier for owner-only functions
     modifier onlyOwner() {

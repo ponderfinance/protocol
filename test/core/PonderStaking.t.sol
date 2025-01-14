@@ -90,28 +90,6 @@ contract PonderStakingTest is Test {
         assertLt(shares, user2StakeAmount, "Should receive fewer shares due to rewards");
     }
 
-    function test_Rebase() public {
-        // Initial stake
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
-        vm.stopPrank();
-
-        // Simulate fee distribution using test contract's balance
-        ponder.transfer(address(staking), 100e18);
-
-        // Advance time for rebase
-        vm.warp(block.timestamp + 1 days);
-
-        vm.expectEmit(true, true, true, true);
-        emit RebasePerformed(1000e18, 1100e18);
-
-        staking.rebase();
-
-        uint256 shareValue = staking.getPonderAmount(1000e18);
-        assertEq(shareValue, 1100e18, "Share value should reflect rewards");
-    }
-
     function test_GetPonderAmount() public {
         // Initial stake
         vm.startPrank(user1);
@@ -128,8 +106,8 @@ contract PonderStakingTest is Test {
     }
 
     function testFuzz_EnterAndLeave(uint256 amount) public {
-        // Bound the amount to reasonable values and available balance
-        amount = bound(amount, 1e18, 1000e18);
+        // Bound amount between MINIMUM_FIRST_STAKE and reasonable max amount
+        amount = bound(amount, staking.MINIMUM_FIRST_STAKE(), 10000e18);
 
         vm.startPrank(marketing);
         ponder.transfer(address(this), amount);
@@ -185,25 +163,6 @@ contract PonderStakingTest is Test {
         assertEq(staking.balanceOf(user1), 500e18, "Should have remaining xPONDER");
     }
 
-    function test_RebaseFrequency() public {
-        // Advance time past initial lastRebaseTime
-        vm.warp(block.timestamp + 1 days);
-
-        staking.rebase();
-
-        vm.expectRevert(abi.encodeWithSignature("RebaseTooFrequent()"));
-        staking.rebase();
-
-        // Advance time but not enough
-        vm.warp(block.timestamp + 12 hours);
-        vm.expectRevert(abi.encodeWithSignature("RebaseTooFrequent()"));
-        staking.rebase();
-
-        // Advance enough time
-        vm.warp(block.timestamp + 12 hours);
-        staking.rebase(); // Should succeed
-    }
-
     function test_RevertOnZeroAmount() public {
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
@@ -243,5 +202,223 @@ contract PonderStakingTest is Test {
 
         assertEq(staking.owner(), newOwner);
         assertEq(staking.pendingOwner(), address(0));
+    }
+
+    function test_PreventFirstStakeManipulation() public {
+        // Attacker tries to manipulate share ratio
+        vm.startPrank(user2);
+        ponder.transfer(address(staking), 1e15);
+        vm.stopPrank();
+
+        // User1 performs normal stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        uint256 shares = staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Should get exact 1:1 ratio for first stake
+        assertEq(shares, 1000e18, "Share ratio was manipulated");
+    }
+
+    function test_FirstStakeMinimum() public {
+        uint256 smallAmount = 100e18; // Below MINIMUM_FIRST_STAKE
+
+        vm.startPrank(user1);
+        ponder.approve(address(staking), smallAmount);
+        vm.expectRevert(abi.encodeWithSignature("InsufficientFirstStake()"));
+        staking.enter(smallAmount);
+        vm.stopPrank();
+    }
+
+    function test_ShareRatioPreservation() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        uint256 shares1 = staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Second stake with half amount
+        vm.startPrank(user2);
+        ponder.approve(address(staking), 500e18);
+        uint256 shares2 = staking.enter(500e18);
+        vm.stopPrank();
+
+        // Half amount should get half shares
+        assertEq(shares2, shares1 / 2, "Share ratio not preserved");
+
+        // Verify totals
+        uint256 totalShares = staking.totalSupply();
+        uint256 totalStaked = ponder.balanceOf(address(staking));
+        assertEq(totalShares, shares1 + shares2, "Incorrect total shares");
+        assertEq(totalStaked, 1500e18, "Incorrect total staked");
+    }
+
+    function test_ShareValueIncreasesWithFees() public {
+        // First stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Record initial share value
+        uint256 initialShareValue = staking.getPonderAmount(1000e18);
+
+        // Simulate fee distribution
+        ponder.transfer(address(staking), 100e18);
+
+        // Share value should increase automatically
+        uint256 newShareValue = staking.getPonderAmount(1000e18);
+        assertGt(newShareValue, initialShareValue, "Share value should increase with fees");
+        assertEq(newShareValue, 1100e18, "Share value should reflect total balance");
+    }
+
+    function test_MultipleShareholders() public {
+        // User1 stakes first
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Simulate fee distribution
+        ponder.transfer(address(staking), 100e18);
+
+        // User2 stakes after fees
+        vm.startPrank(user2);
+        ponder.approve(address(staking), 1000e18);
+        // When user2 stakes 1000e18 PONDER, they should get proportionally fewer shares
+        // Total pool = 1100e18 PONDER, total shares = 1000e18
+        // So 1000e18 PONDER should get (1000e18 * 1000e18) / 1100e18 shares
+        uint256 user2Shares = staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Both users should have proportional claims
+        // User1: 1000e18 shares = 1100e18 PONDER
+        // User2: ~909e18 shares = 1000e18 PONDER
+        uint256 user1Ponder = staking.getPonderAmount(1000e18);
+        uint256 user2Ponder = staking.getPonderAmount(user2Shares);
+
+        // User2 should get ~1000e18 PONDER worth of value
+        assertApproxEqRel(user2Ponder, 1000e18, 0.01e18, "User2 should get ~1000e18 PONDER value");
+        // User1 should get ~1100e18 PONDER worth of value (original + fees)
+        assertApproxEqRel(user1Ponder, 1100e18, 0.01e18, "User1 should get ~1100e18 PONDER value");
+    }
+
+    function test_ShareValueMaintainedThroughoutOperations() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Add fees
+        ponder.transfer(address(staking), 100e18);
+
+        // Second user stakes
+        vm.startPrank(user2);
+        ponder.approve(address(staking), 500e18);
+        uint256 user2Shares = staking.enter(500e18);
+        vm.stopPrank();
+
+        // More fees
+        ponder.transfer(address(staking), 50e18);
+
+        // First user withdraws half
+        vm.startPrank(user1);
+        uint256 withdrawAmount = staking.leave(500e18);
+        vm.stopPrank();
+
+        // Verify proportions are maintained
+        uint256 totalPonder = ponder.balanceOf(address(staking));
+        uint256 totalShares = staking.totalSupply();
+        uint256 expectedShareValue = (totalPonder * 1e18) / totalShares;
+        assertEq(staking.getPonderAmount(1e18), expectedShareValue, "Share value should be maintained");
+    }
+
+    function test_PreventSandwichAttack() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Setup sandwich attack
+        vm.prank(address(this));  // Test contract has tokens
+        ponder.transfer(address(staking), 100e18);
+
+        // Mock a transfer reversion during leave to simulate sandwich
+        vm.mockCall(
+            address(ponder),
+            abi.encodeWithSelector(IERC20.transfer.selector),
+            abi.encode(true)
+        );
+
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSignature("InvalidBalance()"));
+        staking.leave(500e18);
+        vm.stopPrank();
+    }
+
+    function test_PreventDustShares() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Try to withdraw tiny amount
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSignature("MinimumSharesRequired()"));
+        staking.leave(1); // Dust amount
+        vm.stopPrank();
+    }
+
+    function test_PreventExcessiveShares() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+        vm.stopPrank();
+
+        // Try to withdraw more than owned
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSignature("InvalidSharesAmount()"));
+        staking.leave(2000e18);
+        vm.stopPrank();
+    }
+
+    function test_PreventReentrancyOnLeave() public {
+        // Initial stake with real token
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18);
+
+        // Record initial balances
+        uint256 initialShares = staking.balanceOf(user1);
+        uint256 initialStakingBalance = ponder.balanceOf(address(staking));
+
+        // Now try to leave with a malicious transfer hook
+        vm.mockCall(
+            address(ponder),
+            abi.encodeWithSelector(IERC20.transfer.selector),
+            abi.encode(false)  // Simulate failed transfer that might try reentrancy
+        );
+
+        vm.expectRevert(abi.encodeWithSignature("TransferFailed()"));
+        staking.leave(500e18);
+        vm.stopPrank();
+
+        // Verify state hasn't changed
+        assertEq(staking.balanceOf(user1), initialShares, "Shares should not change");
+        assertEq(ponder.balanceOf(address(staking)), initialStakingBalance, "Staking balance should not change");
+    }
+}
+
+contract ReentrantToken is PonderERC20 {
+    constructor() PonderERC20("Reentrant", "REKT") {}
+
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        // Try to reenter staking contract
+        PonderStaking(msg.sender).leave(amount);
+        return true;
     }
 }

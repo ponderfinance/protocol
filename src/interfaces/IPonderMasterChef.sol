@@ -20,7 +20,11 @@ interface IPonderMasterChef {
         uint256 totalWeightedShares; // Total weighted shares (including all boosts)
         uint16 depositFeeBP;       // Deposit fee in basis points
         uint16 boostMultiplier;    // Maximum boost multiplier
+//        uint256 lastRewardBlock;      // Last block rewards were updated
+//        uint256 pendingRewards;       // Accumulated but undistributed rewards
+//        uint256 rewardPerShare;       // Rewards per share, stored with 1e12 precision
     }
+
     /// @notice Returns the number of pools
     function poolLength() external view returns (uint256);
 

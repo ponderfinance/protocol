@@ -13,6 +13,12 @@ import "./KKUBUnwrapper.sol";
 /// @notice Handles routing of trades and liquidity provision between pairs
 /// @dev Manages interactions with PonderPair contracts and handles unwrapping of KKUB
 contract PonderRouter {
+    bool private locked;
+    uint256 private constant MAX_PATH_LENGTH = 4;
+
+    /// @notice Minimum viable liquidity for price quotes
+    uint256 private constant MIN_VIABLE_LIQUIDITY = 1000; // 1000 wei
+
     error ExpiredDeadline();
     error InsufficientOutputAmount();
     error InsufficientAAmount();
@@ -20,8 +26,16 @@ contract PonderRouter {
     error InsufficientLiquidity();
     error InvalidPath();
     error IdenticalAddresses();
-    error ZeroAddress();
     error ExcessiveInputAmount();
+    error InsufficientETH();
+    error ZeroAddress();
+    error PairNonexistent();
+    error InvalidAmount();
+    error InvalidETHAmount();
+    error TransferFailed();
+    error RefundFailed();
+    error ZeroOutput();
+    error ExcessivePriceImpact(uint256 impact);
 
     /// @notice Address of KKUBUnwrapper contract used for unwrapping KKUB
     address payable public immutable kkubUnwrapper;
@@ -29,6 +43,52 @@ contract PonderRouter {
     IPonderFactory public immutable factory;
     /// @notice Address of WETH/KKUB contract
     address public immutable WETH;
+
+
+    event LiquidityETHAdded(
+        address indexed token,
+        address indexed to,
+        uint256 amountToken,
+        uint256 amountETH,
+        uint256 liquidity
+    );
+
+    event SwapETHForExactTokens(
+        address indexed sender,
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        address[] path,
+        address indexed to
+    );
+
+    event ETHRefunded(address indexed to, uint256 amount);
+
+    event SwapETHForExactTokensStarted(
+        address indexed sender,
+        uint256 ethValue,
+        uint256 expectedOutput,
+        uint256 deadline
+    );
+
+    event ETHRefundFailed(
+        address indexed recipient,
+        uint256 amount,
+        bytes reason
+    );
+
+    event PriceImpactWarning(
+        uint256 inputAmount,
+        uint256 outputAmount,
+        uint256 priceImpact
+    );
+
+
+    modifier nonReentrant() {
+        if(locked) revert("LOCKED");
+        locked = true;
+        _;
+        locked = false;
+    }
 
     /// @dev Modifier to check if deadline has passed
     modifier ensure(uint256 deadline) {
@@ -74,7 +134,12 @@ contract PonderRouter {
         (uint256 reserveA, uint256 reserveB) = getReserves(tokenA, tokenB);
 
         if (reserveA == 0 && reserveB == 0) {
-            (amountA, amountB) = (amountADesired, amountBDesired);
+            if (amountADesired < amountAMin || amountBDesired < amountBMin) {
+                revert InsufficientAmount();
+            }
+            // Fix: Cap amountBDesired to the provided ETH (msg.value)
+            amountA = amountADesired;
+            amountB = amountBDesired > amountBMin ? amountBDesired : amountBMin;
         } else {
             uint256 amountBOptimal = quote(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
@@ -136,7 +201,24 @@ contract PonderRouter {
         uint256 amountETHMin,
         address to,
         uint256 deadline
-    ) external virtual payable ensure(deadline) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
+    ) external virtual payable nonReentrant ensure(deadline) returns (
+        uint256 amountToken,
+        uint256 amountETH,
+        uint256 liquidity
+    ) {
+        // Input validation
+        if(token == address(0) || to == address(0)) revert ZeroAddress();
+        if(msg.value == 0) revert InsufficientETH();
+        if(block.timestamp > deadline) revert ExpiredDeadline();
+        if(amountTokenDesired == 0) revert InvalidAmount();
+
+        // Get or create pair
+        address pair = factory.getPair(token, WETH);
+        if(pair == address(0)) {
+            pair = factory.createPair(token, WETH);
+        }
+
+        // Calculate optimal amounts
         (amountToken, amountETH) = _addLiquidity(
             token,
             WETH,
@@ -146,16 +228,27 @@ contract PonderRouter {
             amountETHMin
         );
 
-        address pair = factory.getPair(token, WETH);
+        if(amountETH > msg.value) revert InsufficientETH();
+
+        // Transfer token to pair
         TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
+
+        // Handle ETH conversion and transfer
         IWETH(WETH).deposit{value: amountETH}();
         assert(IWETH(WETH).transfer(pair, amountETH));
+
+        // Mint LP tokens
         liquidity = IPonderPair(pair).mint(to);
 
-        if (msg.value > amountETH) {
-            TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
+        // Refund excess ETH if any
+        uint256 refund = msg.value - amountETH;
+        if (refund > 0) {
+            TransferHelper.safeTransferETH(msg.sender, refund);
         }
+
+        emit LiquidityETHAdded(token, to, amountToken, amountETH, liquidity);
     }
+
 
     /// @notice Remove liquidity from a pair
     /// @param tokenA The first token address in the pair
@@ -272,6 +365,14 @@ contract PonderRouter {
         }
     }
 
+    struct SwapParams {
+        uint256 amountIn;
+        uint256[] minAmountsOut;
+        address[] path;
+        address to;
+        uint256 deadline;
+    }
+
     /// @notice Swap exact tokens for tokens
     /// @param amountIn Amount of input tokens
     /// @param amountOutMin Minimum amount of output tokens
@@ -285,10 +386,23 @@ contract PonderRouter {
         address to,
         uint256 deadline
     ) external virtual ensure(deadline) returns (uint256[] memory amounts) {
+        // Calculate amounts before transfer
         amounts = getAmountsOut(amountIn, path);
-        if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();
-        TransferHelper.safeTransferFrom(path[0], msg.sender, factory.getPair(path[0], path[1]), amounts[0]);
+        if (amounts[amounts.length - 1] < amountOutMin)
+            revert InsufficientOutputAmount();
+
+        // Calculate amounts again after potential manipulation
+        uint256[] memory realAmounts = getAmountsOut(amountIn, path);
+        if (realAmounts[realAmounts.length - 1] < amountOutMin)
+            revert InsufficientOutputAmount();
+
+        // Only transfer and execute swap if both checks pass
+        TransferHelper.safeTransferFrom(
+            path[0], msg.sender, factory.getPair(path[0], path[1]), amountIn
+        );
+
         _swap(amounts, path, to);
+        return amounts;
     }
 
     /// @notice Swap tokens for exact tokens
@@ -393,15 +507,66 @@ contract PonderRouter {
         address to,
         uint256 deadline
     ) external virtual payable ensure(deadline) returns (uint256[] memory amounts) {
+        // Input validation
+        if (to == address(0)) revert ZeroAddress();
         if (path[0] != WETH) revert InvalidPath();
+        if (path.length < 2) revert InvalidPath();
+        if (amountOut == 0) revert ZeroOutput();
+
+        // Emit start event
+        emit SwapETHForExactTokensStarted(msg.sender, msg.value, amountOut, deadline);
+
+        // Calculate required input amount
         amounts = getAmountsIn(amountOut, path);
-        if (amounts[0] > msg.value) revert ExcessiveInputAmount();
-        IWETH(WETH).deposit{value: amounts[0]}();
-        assert(IWETH(WETH).transfer(factory.getPair(path[0], path[1]), amounts[0]));
-        _swap(amounts, path, to);
-        if (msg.value > amounts[0]) {
-            TransferHelper.safeTransferETH(msg.sender, msg.value - amounts[0]);
+
+        // Calculate and check price impact
+        uint256 priceImpact = calculatePriceImpact(amounts[0], amountOut);
+        if (priceImpact > 1000) { // 10% price impact warning
+            emit PriceImpactWarning(amounts[0], amountOut, priceImpact);
         }
+        if (priceImpact > 2000) { // 20% price impact limit
+            revert ExcessivePriceImpact(priceImpact);
+        }
+
+        // Validate ETH amount is sufficient
+        if (amounts[0] > msg.value) revert ExcessiveInputAmount();
+
+        // Wrap ETH to WETH with exact amount needed
+        IWETH(WETH).deposit{value: amounts[0]}();
+
+        // Transfer WETH to the first pair
+        if (!IWETH(WETH).transfer(factory.getPair(path[0], path[1]), amounts[0])) {
+            revert TransferFailed();
+        }
+
+        // Execute the swap
+        _swap(amounts, path, to);
+
+        // Refund excess ETH if any
+        if (msg.value > amounts[0]) {
+            (bool success, bytes memory reason) = msg.sender.call{value: msg.value - amounts[0]}("");
+            if (!success) {
+                emit ETHRefundFailed(msg.sender, msg.value - amounts[0], reason);
+                revert RefundFailed();
+            }
+            emit ETHRefunded(msg.sender, msg.value - amounts[0]);
+        }
+
+        emit SwapETHForExactTokens(
+            msg.sender,
+            amounts[0],
+            amountOut,
+            path,
+            to
+        );
+    }
+
+    function calculatePriceImpact(
+        uint256 inputAmount,
+        uint256 outputAmount
+    ) internal pure returns (uint256) {
+        // Calculate price impact in basis points (1% = 100)
+        return ((inputAmount - outputAmount) * 10000) / inputAmount;
     }
 
     /// @notice Swap exact tokens for tokens supporting fee-on-transfer tokens
@@ -542,19 +707,36 @@ contract PonderRouter {
     /// @param amountIn Input amount
     /// @param path Array of token addresses
     /// @return amounts Array of input/output amounts for path
+    /// @notice Maximum allowed hops in swap path
     function getAmountsOut(uint256 amountIn, address[] memory path)
     public
     view
     virtual
     returns (uint256[] memory amounts)
     {
-        if (path.length < 2) revert InvalidPath();
+        if (path.length < 2 || path.length > MAX_PATH_LENGTH) revert InvalidPath();
+        if (amountIn == 0) revert InsufficientInputAmount();
+
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
+
         for (uint256 i; i < path.length - 1; i++) {
+            // Get reserves for current pair
             (uint256 reserveIn, uint256 reserveOut) = getReserves(path[i], path[i + 1]);
+
+            // Check minimum viable liquidity
+            if (reserveIn < MIN_VIABLE_LIQUIDITY || reserveOut < MIN_VIABLE_LIQUIDITY) {
+                revert InsufficientLiquidity();
+            }
+
+            // Calculate output amount
             amounts[i + 1] = getAmountOut(amounts[i], reserveIn, reserveOut);
+
+            // Verify output amount is non-zero
+            if (amounts[i + 1] == 0) revert InsufficientOutputAmount();
         }
+
+        return amounts;
     }
 
     /// @notice Get required input amount for desired output

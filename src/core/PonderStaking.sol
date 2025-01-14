@@ -32,6 +32,14 @@ contract PonderStaking is PonderERC20 {
 
     /// @notice Minimum time between rebases
     uint256 public constant REBASE_DELAY = 1 days;
+    uint256 public ponderPerShare;
+    uint256 public totalDepositedPonder; // Tracks total PONDER deposited by users
+    uint256 public constant MINIMUM_FIRST_STAKE = 1000e18;
+    uint256 public constant MIN_SHARE_RATIO = 1e14;     // 0.0001 shares per token minimum
+    uint256 public constant MAX_SHARE_RATIO = 100e18;   // 100 shares per token maximum
+    uint256 public constant MINIMUM_WITHDRAW = 1e16; // 0.01 PONDER minimum withdrawal
+
+
 
     /// @notice Events
     event Staked(address indexed user, uint256 ponderAmount, uint256 xPonderAmount);
@@ -46,6 +54,13 @@ contract PonderStaking is PonderERC20 {
     error NotOwner();
     error NotPendingOwner();
     error ZeroAddress();
+    error ExcessiveShareRatio();
+    error InvalidBalance();
+    error InsufficientFirstStake();
+    error InvalidShareRatio();
+    error MinimumSharesRequired();
+    error InvalidSharesAmount();
+    error TransferFailed();
 
     /**
      * @notice Contract constructor
@@ -76,63 +91,56 @@ contract PonderStaking is PonderERC20 {
     function enter(uint256 amount) external returns (uint256 shares) {
         if (amount == 0) revert InvalidAmount();
 
+        // Get the total amount of PONDER in the contract
         uint256 totalPonder = ponder.balanceOf(address(this));
+        // Get the total shares
         uint256 totalShares = totalSupply();
 
-        // If there are no shares minted yet, mint 1:1
-        if (totalShares == 0 || totalPonder == 0) {
+        // Transfer PONDER tokens from user
+        ponder.transferFrom(msg.sender, address(this), amount);
+
+        // Calculate shares to mint
+        if (totalShares == 0) {
+            if (amount < MINIMUM_FIRST_STAKE) revert InsufficientFirstStake();
             shares = amount;
         } else {
-            // Calculate and mint shares
             shares = (amount * totalShares) / totalPonder;
         }
 
-        // Transfer PONDER from user
-        ponder.transferFrom(msg.sender, address(this), amount);
-
-        // Mint xPONDER to user
         _mint(msg.sender, shares);
-
         emit Staked(msg.sender, amount, shares);
     }
-
     /**
      * @notice Withdraws PONDER tokens by burning xPONDER
      * @param shares Amount of xPONDER to burn
      * @return amount Amount of PONDER returned
      */
+
     function leave(uint256 shares) external returns (uint256 amount) {
         if (shares == 0) revert InvalidAmount();
+        if (shares > balanceOf(msg.sender)) revert InvalidSharesAmount();
 
         uint256 totalShares = totalSupply();
-        uint256 totalPonder = ponder.balanceOf(address(this));
+        uint256 totalPonderBefore = ponder.balanceOf(address(this));
 
         // Calculate amount of PONDER to return based on share of total
-        amount = (shares * totalPonder) / totalShares;
+        amount = (shares * totalPonderBefore) / totalShares;
 
-        // Burn xPONDER
+        // Prevent dust amounts that could be manipulated
+        if (amount < MINIMUM_WITHDRAW) revert MinimumSharesRequired();
+
+        // Burn shares before transfer to prevent reentrancy
         _burn(msg.sender, shares);
 
         // Transfer PONDER to user
-        ponder.transfer(msg.sender, amount);
+        if (!ponder.transfer(msg.sender, amount)) revert TransferFailed();
+
+        // Ensure final balance matches expected
+        uint256 expectedFinalBalance = totalPonderBefore - amount;
+        uint256 actualFinalBalance = ponder.balanceOf(address(this));
+        if (actualFinalBalance != expectedFinalBalance) revert InvalidBalance();
 
         emit Withdrawn(msg.sender, amount, shares);
-    }
-
-    /**
-     * @notice Performs rebase to distribute accumulated fees
-     * @dev Only callable after REBASE_DELAY has passed since last rebase
-     */
-    function rebase() external {
-        if (block.timestamp < lastRebaseTime + REBASE_DELAY)
-            revert RebaseTooFrequent();
-
-        lastRebaseTime = block.timestamp;
-
-        uint256 totalShares = totalSupply();
-        uint256 totalPonder = ponder.balanceOf(address(this));
-
-        emit RebasePerformed(totalShares, totalPonder);
     }
 
     /**
@@ -147,23 +155,10 @@ contract PonderStaking is PonderERC20 {
     }
 
     /**
-     * @notice Calculates the amount of xPONDER that would be minted for a given amount of PONDER
-     * @param amount Amount of PONDER to calculate for
-     * @return Amount of xPONDER that would be minted
-     */
-    function getSharesAmount(uint256 amount) external view returns (uint256) {
-        uint256 totalShares = totalSupply();
-        uint256 totalPonder = ponder.balanceOf(address(this));
-        if (totalShares == 0 || totalPonder == 0) return amount;
-        return (amount * totalShares) / totalPonder;
-    }
-
-    /**
      * @notice Initiates transfer of ownership
      * @param newOwner Address of the new owner
      */
-    function transferOwnership(address newOwner) external {
-        if (msg.sender != owner) revert NotOwner();
+    function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
 
         pendingOwner = newOwner;

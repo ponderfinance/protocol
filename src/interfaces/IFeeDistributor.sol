@@ -13,6 +13,12 @@ interface IFeeDistributor {
         uint256 teamAmount
     );
 
+    event EmergencyTokenRecovered(
+        address indexed token,
+        address indexed to,
+        uint256 amount
+    );
+
     /// @notice Emitted when fees are collected from pairs
     event FeesCollected(address indexed token, uint256 amount);
 

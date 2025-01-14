@@ -89,4 +89,9 @@ interface IPonderRouter {
         address to,
         uint deadline
     ) external payable returns (uint[] memory amounts);
+
+    function getAmountsOut(uint256 amountIn, address[] memory path)
+    external
+    view
+    returns (uint256[] memory amounts);
 }

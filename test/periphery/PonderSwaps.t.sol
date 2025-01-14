@@ -348,4 +348,121 @@ contract PonderRouterTest is Test {
         vm.stopPrank();
     }
 
+    function testPriceManipulationAttack() public {
+        // Setup initial liquidity
+        vm.startPrank(alice);
+        router.addLiquidity(
+            address(token0),
+            address(token1),
+            INITIAL_LIQUIDITY_AMOUNT,
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+        vm.stopPrank();
+
+        // Setup the attack
+        vm.startPrank(bob);
+        token0.mint(bob, INITIAL_LIQUIDITY_AMOUNT * 2);
+        token0.approve(address(router), type(uint256).max);
+
+        // Setup path for the swap
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(token1);
+
+        // Step 1: Get initial price
+        uint256[] memory amountsOut = router.getAmountsOut(SWAP_AMOUNT, path);
+        uint256 expectedOut = amountsOut[1];
+
+        // Step 2: Manipulate price by doing a large swap
+        router.swapExactTokensForTokens(
+            INITIAL_LIQUIDITY_AMOUNT,  // Large swap to manipulate price
+            0,
+            path,
+            bob,
+            block.timestamp + 1
+        );
+
+        // Step 3: Try the original swap - should revert with InsufficientOutputAmount
+        vm.expectRevert(abi.encodeWithSelector(PonderRouter.InsufficientOutputAmount.selector));
+        router.swapExactTokensForTokens(
+            SWAP_AMOUNT,
+            expectedOut,  // Using price from before manipulation
+            path,
+            bob,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
+
+    function testMultiHopPriceManipulation() public {
+        // Setup initial liquidity for a multi-hop path (token0 -> token1 -> WETH)
+        vm.startPrank(alice);
+
+        // Add liquidity to first pair (token0/token1)
+        router.addLiquidity(
+            address(token0),
+            address(token1),
+            INITIAL_LIQUIDITY_AMOUNT,
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Add liquidity to second pair (token1/WETH)
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token1),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+        vm.stopPrank();
+
+        // Setup multi-hop path
+        address[] memory path = new address[](3);
+        path[0] = address(token0);
+        path[1] = address(token1);
+        path[2] = address(weth);
+
+        // Setup manipulation path (just first pair)
+        address[] memory manipulationPath = new address[](2);
+        manipulationPath[0] = address(token0);
+        manipulationPath[1] = address(token1);
+
+        vm.startPrank(bob);
+        token0.mint(bob, INITIAL_LIQUIDITY_AMOUNT * 2);
+        token0.approve(address(router), type(uint256).max);
+
+        // Get initial amounts
+        uint256[] memory initialAmounts = router.getAmountsOut(SWAP_AMOUNT, path);
+
+        // Try to manipulate intermediate pair
+        router.swapExactTokensForTokens(
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            manipulationPath,
+            bob,
+            block.timestamp + 1
+        );
+
+        // Try multi-hop swap with original amounts - should revert with InsufficientOutputAmount
+        vm.expectRevert(abi.encodeWithSelector(PonderRouter.InsufficientOutputAmount.selector));
+        router.swapExactTokensForTokens(
+            SWAP_AMOUNT,
+            initialAmounts[2],  // Expected output from initial calculation
+            path,
+            bob,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
 }

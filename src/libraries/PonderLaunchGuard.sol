@@ -51,32 +51,29 @@ library PonderLaunchGuard {
     ) external view returns (ValidationResult memory result) {
         if (amount == 0) revert ZeroAmount();
 
-        PriceState memory state = _getPriceState(pair, oracle);
-
-        // Check minimum liquidity
-        uint256 totalLiquidity = uint256(state.reserve0) * state.reserve1;
+        // Get reserves and verify minimum liquidity
+        (uint112 reserve0, uint112 reserve1,) = IPonderPair(pair).getReserves();
+        uint256 totalLiquidity = uint256(reserve0) * reserve1;
         if (totalLiquidity < MIN_LIQUIDITY) revert InsufficientLiquidity();
 
-        // Calculate max PONDER acceptance based on liquidity
-        result.maxPonderPercent = _calculatePonderCap(totalLiquidity);
-
-        // Validate TWAP vs spot price
-        if (_calculateDeviation(state.spotPrice, state.twapPrice) > SPOT_TWAP_DEVIATION_LIMIT) {
-            revert ExcessivePriceDeviation();
-        }
-
-        // Use TWAP for valuation
-        result.kubValue = state.twapPrice * amount / 1e18;
+        // Get TWAP price from oracle
+        result.kubValue = IPonderPriceOracle(oracle).getCurrentPrice(
+            pair,
+            IPonderPair(pair).token0(),
+            amount
+        );
         if (result.kubValue == 0) revert InvalidPrice();
 
         // Calculate and validate price impact
         result.priceImpact = _calculatePriceImpact(
-            state.reserve1, // ponder reserve
-            state.reserve0, // kub reserve
+            reserve1, // ponder reserve
+            reserve0, // kub reserve
             amount
         );
-
         if (result.priceImpact > MAX_PRICE_IMPACT) revert ExcessivePriceImpact();
+
+        // Use fixed maximum percentage instead of scaling
+        result.maxPonderPercent = MAX_PONDER_PERCENT;
 
         return result;
     }

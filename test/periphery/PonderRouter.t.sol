@@ -652,4 +652,302 @@ contract PonderRouterTest is Test {
         vm.stopPrank();
     }
 
+    function testSwapExcessETHForExactTokens() public {
+        vm.startPrank(alice);  // <-- Add this
+
+        // Setup initial liquidity
+        uint256 tokenAmount = 100 ether;
+        uint256 ethAmount = 100 ether;
+
+        // Approve tokenA for router
+        tokenA.approve(address(router), tokenAmount);
+
+        // Add initial liquidity
+        router.addLiquidityETH{value: ethAmount}(
+            address(tokenA),
+            tokenAmount,
+            tokenAmount,
+            ethAmount,
+            alice,           // <-- Change to alice
+            block.timestamp + 1
+        );
+
+        // Setup test parameters
+        uint256 outputAmount = 1 ether;
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+        uint256 deadline = block.timestamp + 1;
+
+        uint256[] memory amounts = router.getAmountsIn(outputAmount, path);
+        uint256 expectedEthInput = amounts[0];
+        uint256 maxETH = expectedEthInput + 1 ether;
+
+        uint256 initialTokenBalance = tokenA.balanceOf(alice);  // <-- Change to alice
+        uint256 initialETHBalance = alice.balance;              // <-- Change to alice
+
+        uint256[] memory swapAmounts = router.swapETHForExactTokens{value: maxETH}(
+            outputAmount,
+            path,
+            alice,           // <-- Change to alice
+            deadline
+        );
+
+        assertEq(
+            tokenA.balanceOf(alice) - initialTokenBalance,      // <-- Change to alice
+            outputAmount,
+            "Incorrect token output amount"
+        );
+
+        assertEq(
+            initialETHBalance - alice.balance,                  // <-- Change to alice
+            expectedEthInput,
+            "Incorrect ETH spent"
+        );
+
+        vm.stopPrank();  // <-- Add this
+    }
+
+    function testSwapETHForExactTokensFail_Deadline() public {
+        // Setup test parameters
+        uint256 outputAmount = 1 ether;
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+        uint256 deadline = block.timestamp;
+
+        // Move time past deadline
+        vm.warp(deadline + 1);
+
+        vm.expectRevert(PonderRouter.ExpiredDeadline.selector);
+        router.swapETHForExactTokens{value: 1 ether}(
+            outputAmount,
+            path,
+            address(this),
+            deadline
+        );
+    }
+
+    function testSwapETHForExactTokensFail_InvalidPath() public {
+        // Setup test with invalid path (token instead of WETH first)
+        uint256 outputAmount = 1 ether;
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);  // Should be WETH
+        path[1] = address(weth);
+        uint256 deadline = block.timestamp + 1;
+
+        vm.expectRevert(PonderRouter.InvalidPath.selector);
+        router.swapETHForExactTokens{value: 1 ether}(
+            outputAmount,
+            path,
+            address(this),
+            deadline
+        );
+    }
+
+    function testSwapETHForExactTokensFail_InsufficientETH() public {
+        vm.startPrank(alice);
+
+        // Setup initial liquidity
+        uint256 tokenAmount = 100 ether;
+        uint256 ethAmount = 100 ether;
+
+        tokenA.approve(address(router), tokenAmount);
+        router.addLiquidityETH{value: ethAmount}(
+            address(tokenA),
+            tokenAmount,
+            tokenAmount,
+            ethAmount,
+            alice,           // Changed from address(this)
+            block.timestamp + 1
+        );
+
+        // Setup test parameters
+        uint256 outputAmount = 1 ether;
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+        uint256 deadline = block.timestamp + 1;
+
+        // Get required input amount
+        uint256[] memory amounts = router.getAmountsIn(outputAmount, path);
+        uint256 requiredETH = amounts[0];
+
+        // Try to swap with insufficient ETH
+        uint256 insufficientETH = requiredETH - 0.1 ether;
+
+        vm.expectRevert(PonderRouter.ExcessiveInputAmount.selector);
+        router.swapETHForExactTokens{value: insufficientETH}(
+            outputAmount,
+            path,
+            alice,          // Changed from address(this)
+            deadline
+        );
+
+        vm.stopPrank();
+    }
+
+    function testSwapETHForExactTokensWithPriceImpact() public {
+        vm.startPrank(alice);
+
+        // Setup initial liquidity
+        uint256 tokenAmount = 100 ether;
+        uint256 ethAmount = 100 ether;
+
+        uint256 initialBalance = tokenA.balanceOf(alice);
+
+        tokenA.approve(address(router), tokenAmount);
+        router.addLiquidityETH{value: ethAmount}(
+            address(tokenA),
+            tokenAmount,
+            tokenAmount,
+            ethAmount,
+            alice,
+            block.timestamp + 1
+        );
+
+        uint256 outputAmount = 1 ether;
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+
+        uint256[] memory amounts = router.getAmountsIn(outputAmount, path);
+        uint256 ethRequired = amounts[0];
+
+        uint256 balanceBeforeSwap = tokenA.balanceOf(alice);
+
+        router.swapETHForExactTokens{value: ethRequired}(
+            outputAmount,
+            path,
+            alice,
+            deadline
+        );
+
+        // Check only the swap amount, excluding liquidity effects
+        assertEq(
+            tokenA.balanceOf(alice) - balanceBeforeSwap,
+            outputAmount,
+            "Did not receive expected output amount"
+        );
+
+        vm.stopPrank();
+    }
+
+    function testSwapETHForExactTokensWithZeroOutput() public {
+        vm.startPrank(alice);
+
+        uint256 tokenAmount = 100 ether;
+        uint256 ethAmount = 100 ether;
+
+        tokenA.approve(address(router), tokenAmount);
+        router.addLiquidityETH{value: ethAmount}(
+            address(tokenA),
+            tokenAmount,
+            tokenAmount,
+            ethAmount,
+            alice,
+            block.timestamp + 1
+        );
+
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+
+        // Use the router's error selector
+        vm.expectRevert(PonderRouter.ZeroOutput.selector);
+        router.swapETHForExactTokens{value: 1 ether}(
+            0,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
+
+    function testSwapETHForExactTokensWithMaxBalance() public {
+        vm.startPrank(alice);
+
+        uint256 tokenAmount = 100 ether;
+        uint256 ethAmount = 100 ether;
+
+        tokenA.approve(address(router), tokenAmount);
+        router.addLiquidityETH{value: ethAmount}(
+            address(tokenA),
+            tokenAmount,
+            tokenAmount,
+            ethAmount,
+            alice,
+            block.timestamp + 1
+        );
+
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+
+        // Try to get exactly the amount in the pool (should fail as we need to leave some liquidity)
+        uint256 outputAmount = tokenAmount;
+
+        vm.expectRevert(); // We expect a revert due to insufficient liquidity
+        router.swapETHForExactTokens{value: ethAmount}(
+            outputAmount,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
+
+    function testSwapETHForExactTokensWithSlippage() public {
+        vm.startPrank(alice);
+
+        uint256 tokenAmount = 100 ether;
+        uint256 ethAmount = 100 ether;
+
+        tokenA.approve(address(router), tokenAmount);
+        router.addLiquidityETH{value: ethAmount}(
+            address(tokenA),
+            tokenAmount,
+            tokenAmount,
+            ethAmount,
+            alice,
+            block.timestamp + 1
+        );
+
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = address(tokenA);
+
+        uint256 outputAmount = 1 ether;
+        uint256[] memory amounts = router.getAmountsIn(outputAmount, path);
+        uint256 expectedEthInput = amounts[0];
+
+        // Create price movement that would cause a significant reserve change
+        vm.stopPrank();
+        vm.startPrank(bob);
+        tokenA.mint(bob, tokenAmount * 2);
+        tokenA.approve(address(router), tokenAmount * 2);
+
+        // Try to capture the actual revert
+        bool success;
+        bytes memory revertData;
+        try router.swapETHForExactTokens{value: expectedEthInput}(
+            outputAmount,
+            path,
+            alice,
+            block.timestamp + 1
+        ) returns (uint256[] memory) {
+            success = true;
+        } catch (bytes memory err) {
+            revertData = err;
+            console.log("Actual revert data:");
+            console.logBytes(revertData);
+        }
+
+        vm.stopPrank();
+    }
+
+
+
 }

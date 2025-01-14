@@ -342,7 +342,7 @@ contract PonderPairTest is Test {
         // Perform actual swap
         vm.startPrank(alice);
         token0.transfer(address(standardPair), SWAP_AMOUNT);
-        standardPair.swap(0, SWAP_AMOUNT/2, alice, "");
+        standardPair.swap(0, SWAP_AMOUNT / 2, alice, "");
         vm.stopPrank();
 
         // Check K value hasn't decreased
@@ -350,6 +350,9 @@ contract PonderPairTest is Test {
         uint256 newK = uint256(reserve0) * uint256(reserve1);
         assertGe(newK, initialK, "K value should not decrease");
     }
+
+
+
 
     function testActualSwapWithFees() public {
         addInitialLiquidity(
@@ -713,5 +716,133 @@ contract PonderPairTest is Test {
 
 
         vm.stopPrank();
+    }
+
+    function testMintInitialLiquidity() public {
+        // Case 1: Insufficient initial liquidity - should revert
+        vm.startPrank(alice);
+        token0.transfer(address(standardPair), 500);  // Less than required 1000 units
+        token1.transfer(address(standardPair), 500);
+        vm.expectRevert("Insufficient initial liquidity");
+        standardPair.mint(alice);
+        vm.stopPrank();
+
+        // Case 2: Sufficient initial liquidity - should succeed
+        vm.startPrank(alice);
+        token0.transfer(address(standardPair), 1000);  // Exactly 1000 units
+        token1.transfer(address(standardPair), 1000);
+        uint256 liquidity = standardPair.mint(alice);
+        vm.stopPrank();
+
+        // Validate that LP tokens were minted correctly
+        assertGt(liquidity, 0, "Liquidity should be greater than zero");
+        assertEq(standardPair.balanceOf(alice), liquidity, "Alice should receive LP tokens");
+    }
+
+    function testFlashLoanManipulationResistance() public {
+        // Add initial liquidity to the pair
+        addInitialLiquidity(standardPair, token0, token1, INITIAL_LIQUIDITY_AMOUNT);
+
+        // Move time forward slightly and sync to initialize price accumulators
+        vm.warp(block.timestamp + 10);
+        standardPair.sync();
+
+        // Record initial state after sync
+        (uint112 reserve0Before, uint112 reserve1Before, uint32 timestampBefore) = standardPair.getReserves();
+        uint256 initialK = uint256(reserve0Before) * uint256(reserve1Before);
+        uint256 price0CumBefore = standardPair.price0CumulativeLast();
+        uint256 price1CumBefore = standardPair.price1CumulativeLast();
+
+        // Perform flash loan-like swap (1% of reserves)
+        uint256 swapSize = INITIAL_LIQUIDITY_AMOUNT / 100;
+        vm.startPrank(alice);
+        token0.transfer(address(standardPair), swapSize);
+
+        // Calculate expected output with 0.3% fee
+        uint256 expectedOutput = (swapSize * 997 * uint256(reserve1Before)) /
+            (uint256(reserve0Before) * 1000 + (swapSize * 997));
+        standardPair.swap(0, expectedOutput, alice, "");
+        vm.stopPrank();
+
+        // Move time forward and sync
+        vm.warp(block.timestamp + 10);
+        standardPair.sync();
+
+        // Get final state
+        (uint112 reserve0After, uint112 reserve1After,) = standardPair.getReserves();
+        uint256 finalK = uint256(reserve0After) * uint256(reserve1After);
+
+        // Verify K value hasn't decreased
+        assertGe(finalK, initialK, "K value should not decrease");
+
+        // Calculate reserve-based price impact
+        uint256 initialPrice = (uint256(reserve1Before) * 1e18) / reserve0Before;
+        uint256 finalPrice = (uint256(reserve1After) * 1e18) / reserve0After;
+
+        // Calculate absolute price change as percentage
+        uint256 priceChange;
+        if (finalPrice > initialPrice) {
+            priceChange = ((finalPrice - initialPrice) * 100) / initialPrice;
+        } else {
+            priceChange = ((initialPrice - finalPrice) * 100) / initialPrice;
+        }
+
+        // Price impact from 1% flash loan should be less than 2%
+        uint256 maxAllowedPriceImpact = 2;
+        assertLe(priceChange, maxAllowedPriceImpact, "Flash loan price impact too high");
+    }
+
+    function testSustainedManipulationResistance() public {
+        // Add initial liquidity to the pair
+        addInitialLiquidity(standardPair, token0, token1, INITIAL_LIQUIDITY_AMOUNT);
+
+        // Record initial cumulative prices
+        (uint256 price0CumulativeStart, uint256 price1CumulativeStart, uint32 blockTimestampStart) = standardPair.getReserves();
+
+        // Simulate time passing (sustained manipulation period)
+        vm.warp(block.timestamp + 3600); // Fast forward 1 hour
+
+        // Perform multiple swaps during sustained manipulation period
+        vm.startPrank(alice);
+        for (uint256 i = 0; i < 5; i++) {
+            token0.transfer(address(standardPair), SWAP_AMOUNT / 5);
+            standardPair.swap(0, SWAP_AMOUNT / 10, alice, "");
+        }
+        vm.stopPrank();
+
+        // Capture the new cumulative prices
+        (uint256 price0CumulativeEnd, uint256 price1CumulativeEnd, uint32 blockTimestampEnd) = standardPair.getReserves();
+
+        // Assert TWAP is correctly updated without significant skew
+        uint32 timeElapsed = blockTimestampEnd - blockTimestampStart;
+        uint256 price0TWAP = (price0CumulativeEnd - price0CumulativeStart) / timeElapsed;
+        assertGt(price0TWAP, 0, "TWAP for token0 should increase appropriately");
+    }
+
+    function testTWAPCalculationAccuracy() public {
+        // Add initial liquidity to the pair
+        addInitialLiquidity(standardPair, token0, token1, INITIAL_LIQUIDITY_AMOUNT);
+
+        // Record initial cumulative prices
+        (uint256 price0CumulativeStart, uint256 price1CumulativeStart, uint32 blockTimestampStart) = standardPair.getReserves();
+
+        // Wait for a specific period (simulate normal time progression)
+        vm.warp(block.timestamp + 600); // Fast forward 10 minutes
+
+        // Perform a swap to trigger price update
+        vm.startPrank(alice);
+        token0.transfer(address(standardPair), SWAP_AMOUNT);
+        standardPair.swap(0, SWAP_AMOUNT / 2, alice, "");
+        vm.stopPrank();
+
+        // Capture the final cumulative prices
+        (uint256 price0CumulativeEnd, uint256 price1CumulativeEnd, uint32 blockTimestampEnd) = standardPair.getReserves();
+
+        // Calculate TWAP for token0 -> token1
+        uint32 timeElapsed = blockTimestampEnd - blockTimestampStart;
+        uint256 price0TWAP = (price0CumulativeEnd - price0CumulativeStart) / timeElapsed;
+
+        // Assert TWAP is correctly calculated and greater than zero
+        assertGt(price0TWAP, 0, "TWAP for token0 should be correctly calculated");
     }
 }

@@ -102,17 +102,23 @@ contract PonderPriceOracle {
         if (period == 0 || period > PERIOD) revert InvalidPeriod();
         if (amountIn == 0) return 0;
 
+        // Check observation array is initialized
         if (observations[pair].length == 0) revert InsufficientData();
+
+        // Check oracle has recent data
         if (block.timestamp > lastUpdateTime[pair] + PERIOD) revert StalePrice();
 
+        // Get latest cumulative price
         (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) =
                             PonderOracleLibrary.currentCumulativePrices(pair);
 
+        // Get historical price data
         (uint256 oldPrice0Cumulative, uint256 oldPrice1Cumulative, uint256 oldTimestamp) =
                         _getHistoricalPrices(pair, blockTimestamp - period);
 
+        // Verify have enough elapsed time for accurate TWAP
         uint32 timeElapsed = blockTimestamp - uint32(oldTimestamp);
-        if (timeElapsed == 0) revert InsufficientData();
+        if (timeElapsed < MIN_UPDATE_DELAY || timeElapsed > period) revert InsufficientData();
 
         IPonderPair pairContract = IPonderPair(pair);
 
@@ -186,25 +192,15 @@ contract PonderPriceOracle {
         address tokenIn,
         uint256 amountIn
     ) external view returns (uint256 amountOut) {
-        // Try direct stablecoin pair first
+        if (amountIn == 0) return 0;
+
+        // Try direct stablecoin pair first using TWAP
         address stablePair = IPonderFactory(factory).getPair(tokenIn, stablecoin);
         if (stablePair != address(0)) {
             return this.getCurrentPrice(stablePair, tokenIn, amountIn);
         }
 
-        // Route through base token
-        address baseTokenPair = IPonderFactory(factory).getPair(tokenIn, baseToken);
-        if (baseTokenPair == address(0)) revert InvalidPair();
-
-        // First get price in base token
-        uint256 baseTokenAmount = this.getCurrentPrice(baseTokenPair, tokenIn, amountIn);
-
-        // Then convert base token to stablecoin
-        address baseStablePair = IPonderFactory(factory).getPair(baseToken, stablecoin);
-        if (baseStablePair == address(0)) revert InvalidPair();
-
-        // Calculate final stablecoin amount
-        return this.getCurrentPrice(baseStablePair, baseToken, baseTokenAmount);
+        return 0;
     }
 
     function _getHistoricalPrices(

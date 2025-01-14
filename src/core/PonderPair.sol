@@ -170,6 +170,9 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves();
         require(amount0Out < _reserve0 && amount1Out < _reserve1, "Insufficient liquidity");
 
+        // New: Store the initial product of reserves (K invariant)
+        uint256 initialK = uint256(_reserve0) * uint256(_reserve1);
+
         // Execute initial transfers first
         _executeTransfers(to, amount0Out, amount1Out, data);
 
@@ -182,7 +185,6 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         swapData.balance0 = IERC20(token0).balanceOf(address(this));
         swapData.balance1 = IERC20(token1).balanceOf(address(this));
 
-        // Calculate amounts in (exactly like Uniswap V2)
         swapData.amount0In = swapData.balance0 > swapData.reserve0 - amount0Out ?
             swapData.balance0 - (swapData.reserve0 - amount0Out) : 0;
         swapData.amount1In = swapData.balance1 > swapData.reserve1 - amount1Out ?
@@ -192,6 +194,9 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
 
         // Validate K value
         require(_validateKValue(swapData), "K value check failed");
+
+        // New: Check the final product of reserves (K invariant) to prevent flash loan attacks
+        require(swapData.balance0 * swapData.balance1 >= initialK, "Invariant violation");
 
         // Handle fees after K check
         bool isPonderPair = token0 == ponder() || token1 == ponder();
@@ -275,6 +280,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         uint256 _totalSupply = totalSupply();
 
         if (_totalSupply == 0) {
+            require(amount0 >= 1000 && amount1 >= 1000, "Insufficient initial liquidity");
             liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
             _mint(address(1), MINIMUM_LIQUIDITY);
         } else {
@@ -296,7 +302,10 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     function _update(uint256 balance0, uint256 balance1, uint112 _reserve0, uint112 _reserve1) private {
         require(balance0 <= type(uint112).max && balance1 <= type(uint112).max, "OVERFLOW");
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
-        uint32 timeElapsed = blockTimestamp - blockTimestampLast;
+        uint32 timeElapsed = blockTimestamp > blockTimestampLast
+            ? blockTimestamp - blockTimestampLast
+            : 0;
+
         if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
             price0CumulativeLast += uint256(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) * timeElapsed;
             price1CumulativeLast += uint256(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) * timeElapsed;
@@ -344,6 +353,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
 
         // Then transfer accumulated protocol fees to fee distributor if it exists
         if (feeTo != address(0)) {
+            // Key security change: fees can ONLY go to feeTo address
             if (accumulatedFee0 > 0) {
                 _safeTransfer(_token0, feeTo, accumulatedFee0);
                 accumulatedFee0 = 0;
@@ -354,6 +364,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
             }
         }
     }
+
 
     function sync() external override lock {
         _update(
