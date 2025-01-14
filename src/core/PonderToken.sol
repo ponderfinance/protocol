@@ -31,6 +31,12 @@ contract PonderToken is PonderERC20 {
     /// @notice Team/Reserve address
     address public teamReserve;
 
+    uint256 private immutable teamVestingEnd;
+
+    // Track unvested team allocation
+    uint256 private reservedForTeam;
+
+
     /// @notice Marketing address
     address public marketing;
 
@@ -60,6 +66,8 @@ contract PonderToken is PonderERC20 {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event TeamTokensClaimed(uint256 amount);
     event LauncherUpdated(address indexed oldLauncher, address indexed newLauncher);
+    // @notice burn function that only launcher can call
+    event TokensBurned(address indexed burner, uint256 amount);
 
 
     modifier onlyOwner {
@@ -75,10 +83,9 @@ contract PonderToken is PonderERC20 {
     constructor(
         address _teamReserve,
         address _marketing,
-        address _launcher // Can be address(0), will be set later through setLauncher
+        address _launcher
     ) PonderERC20("Koi", "KOI") {
         if (_teamReserve == address(0) || _marketing == address(0)) revert ZeroAddress();
-
 
         launcher = _launcher;
         owner = msg.sender;
@@ -86,52 +93,56 @@ contract PonderToken is PonderERC20 {
         teamReserve = _teamReserve;
         marketing = _marketing;
         teamVestingStart = block.timestamp;
+        teamVestingEnd = block.timestamp + VESTING_DURATION;
+
+        // Initialize reserved amount for team
+        reservedForTeam = TEAM_ALLOCATION;
 
         // Initial distributions
-        // Initial Liquidity: 10% (100M)
         _mint(owner, 200_000_000e18);
-
-        // Marketing: 10% (100M)
         _mint(marketing, 150_000_000e18);
-
-        // Note: Team allocation (15%, 150M) is vested
-        // Farming allocation (40%, 400M) will be handled by MasterChef
     }
 
     function _calculateVestedAmount() internal view returns (uint256) {
-        if (block.timestamp < teamVestingStart) return 0;
-
         uint256 timeElapsed = block.timestamp - teamVestingStart;
         if (timeElapsed > VESTING_DURATION) {
-            timeElapsed = VESTING_DURATION; // Cap elapsed time
+            timeElapsed = VESTING_DURATION;
         }
 
         uint256 totalVested = (TEAM_ALLOCATION * timeElapsed) / VESTING_DURATION;
-
-        uint256 claimable = totalVested > teamTokensClaimed ? totalVested - teamTokensClaimed : 0;
-
-        return claimable;
+        return totalVested > teamTokensClaimed ? totalVested - teamTokensClaimed : 0;
     }
 
     function claimTeamTokens() external {
         if (msg.sender != teamReserve) revert Forbidden();
+
+        // First check vesting start
         if (block.timestamp < teamVestingStart) revert VestingNotStarted();
 
+        // Then calculate amount
         uint256 vestedAmount = _calculateVestedAmount();
+
+        // Check for zero amount last
         if (vestedAmount == 0) revert NoTokensAvailable();
 
-        // Update before minting
+        // Update state
+        reservedForTeam -= vestedAmount;
         teamTokensClaimed += vestedAmount;
+
         _mint(teamReserve, vestedAmount);
 
         emit TeamTokensClaimed(vestedAmount);
     }
 
 
+
     /// @notice Mint new tokens for farming rewards, capped by maximum supply
     function mint(address to, uint256 amount) external onlyMinter {
         if (block.timestamp > deploymentTime + MINTING_END) revert MintingDisabled();
-        if (totalSupply() + amount > MAXIMUM_SUPPLY) revert SupplyExceeded();
+
+        // Check max supply including reserved but unclaimed team tokens
+        if (totalSupply() + amount + reservedForTeam > MAXIMUM_SUPPLY) revert SupplyExceeded();
+
         _mint(to, amount);
     }
 
@@ -168,10 +179,30 @@ contract PonderToken is PonderERC20 {
         emit OwnershipTransferred(oldOwner, owner);
     }
 
-    // @notice burn function that only launcher can call
     function burn(uint256 amount) external {
+        // Check caller is either launcher or owner
+        if (msg.sender != launcher && msg.sender != owner) revert Forbidden();
+
+        // Check minimum burn amount to prevent dust attacks
+        if (amount < 1000) revert("Amount too small");
+
+        // Check maximum burn per transaction (e.g. 1% of total supply)
+        if (amount > totalSupply() / 100) revert("Exceeds max burn amount");
+
+        // Balance check (already in _burn but good to be explicit)
         require(balanceOf(msg.sender) >= amount, "ERC20: burn amount exceeds balance");
+
+        // Perform burn
         _burn(msg.sender, amount);
+
+        // Update total burned tracking
         totalBurned += amount;
+
+        // Emit burn event
+        emit TokensBurned(msg.sender, amount);
+    }
+
+    function getReservedForTeam() external view returns (uint256) {
+        return reservedForTeam;
     }
 }

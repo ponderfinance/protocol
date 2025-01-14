@@ -27,6 +27,10 @@ contract PonderERC20 is IERC20 {
     // EIP-2612 permit functionality
     bytes32 private _DOMAIN_SEPARATOR;
 
+    bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
+    uint256 private immutable _CACHED_CHAIN_ID;
+    address private immutable _CACHED_THIS;
+
     /// @notice The EIP-2612 permit type hash.
     bytes32 public constant PERMIT_TYPEHASH =
     0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
@@ -43,16 +47,18 @@ contract PonderERC20 is IERC20 {
         _name = tokenName;
         _symbol = tokenSymbol;
 
-        uint256 chainId;
-        assembly {
-            chainId := chainid()
-        }
-        _DOMAIN_SEPARATOR = keccak256(
+        _CACHED_CHAIN_ID = block.chainid;
+        _CACHED_THIS = address(this);
+        _CACHED_DOMAIN_SEPARATOR = _computeDomainSeparator();
+    }
+
+    function _computeDomainSeparator() internal view returns (bytes32) {
+        return keccak256(
             abi.encode(
                 keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
                 keccak256(bytes(_name)),
                 keccak256(bytes('1')),
-                chainId,
+                block.chainid,
                 address(this)
             )
         );
@@ -78,8 +84,11 @@ contract PonderERC20 is IERC20 {
      * @notice Returns the EIP-2612 domain separator.
      * @return The domain separator.
      */
-    function DOMAIN_SEPARATOR() external view override returns (bytes32) {
-        return _DOMAIN_SEPARATOR;
+    function DOMAIN_SEPARATOR() public view override returns (bytes32) {
+        if (block.chainid == _CACHED_CHAIN_ID && address(this) == _CACHED_THIS) {
+            return _CACHED_DOMAIN_SEPARATOR;
+        }
+        return _computeDomainSeparator();
     }
 
     /**
@@ -226,7 +235,7 @@ contract PonderERC20 is IERC20 {
         bytes32 digest = keccak256(
             abi.encodePacked(
                 '\x19\x01',
-                _DOMAIN_SEPARATOR,
+                DOMAIN_SEPARATOR(), // Use the function instead of the state variable
                 keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, _nonces[owner]++, deadline))
             )
         );
