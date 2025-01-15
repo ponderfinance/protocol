@@ -1,6 +1,6 @@
 // src/libraries/PonderOracleLibrary.sol
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "../interfaces/IPonderPair.sol";
 import "./UQ112x112.sol";

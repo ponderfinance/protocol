@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/core/FeeDistributor.sol";
@@ -157,6 +157,7 @@ contract FeeDistributorTest is Test {
     error DistributionTooFrequent();
     error InsufficientAccumulation();
     error SwapFailed();
+    error ReentrancyGuardReentrantCall();
 
     event FeesDistributed(
         uint256 totalAmount,
@@ -654,8 +655,8 @@ contract FeeDistributorTest is Test {
         token0.mint(address(reentrantPair), 1_000_000e18);
         token1.mint(address(reentrantPair), 1_000_000e18);
 
-        // Attempt reentrancy attack - should fail
-        vm.expectRevert("ReentrancyGuard: reentrant call");
+        // Expect the custom error
+        vm.expectRevert(ReentrancyGuardReentrantCall.selector);
         distributor.collectFeesFromPair(address(reentrantPair));
     }
 

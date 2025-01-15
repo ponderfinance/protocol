@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 library TransferHelper {
     function safeApprove(address token, address to, uint256 value) internal {

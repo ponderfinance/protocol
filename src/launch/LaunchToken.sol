@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "../core/PonderERC20.sol";
 import "../interfaces/IPonderFactory.sol";
 import "../interfaces/IPonderRouter.sol";
 import "../interfaces/IERC20.sol";
 import "../core/PonderToken.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract LaunchToken is PonderERC20 {
+
+contract LaunchToken is PonderERC20, ReentrancyGuard {
     /// @notice Core protocol addresses
-    address public immutable launcher;
+    address public launcher;
+    address public pendingLauncher;
     IPonderFactory public immutable factory;
     IPonderRouter public immutable router;
     PonderToken public immutable ponder;
@@ -23,6 +26,7 @@ contract LaunchToken is PonderERC20 {
     uint256 public vestingEnd;
     uint256 public totalVestedAmount;
     uint256 public vestedClaimed;
+    uint256 public lastClaimTime;
 
     /// @notice Pool addresses
     address public kubPair;      // Primary KUB pair
@@ -31,24 +35,10 @@ contract LaunchToken is PonderERC20 {
     /// @notice Protocol constants
     uint256 public constant TOTAL_SUPPLY = 555_555_555 ether;
     uint256 public constant VESTING_DURATION = 180 days;
+    uint256 public constant MIN_CLAIM_INTERVAL = 1 hours;
 
-    /// @notice Fee constants (used by PonderPair)
-    uint256 public constant FEE_DENOMINATOR = 10000;
-
-    // KUB pair fees (0.3% total)
-    uint256 public constant KUB_PROTOCOL_FEE = 20;   // 0.2% to protocol
-    uint256 public constant KUB_CREATOR_FEE = 10;    // 0.1% to creator
-
-    // PONDER pair fees (0.3% total)
-    uint256 public constant PONDER_PROTOCOL_FEE = 15;  // 0.15% to protocol
-    uint256 public constant PONDER_CREATOR_FEE = 15;   // 0.15% to creator
-
-
-    /// @notice Events
-    event VestingInitialized(address indexed creator, uint256 amount, uint256 startTime, uint256 endTime);
-    event TokensClaimed(address indexed creator, uint256 amount);
-    event TransfersEnabled();
-    event PairsSet(address kubPair, address ponderPair);
+    /// @notice Vesting initialization status
+    bool private _vestingInitialized;
 
     /// @notice Custom errors
     error TransfersDisabled();
@@ -56,7 +46,25 @@ contract LaunchToken is PonderERC20 {
     error InsufficientAllowance();
     error NoTokensAvailable();
     error VestingNotStarted();
+    error VestingNotInitialized();
+    error VestingAlreadyInitialized();
+    error InvalidCreator();
+    error InvalidAmount();
+    error ExcessiveAmount();
+    error InsufficientLauncherBalance();
     error PairAlreadySet();
+    error ClaimTooFrequent();
+    error ZeroAddress();
+    error NotPendingLauncher();
+
+    /// @notice Events
+    event VestingInitialized(address indexed creator, uint256 amount, uint256 startTime, uint256 endTime);
+    event TokensClaimed(address indexed creator, uint256 amount);
+    event TransfersEnabled();
+    event PairsSet(address kubPair, address ponderPair);
+    event NewPendingLauncher(address indexed previousPending, address indexed newPending);
+    event LauncherTransferred(address indexed previousLauncher, address indexed newLauncher);
+
 
     constructor(
         string memory _name,
@@ -66,26 +74,88 @@ contract LaunchToken is PonderERC20 {
         address payable _router,
         address _ponder
     ) PonderERC20(_name, _symbol) {
+        if (_launcher == address(0)) revert ZeroAddress();
         launcher = _launcher;
         factory = IPonderFactory(_factory);
         router = IPonderRouter(_router);
         ponder = PonderToken(_ponder);
-
-        // Mint entire supply to launcher
         _mint(_launcher, TOTAL_SUPPLY);
     }
 
-    function isLaunchToken() external pure returns (bool) {
-        return true;
-    }
-
     function setupVesting(address _creator, uint256 _amount) external {
+        // Authorization check
         if (msg.sender != launcher) revert Unauthorized();
+
+        // State checks
+        if (_vestingInitialized) revert VestingAlreadyInitialized();
+        if (_creator == address(0)) revert InvalidCreator();
+        if (_amount == 0) revert InvalidAmount();
+
+        // Amount validation - check total supply first
+        if (_amount > TOTAL_SUPPLY) revert ExcessiveAmount();
+        if (_amount > balanceOf(launcher)) revert InsufficientLauncherBalance();
+
+        // State updates
         creator = _creator;
         totalVestedAmount = _amount;
         vestingStart = block.timestamp;
         vestingEnd = block.timestamp + VESTING_DURATION;
+
+        // Set initialized flag last (CEI pattern)
+        _vestingInitialized = true;
+
         emit VestingInitialized(_creator, _amount, vestingStart, vestingEnd);
+    }
+
+    function isVestingInitialized() external view returns (bool) {
+        return _vestingInitialized;
+    }
+
+    function claimVestedTokens() external nonReentrant {
+        if (!_vestingInitialized) revert VestingNotInitialized();
+        if (msg.sender != creator) revert Unauthorized();
+        if (block.timestamp < vestingStart) revert VestingNotStarted();
+        if (block.timestamp < lastClaimTime + MIN_CLAIM_INTERVAL) revert ClaimTooFrequent();
+
+        uint256 claimableAmount = _calculateVestedAmount();
+        if (claimableAmount == 0) revert NoTokensAvailable();
+        if (balanceOf(launcher) < claimableAmount) revert InsufficientLauncherBalance();
+
+        // Update state before transfer (CEI pattern)
+        lastClaimTime = block.timestamp;
+        vestedClaimed += claimableAmount;
+
+        // Perform transfer last
+        _transfer(launcher, creator, claimableAmount);
+
+        emit TokensClaimed(creator, claimableAmount);
+    }
+
+    function _calculateVestedAmount() internal view returns (uint256) {
+        if (block.timestamp < vestingStart) return 0;
+
+        // Calculate elapsed time with cap
+        uint256 elapsed = block.timestamp - vestingStart;
+        if (elapsed > VESTING_DURATION) {
+            elapsed = VESTING_DURATION;
+        }
+
+        // Calculate linearly vested amount with high precision
+        uint256 totalVestedNow = (totalVestedAmount * elapsed) / VESTING_DURATION;
+
+        // If we've claimed this much or more, nothing to claim
+        if (totalVestedNow <= vestedClaimed) return 0;
+
+        // Calculate claimable amount
+        uint256 claimable = totalVestedNow - vestedClaimed;
+
+        // Final safety check against remaining amount
+        uint256 remaining = totalVestedAmount - vestedClaimed;
+        return claimable > remaining ? remaining : claimable;
+    }
+
+    function isLaunchToken() external pure returns (bool) {
+        return true;
     }
 
     function setPairs(address _kubPair, address _ponderPair) external {
@@ -102,18 +172,6 @@ contract LaunchToken is PonderERC20 {
         emit TransfersEnabled();
     }
 
-    function claimVestedTokens() external {
-        if (msg.sender != creator) revert Unauthorized();
-        if (block.timestamp < vestingStart) revert VestingNotStarted();
-
-        uint256 vestedAmount = _calculateVestedAmount();
-        if (vestedAmount == 0) revert NoTokensAvailable();
-
-        vestedClaimed += vestedAmount;
-        _transfer(launcher, creator, vestedAmount);
-
-        emit TokensClaimed(creator, vestedAmount);
-    }
 
     function transfer(address to, uint256 value) external override returns (bool) {
         // Allow transfers if:
@@ -146,18 +204,37 @@ contract LaunchToken is PonderERC20 {
         return true;
     }
 
-    function _calculateVestedAmount() internal view returns (uint256) {
-        if (block.timestamp < vestingStart) return 0;
+    /// @notice Initiates transfer of launcher role to a new address
+    /// @param newLauncher The address that will become the new launcher
+    function transferLauncher(address newLauncher) external {
+        if (msg.sender != launcher) revert Unauthorized();
+        if (newLauncher == address(0)) revert ZeroAddress();
 
-        uint256 elapsed = block.timestamp - vestingStart;
-        if (elapsed > VESTING_DURATION) {
-            elapsed = VESTING_DURATION;
+        address oldPending = pendingLauncher;
+        pendingLauncher = newLauncher;
+
+        emit NewPendingLauncher(oldPending, newLauncher);
+    }
+
+    /// @notice Accepts the launcher role
+    /// @dev Can only be called by pendingLauncher
+    function acceptLauncher() external {
+        if (msg.sender != pendingLauncher) revert NotPendingLauncher();
+
+        address oldLauncher = launcher;
+        address newLauncher = msg.sender;
+
+        // Update state first
+        launcher = newLauncher;
+        pendingLauncher = address(0);
+
+        // Transfer any remaining balance to new launcher
+        uint256 remainingBalance = balanceOf(oldLauncher);
+        if (remainingBalance > 0) {
+            _transfer(oldLauncher, newLauncher, remainingBalance);
         }
 
-        uint256 vestedAmount = (totalVestedAmount * elapsed) / VESTING_DURATION;
-        if (vestedAmount <= vestedClaimed) return 0;
-
-        return vestedAmount - vestedClaimed;
+        emit LauncherTransferred(oldLauncher, newLauncher);
     }
 
     function getVestingInfo() external view returns (
@@ -175,4 +252,5 @@ contract LaunchToken is PonderERC20 {
             vestingEnd
         );
     }
+
 }

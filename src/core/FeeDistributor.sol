@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "../interfaces/IFeeDistributor.sol";
 import "../interfaces/IPonderFactory.sol";
@@ -8,26 +8,7 @@ import "../interfaces/IPonderRouter.sol";
 import "../interfaces/IPonderStaking.sol";
 import "../interfaces/IERC20.sol";
 import "../libraries/TransferHelper.sol";
-
-
-abstract contract ReentrancyGuard {
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-    uint256 private _status;
-
-
-    constructor() {
-        _status = _NOT_ENTERED;
-    }
-
-    modifier nonReentrant() {
-        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
-    }
-}
-
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title FeeDistributor
@@ -122,10 +103,6 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         IERC20(_ponder).approve(_router, type(uint256).max);
     }
 
-    /**
-     * @notice Collects fees from a specific pair
-     * @param pair Address of the pair to collect fees from
-     */
     /**
         * @notice Safely collects fees from a specific pair using CEI pattern
      * @param pair Address of the pair to collect fees from

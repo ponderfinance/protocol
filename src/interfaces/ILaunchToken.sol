@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 interface ILaunchToken {
     function initialize(string memory _name, string memory _symbol, uint256 totalSupply, address _launcher) external;

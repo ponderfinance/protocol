@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/launch/FiveFiveFiveLauncher.sol";
@@ -77,6 +77,8 @@ contract FiveFiveFiveLauncherTest is Test {
         // Deploy core contracts
         weth = new WETH9();
         factory = new PonderFactory(address(this), address(this), address(1));
+
+        // Deploy PonderToken first with temporary launcher
         ponder = new PonderToken(teamReserve, marketing, address(this));
 
         ponderWethPair = factory.createPair(address(ponder), address(weth));
@@ -107,6 +109,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         _initializeOracleHistory();
 
+        // Deploy launcher ONCE with all dependencies initialized
         launcher = new FiveFiveFiveLauncher(
             address(factory),
             payable(address(router)),
@@ -115,6 +118,8 @@ contract FiveFiveFiveLauncherTest is Test {
             address(oracle)
         );
 
+        // Now update the launcher in PonderToken
+        ponder.setLauncher(address(launcher));
 
         // Fund test accounts
         vm.deal(alice, 10000 ether);

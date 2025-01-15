@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "../interfaces/IPonderFactory.sol";
 import "./PonderPair.sol";
@@ -43,7 +43,7 @@ contract PonderFactory is IPonderFactory {
     error Forbidden();
 
     /// @notice Hash of the init code of the pair contract.
-    bytes32 public constant INIT_CODE_PAIR_HASH = 0xe92fc41ecee013a8c1558488a78dbbeb7d1efc1a4b992a72c861b0325c9c68f3;
+    bytes32 public constant INIT_CODE_PAIR_HASH = 0x12f5ebeebafc88ee3aec0bec5836d721e5885ad7ca9e30e61af229719355c9d1;
 
     /**
      * @dev Constructor to initialize the factory with required addresses.

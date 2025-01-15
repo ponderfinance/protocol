@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 /// @title Fixed Point Math Library
 /// @notice A library for handling fixed-point arithmetic

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./PonderERC20.sol";
 
@@ -60,6 +60,8 @@ contract PonderToken is PonderERC20 {
     error NoTokensAvailable();
     error VestingNotEnded();
     error OnlyLauncherOrOwner();
+    error BurnAmountTooSmall();
+    error BurnAmountTooLarge();
 
     event MinterUpdated(address indexed previousMinter, address indexed newMinter);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);

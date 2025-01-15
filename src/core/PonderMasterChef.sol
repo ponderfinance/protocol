@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "../interfaces/IPonderMasterChef.sol";
 import "../interfaces/IPonderFactory.sol";
@@ -146,6 +146,12 @@ contract PonderMasterChef is IPonderMasterChef {
             // Calculate rewards with safe math
             uint256 ponderReward = (timeElapsed * ponderPerSecond * pool.allocPoint) / totalAllocPoint;
 
+            // Check if reward would exceed remaining supply
+            uint256 remainingMintable = ponder.MAXIMUM_SUPPLY() - ponder.totalSupply();
+            if (ponderReward > remainingMintable) {
+                ponderReward = remainingMintable;
+            }
+
             // Calculate rewards based on boosted shares
             accPonderPerShare = accPonderPerShare + ((ponderReward * 1e12) / lpSupply);
         }
@@ -155,14 +161,15 @@ contract PonderMasterChef is IPonderMasterChef {
             ((user.weightedShares * accPonderPerShare) / 1e12) - user.rewardDebt :
             0;
 
-        // Cap rewards at remaining mintable supply
-        if (block.timestamp <= ponder.deploymentTime() + ponder.MINTING_END()) {
-            uint256 remainingMintable = ponder.MAXIMUM_SUPPLY() - ponder.totalSupply();
-            if (pending > remainingMintable) {
-                pending = remainingMintable;
-            }
-        } else {
-            pending = 0; // No rewards after minting end
+        // Additional safety check for max supply
+        uint256 remainingMintable = ponder.MAXIMUM_SUPPLY() - ponder.totalSupply();
+        if (pending > remainingMintable) {
+            pending = remainingMintable;
+        }
+
+        // No rewards after minting end
+        if (block.timestamp > ponder.deploymentTime() + ponder.MINTING_END()) {
+            pending = 0;
         }
     }
 
