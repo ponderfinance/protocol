@@ -6,7 +6,7 @@ import "../interfaces/IPonderFactory.sol";
 import "../interfaces/IPonderPair.sol";
 import "../interfaces/IPonderRouter.sol";
 import "../interfaces/IPonderStaking.sol";
-import "../interfaces/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../libraries/TransferHelper.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 

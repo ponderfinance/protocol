@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-contract ERC20 {
+contract ERC20Mock {
     string public name;
     string public symbol;
     uint8 private immutable _decimals;

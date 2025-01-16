@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "../interfaces/IPonderPair.sol";
 import "../interfaces/IPonderFactory.sol";
 import "../libraries/PonderOracleLibrary.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title PonderPriceOracle
 /// @notice Price oracle for Ponder pairs with TWAP support and fallback mechanisms
@@ -154,8 +155,8 @@ contract PonderPriceOracle {
         bool isToken0 = tokenIn == pairContract.token0();
         if (!isToken0 && tokenIn != pairContract.token1()) revert InvalidToken();
 
-        uint8 decimalsIn = IERC20(tokenIn).decimals();
-        uint8 decimalsOut = IERC20(isToken0 ? pairContract.token1() : pairContract.token0()).decimals();
+        uint8 decimalsIn = IERC20Metadata(tokenIn).decimals();
+        uint8 decimalsOut = IERC20Metadata(isToken0 ? pairContract.token1() : pairContract.token0()).decimals();
 
         uint256 reserveIn = uint256(isToken0 ? reserve0 : reserve1);
         uint256 reserveOut = uint256(isToken0 ? reserve1 : reserve0);

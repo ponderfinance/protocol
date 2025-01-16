@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "../interfaces/IPonderFactory.sol";
 import "../interfaces/IPonderPair.sol";
-import "../interfaces/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/IWETH.sol";
 import "../libraries/TransferHelper.sol";
 import "./KKUBUnwrapper.sol";

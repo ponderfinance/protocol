@@ -4,10 +4,9 @@ pragma solidity ^0.8.20;
 import "../core/PonderERC20.sol";
 import "../interfaces/IPonderFactory.sol";
 import "../interfaces/IPonderRouter.sol";
-import "../interfaces/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../core/PonderToken.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
 
 contract LaunchToken is PonderERC20, ReentrancyGuard {
     /// @notice Core protocol addresses
@@ -27,6 +26,10 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
     uint256 public totalVestedAmount;
     uint256 public vestedClaimed;
     uint256 public lastClaimTime;
+    uint256 public constant TRADING_RESTRICTION_PERIOD = 15 minutes;
+    uint256 public tradingEnabledAt;
+    uint256 public maxTxAmount;
+    bool public tradingRestricted = true;
 
     /// @notice Pool addresses
     address public kubPair;      // Primary KUB pair
@@ -56,6 +59,9 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
     error ClaimTooFrequent();
     error ZeroAddress();
     error NotPendingLauncher();
+    error MaxTransferExceeded();
+    error ContractBuyingRestricted();
+    error TradingRestricted();
 
     /// @notice Events
     event VestingInitialized(address indexed creator, uint256 amount, uint256 startTime, uint256 endTime);
@@ -64,7 +70,6 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
     event PairsSet(address kubPair, address ponderPair);
     event NewPendingLauncher(address indexed previousPending, address indexed newPending);
     event LauncherTransferred(address indexed previousLauncher, address indexed newLauncher);
-
 
     constructor(
         string memory _name,
@@ -81,6 +86,66 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         ponder = PonderToken(_ponder);
         _mint(_launcher, TOTAL_SUPPLY);
     }
+
+    function _update(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual override {
+        // Skip checks for minting
+        if (from == address(0)) {
+            super._update(from, to, amount);
+            return;
+        }
+
+        // Skip checks for launcher operations during setup
+        if ((from == launcher || to == launcher) && !transfersEnabled) {
+            super._update(from, to, amount);
+            return;
+        }
+
+        // Check if transfers are enabled for non-launcher operations
+        if (!transfersEnabled) {
+            revert TransfersDisabled();
+        }
+
+        // Apply trading restrictions during initial period
+// Apply trading restrictions during initial period
+        if (block.timestamp < tradingEnabledAt + TRADING_RESTRICTION_PERIOD) {
+            // Check max transaction amount
+            if (amount > maxTxAmount) {
+                revert MaxTransferExceeded();
+            }
+
+            // Check for contracts trading in either direction
+            if (to.code.length > 0 || from.code.length > 0) {  // Check both directions
+                // Check if this is our pair address
+                if (to == kubPair || to == ponderPair ||
+                from == kubPair || from == ponderPair) {
+                    super._update(from, to, amount);
+                    return;
+                }
+
+                // Check if this is a pair being created
+                address kubPairCheck = factory.getPair(address(this), address(router.WETH()));
+                address ponderPairCheck = factory.getPair(address(this), address(ponder));
+
+                if (to != address(router) &&
+                to != address(factory) &&
+                to != kubPairCheck &&
+                to != ponderPairCheck &&
+                from != address(router) &&
+                from != address(factory) &&
+                from != kubPairCheck &&
+                    from != ponderPairCheck) {
+                    revert ContractBuyingRestricted();
+                }
+            }
+        }
+
+        super._update(from, to, amount);
+    }
+
 
     function setupVesting(address _creator, uint256 _amount) external {
         // Authorization check
@@ -125,7 +190,7 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         lastClaimTime = block.timestamp;
         vestedClaimed += claimableAmount;
 
-        // Perform transfer last
+        // Use internal _transfer
         _transfer(launcher, creator, claimableAmount);
 
         emit TokensClaimed(creator, claimableAmount);
@@ -168,44 +233,20 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
 
     function enableTransfers() external {
         if (msg.sender != launcher) revert Unauthorized();
+
         transfersEnabled = true;
+        tradingEnabledAt = block.timestamp;
+        maxTxAmount = TOTAL_SUPPLY / 200; // 0.5% max transaction limit
+
         emit TransfersEnabled();
     }
 
-
-    function transfer(address to, uint256 value) external override returns (bool) {
-        // Allow transfers if:
-        // 1. Transfers are enabled, OR
-        // 2. Sender is launcher, OR
-        // 3. Recipient is launcher (for refunds)
-        if (!transfersEnabled && msg.sender != launcher && to != launcher) {
-            revert TransfersDisabled();
-        }
-        _transfer(msg.sender, to, value);
-        return true;
+    function setMaxTxAmount(uint256 _maxTxAmount) external {
+        if (msg.sender != launcher) revert Unauthorized();
+        if (block.timestamp < tradingEnabledAt + TRADING_RESTRICTION_PERIOD) revert TradingRestricted();
+        maxTxAmount = _maxTxAmount;
     }
 
-    function transferFrom(address from, address to, uint256 value) external override returns (bool) {
-        // Allow transfers if:
-        // 1. Transfers are enabled, OR
-        // 2. From is launcher, OR
-        // 3. Recipient is launcher (for refunds)
-        if (!transfersEnabled && from != launcher && to != launcher) {
-            revert TransfersDisabled();
-        }
-
-        uint256 currentAllowance = allowance(from, msg.sender);
-        if (currentAllowance != type(uint256).max) {
-            if (currentAllowance < value) revert InsufficientAllowance();
-            _approve(from, msg.sender, currentAllowance - value);
-        }
-
-        _transfer(from, to, value);
-        return true;
-    }
-
-    /// @notice Initiates transfer of launcher role to a new address
-    /// @param newLauncher The address that will become the new launcher
     function transferLauncher(address newLauncher) external {
         if (msg.sender != launcher) revert Unauthorized();
         if (newLauncher == address(0)) revert ZeroAddress();
@@ -216,8 +257,6 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         emit NewPendingLauncher(oldPending, newLauncher);
     }
 
-    /// @notice Accepts the launcher role
-    /// @dev Can only be called by pendingLauncher
     function acceptLauncher() external {
         if (msg.sender != pendingLauncher) revert NotPendingLauncher();
 
@@ -228,7 +267,7 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         launcher = newLauncher;
         pendingLauncher = address(0);
 
-        // Transfer any remaining balance to new launcher
+        // Transfer any remaining balance using internal _transfer
         uint256 remainingBalance = balanceOf(oldLauncher);
         if (remainingBalance > 0) {
             _transfer(oldLauncher, newLauncher, remainingBalance);
@@ -252,5 +291,4 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
             vestingEnd
         );
     }
-
 }

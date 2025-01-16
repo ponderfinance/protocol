@@ -613,6 +613,78 @@ contract LaunchTokenTest is Test {
         newToken.acceptLauncher();
     }
 
+    function testTradingRestrictions() public {
+        LaunchToken newToken = new LaunchToken(
+            "Test Token",
+            "TEST",
+            launcher,
+            address(factory),
+            payable(address(router)),
+            address(ponder)
+        );
+
+        // Create pairs first
+        address launchKubPair = factory.createPair(address(newToken), address(weth));
+
+        vm.startPrank(launcher);
+        newToken.setPairs(launchKubPair, address(0));
+        newToken.enableTransfers();
+        vm.stopPrank();
+
+        // Create contract and normal user
+        address maliciousContract = makeAddr("maliciousContract");
+        vm.etch(maliciousContract, hex"6080604052"); // Simple bytecode
+        address normalUser = makeAddr("normalUser");
+
+        // Fund accounts
+        deal(address(newToken), maliciousContract, 1 ether);
+        deal(address(newToken), normalUser, 1 ether);
+
+        // Test contract sending
+        vm.startPrank(maliciousContract);
+        vm.expectRevert(abi.encodeWithSignature("ContractBuyingRestricted()"));
+        newToken.transfer(normalUser, 0.1 ether);
+        vm.stopPrank();
+
+        // Test contract receiving
+        vm.startPrank(normalUser);
+        vm.expectRevert(abi.encodeWithSignature("ContractBuyingRestricted()"));
+        newToken.transfer(maliciousContract, 0.1 ether);
+        vm.stopPrank();
+
+        // Test max tx limit
+        uint256 maxTx = newToken.TOTAL_SUPPLY() / 200; // 0.5% limit
+
+        // Fund user with enough tokens for the test
+        deal(address(newToken), normalUser, maxTx * 3); // Ensure enough balance for all tests
+
+        vm.startPrank(normalUser);
+
+        // Test exceeding max tx limit
+        vm.expectRevert(abi.encodeWithSignature("MaxTransferExceeded()"));
+        newToken.transfer(address(0x123), maxTx + 1);
+
+        // Test exact max tx limit (should work)
+        newToken.transfer(address(0x123), maxTx);
+        vm.stopPrank();
+
+        // Verify restrictions lift after period
+        vm.warp(block.timestamp + 16 minutes);
+
+        // Contract transfers should work both ways
+        vm.prank(maliciousContract);
+        newToken.transfer(normalUser, 0.5 ether);
+
+        vm.prank(normalUser);
+        newToken.transfer(maliciousContract, 0.5 ether);
+
+        // Test large transfer after restrictions are lifted
+        vm.startPrank(normalUser);
+        uint256 userBalance = newToken.balanceOf(normalUser);
+        newToken.transfer(address(0x123), userBalance - 1); // Transfer almost all balance
+        vm.stopPrank();
+    }
+
     receive() external payable {}
 }
 
@@ -638,6 +710,7 @@ contract ReentrancyAttacker {
     }
 }
 
+
 error ReentrancyGuard__ReentrantCall();
 
 contract ReentrancyTestToken is LaunchToken {
@@ -650,16 +723,26 @@ contract ReentrancyTestToken is LaunchToken {
         address _ponder
     ) LaunchToken(_name, _symbol, _launcher, _factory, _router, _ponder) {}
 
-    function _transfer(
+    // Override _update to add callback functionality
+    function _update(
         address from,
         address to,
-        uint256 value
+        uint256 amount
     ) internal virtual override {
-        super._transfer(from, to, value);
+        super._update(from, to, amount);
 
-        // If recipient is a contract, try the callback
-        if (to.code.length > 0) {
-            ReentrancyAttacker(to).onTokenTransfer(from, value);
+        // If recipient is a contract and not a special address, try the callback
+        if (to.code.length > 0 &&
+        to != address(router) &&
+        to != kubPair &&
+            to != ponderPair) {
+            ReentrancyAttacker(to).onTokenTransfer(from, amount);
         }
+    }
+}
+
+contract MockMaliciousContract {
+    function isContract() public view returns (bool) {
+        return true;
     }
 }

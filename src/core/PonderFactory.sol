@@ -43,7 +43,7 @@ contract PonderFactory is IPonderFactory {
     error Forbidden();
 
     /// @notice Hash of the init code of the pair contract.
-    bytes32 public constant INIT_CODE_PAIR_HASH = 0x12f5ebeebafc88ee3aec0bec5836d721e5885ad7ca9e30e61af229719355c9d1;
+    bytes32 public constant INIT_CODE_PAIR_HASH = 0x1b6d98123879128c93ef65233555b8cf63c32f037046d57e429f11bd9f036e7c;
 
     /**
      * @dev Constructor to initialize the factory with required addresses.

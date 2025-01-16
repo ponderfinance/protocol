@@ -8,13 +8,13 @@ import "../../src/core/PonderToken.sol";
 import "../../src/core/PonderPriceOracle.sol";
 import "../../src/periphery/PonderRouter.sol";
 import "../../src/launch/LaunchToken.sol";
-import "../mocks/ERC20.sol";
+import "../mocks/ERC20Mock.sol";
 import "../mocks/WETH9.sol";
 import "../mocks/MockKKUBUnwrapper.sol";
 
 contract ReentrantAttacker {
-    FiveFiveFiveLauncher public launcher;
-    uint256 public attackCount;
+    FiveFiveFiveLauncher public immutable launcher;
+    bool public hasReentered;
 
     constructor(address payable _launcher) {
         launcher = FiveFiveFiveLauncher(_launcher);
@@ -24,10 +24,17 @@ contract ReentrantAttacker {
         launcher.contributeKUB{value: msg.value}(launchId);
     }
 
+    function approveTokens(address token, uint256 amount) external {
+        IERC20(token).approve(address(launcher), amount);
+    }
+
     receive() external payable {
-        if (attackCount < 3) {
-            attackCount++;
-            launcher.contributeKUB{value: 1000 ether}(0);
+        hasReentered = false;
+        try launcher.claimRefund(0) {
+            // If this succeeds, we've reentered
+            hasReentered = true;
+        } catch {
+            // Expected to fail - contract is secure
         }
     }
 }
@@ -48,6 +55,8 @@ contract FiveFiveFiveLauncherTest is Test {
     address treasury = makeAddr("treasury");
     address teamReserve = makeAddr("teamReserve");
     address marketing = makeAddr("marketing");
+    address attacker = makeAddr("attacker"); // Add this line
+
 
     uint256 constant TARGET_RAISE = 5555 ether;
     uint256 constant BASIS_POINTS = 10000;
@@ -57,7 +66,7 @@ contract FiveFiveFiveLauncherTest is Test {
     uint256 constant MAX_PONDER_PERCENT = 2000; // 20%
     uint256 constant MIN_KUB_CONTRIBUTION = 0.01 ether;
     uint256 constant MIN_PONDER_CONTRIBUTION = 0.1 ether;
-    uint256 constant MIN_POOL_LIQUIDITY = 1 ether;
+    uint256 constant MIN_POOL_LIQUIDITY = 50 ether;
     uint256 constant PONDER_TO_MEME_PONDER = 8000;  // 80% of PONDER goes to PONDER pool
     uint256 constant PONDER_TO_BURN = 2000;         // 20% of PONDER gets burned if pool created
 
@@ -70,6 +79,13 @@ contract FiveFiveFiveLauncherTest is Test {
     event LaunchCompleted(uint256 indexed launchId, uint256 kubRaised, uint256 ponderRaised);
     event PonderBurned(uint256 indexed launchId, uint256 amount);
     event PonderPoolSkipped(uint256 indexed launchId, uint256 ponderAmount, uint256 ponderValueInKub);
+    event LaunchCancelled(
+        uint256 indexed launchId,
+        address indexed creator,
+        uint256 kubCollected,
+        uint256 ponderCollected
+    );
+
 
     function setUp() public {
         vm.warp(1000);
@@ -124,8 +140,10 @@ contract FiveFiveFiveLauncherTest is Test {
         // Fund test accounts
         vm.deal(alice, 10000 ether);
         vm.deal(bob, 10000 ether);
+        vm.deal(attacker, 10000 ether);
         ponder.mint(alice, 100000 ether);
         ponder.mint(bob, 100000 ether);
+        ponder.mint(attacker, 100000 ether); // Add this line
 
         vm.prank(alice);
         ponder.approve(address(launcher), type(uint256).max);
@@ -739,23 +757,74 @@ contract FiveFiveFiveLauncherTest is Test {
         assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "KUB pool should have liquidity");
     }
 
-    function testReentrantContribution() public {
-        ReentrantAttacker attacker = new ReentrantAttacker(payable(address(launcher)));
+    function testNoReentrancyInRefund() public {
         uint256 launchId = _createTestLaunch();
 
-        vm.deal(address(attacker), TARGET_RAISE);
-        vm.startPrank(address(attacker));
+        ReentrantAttacker attacker = new ReentrantAttacker(payable(address(launcher)));
+        vm.deal(address(attacker), 1 ether);
 
-        // Try to attack with exact target amount to avoid LP token issues
-        attacker.attack{value: TARGET_RAISE}(launchId);
+        // Make initial contribution
+        vm.startPrank(address(attacker));
+        attacker.attack{value: 1 ether}(launchId);
+
+        // Setup approvals
+        (address token,,,,,, ) = launcher.getLaunchInfo(launchId);
+        attacker.approveTokens(token, type(uint256).max);
         vm.stopPrank();
 
-        // Verify no excess KUB was stolen
-        assertLe(
-            address(launcher).balance,
-            TARGET_RAISE,
-            "Contract should not hold excess KUB"
-        );
+        // Cancel launch to enable refunds
+        vm.prank(creator);
+        launcher.cancelLaunch(launchId);
+
+        // Attempt refund which will trigger receive()
+        vm.prank(address(attacker));
+        launcher.claimRefund(launchId);
+
+        // Verify no reentry occurred
+        assertFalse(attacker.hasReentered(), "Reentrancy should not be possible");
+    }
+
+    function testFinalizationFlag() public {
+        uint256 launchId = _createTestLaunch();
+
+        // First contribute almost enough to trigger finalization
+        uint256 initialContribution = TARGET_RAISE - 1 ether;
+        vm.prank(alice);
+        launcher.contributeKUB{value: initialContribution}(launchId);
+
+        // Bob tries to contribute while first tx processing
+        vm.startPrank(bob);
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        launcher.contributeKUB{value: 2 ether}(launchId);
+        vm.stopPrank();
+
+        // Alice completes the launch
+        vm.prank(alice);
+        launcher.contributeKUB{value: 1 ether}(launchId);
+
+        // Verify final state
+        (,,,,,bool launched,) = launcher.getLaunchInfo(launchId);
+        assertTrue(launched, "Launch should complete successfully");
+    }
+
+    function testContributionStateConsistency() public {
+        uint256 launchId = _createTestLaunch();
+        uint256 contribution = 1000 ether;
+
+        // Record initial state
+        (,,,, uint256 initialKubRaised,,) = launcher.getLaunchInfo(launchId);
+
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: contribution}(launchId);
+
+        // Verify state consistency
+        (,,,, uint256 finalKubRaised,,) = launcher.getLaunchInfo(launchId);
+        assertEq(finalKubRaised, initialKubRaised + contribution, "KUB raised should increase exactly by contribution");
+
+        // Verify contributor info
+        (uint256 kubContributed,,,) = launcher.getContributorInfo(launchId, alice);
+        assertEq(kubContributed, contribution, "Contributor KUB amount should match");
+        vm.stopPrank();
     }
 
     function testLiquidityRatioSanityChecks() public {
@@ -1049,6 +1118,229 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.stopPrank();
     }
 
+    function testDuplicateTokenName() public {
+        FiveFiveFiveLauncher.LaunchParams memory params1 = FiveFiveFiveLauncher.LaunchParams({
+            name: "Test Token",
+            symbol: "TEST1",
+            imageURI: "ipfs://test"
+        });
+
+        FiveFiveFiveLauncher.LaunchParams memory params2 = FiveFiveFiveLauncher.LaunchParams({
+            name: "Test Token",  // Same name
+            symbol: "TEST2",
+            imageURI: "ipfs://test2"
+        });
+
+        vm.prank(creator);
+        launcher.createLaunch(params1);
+
+        vm.prank(creator);
+        vm.expectRevert(FiveFiveFiveLauncher.TokenNameExists.selector);
+        launcher.createLaunch(params2);
+    }
+
+    function testInvalidCharactersInName() public {
+        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+            name: "Test<>Token",  // Invalid characters
+            symbol: "TEST",
+            imageURI: "ipfs://test"
+        });
+
+        vm.prank(creator);
+        vm.expectRevert(FiveFiveFiveLauncher.InvalidTokenParams.selector);
+        launcher.createLaunch(params);
+    }
+
+    function testValidTokenCreation() public {
+        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+            name: "Valid-Token_Name",
+            symbol: "VTN",
+            imageURI: "ipfs://test"
+        });
+
+        vm.prank(creator);
+        uint256 launchId = launcher.createLaunch(params);
+
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        assertTrue(tokenAddress != address(0), "Token should be created");
+    }
+
+    function testMultipleSimultaneousLaunches() public {
+        // Create multiple addresses to simulate concurrent launches
+        address[] memory launchers = new address[](3);
+        for(uint i = 0; i < 3; i++) {
+            launchers[i] = makeAddr(string.concat("launcher", vm.toString(i)));
+        }
+
+        // Try to launch simultaneously
+        for(uint i = 0; i < 3; i++) {
+            vm.prank(launchers[i]);
+            FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+                name: string.concat("Token", vm.toString(i)),
+                symbol: string.concat("TKN", vm.toString(i)),
+                imageURI: "ipfs://test"
+            });
+            launcher.createLaunch(params);
+        }
+
+        // Verify launchIds are sequential and no launches were lost
+        assertEq(launcher.launchCount(), 3, "Should have exactly 3 launches");
+    }
+
+    function testSuccessfulContribution() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make a normal contribution
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
+        launcher.contributeKUB{value: 0.5 ether}(launchId);
+
+        // Verify state was updated correctly
+        (uint256 kubCollected,,,) = launcher.getContributionInfo(launchId);
+        assertEq(kubCollected, 0.5 ether, "KUB collected should be updated");
+
+        // Verify token transfer
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        uint256 aliceBalance = LaunchToken(tokenAddress).balanceOf(alice);
+        assertTrue(aliceBalance > 0, "Alice should have received tokens");
+    }
+
+    function testContributionRejection() public {
+        uint256 launchId = _createTestLaunch();
+
+        TokenRejecter rejecter = new TokenRejecter(payable(address(launcher)));
+        vm.deal(address(rejecter), 1 ether);
+
+        // First contribution should succeed
+        vm.prank(address(rejecter));
+        rejecter.attemptContribution{value: 0.5 ether}(launchId);
+
+        // Record state after first contribution
+        (uint256 initialKubCollected,,,) = launcher.getContributionInfo(launchId);
+
+        // Set rejection mode
+        rejecter.setShouldReject(true);
+
+        // Contribution should fail at TokenRejecter level
+        vm.prank(address(rejecter));
+        vm.expectRevert("ETH transfer rejected at source");
+        rejecter.attemptContribution{value: 0.5 ether}(launchId);
+
+        // Verify state is unchanged
+        (uint256 finalKubCollected,,,) = launcher.getContributionInfo(launchId);
+        assertEq(finalKubCollected, initialKubCollected, "State should not change after rejected attempt");
+    }
+
+    function testPriceManipulationResistance() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Setup proper oracle history first
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Deal PONDER to our test accounts
+        deal(address(ponder), alice, 2000 ether);
+        deal(address(ponder), bob, 100000 ether);
+
+        // Approve spending
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 2000 ether);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        ponder.approve(address(router), 100000 ether);
+
+        // Execute price manipulation
+        address[] memory path = _getPath(address(ponder), address(weth));
+        router.swapExactTokensForTokens(
+            50000 ether, // Large swap to move price
+            0,
+            path,
+            bob,
+            block.timestamp
+        );
+
+        // Try to contribute - should fail due to price deviation
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
+    function testPriceManipulationWithInsufficientHistory() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Deal enough PONDER to alice for test
+        deal(address(ponder), alice, 1000 ether);
+
+        // Reset all oracle history
+        vm.warp(block.timestamp + 24 hours); // Move way past any existing updates
+
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 1000 ether);
+
+        // Should revert with StalePrice since no recent price data
+        vm.expectRevert(FiveFiveFiveLauncher.StalePrice.selector);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
+    function testPriceStalenessProtection() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Initialize history but then move time forward past staleness threshold
+        _initializeOracleHistory();
+        vm.warp(block.timestamp + 2 hours + 1); // Using explicit time since PRICE_STALENESS_THRESHOLD = 2 hours
+
+        vm.startPrank(alice);
+        vm.expectRevert(FiveFiveFiveLauncher.StalePrice.selector);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
+
+    function testMultiBlockManipulationResistance() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Setup proper oracle history first
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Deal tokens to Bob for manipulation
+        deal(address(ponder), bob, 100000 ether);
+
+        vm.startPrank(bob);
+        ponder.approve(address(router), 100000 ether);
+
+        address[] memory path = _getPath(address(ponder), address(weth));
+
+        // Execute multiple smaller swaps
+        for (uint i = 0; i < 5; i++) {
+            router.swapExactTokensForTokens(
+                10000 ether,
+                0,
+                path,
+                bob,
+                block.timestamp
+            );
+
+            // Move time and update oracle
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Should fail due to accumulated deviation
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
     function _getPonderEquivalent(uint256 kubValue) internal pure returns (uint256) {
         return kubValue * 10; // 1 PONDER = 0.1 KUB
     }
@@ -1057,5 +1349,700 @@ contract FiveFiveFiveLauncherTest is Test {
         return ponderAmount / 10; // 1 PONDER = 0.1 KUB
     }
 
+    function _getPath(address tokenIn, address tokenOut) internal pure returns (address[] memory) {
+        address[] memory path = new address[](2);
+        path[0] = tokenIn;
+        path[1] = tokenOut;
+        return path;
+    }
+
+    function testConcurrentPoolCreation() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Contribute enough to nearly complete the launch
+        uint256 almostComplete = TARGET_RAISE - 1 ether;
+        vm.prank(alice);
+        launcher.contributeKUB{value: almostComplete}(launchId);
+
+        // Try to complete launch from two different addresses simultaneously
+        vm.prank(bob);
+        launcher.contributeKUB{value: 0.6 ether}(launchId);
+
+        vm.prank(alice);
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        launcher.contributeKUB{value: 0.6 ether}(launchId);
+    }
+
+    function testPoolCreationWithMinimumValues() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Calculate minimum contribution that creates valid pools
+        // Need to account for both MIN_POOL_LIQUIDITY and the KUB_TO_MEME_KUB_LP ratio
+        uint256 minValidContribution = (MIN_POOL_LIQUIDITY * BASIS_POINTS) / KUB_TO_MEME_KUB_LP;
+
+        // Need to contribute enough to meet target raise
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE}(launchId);
+        vm.stopPrank();
+
+        // Verify launch completed and pools are created
+        (address memeKubPair,,) = launcher.getPoolInfo(launchId);
+
+        // Check pool liquidity
+        (uint112 reserve0, uint112 reserve1,) = PonderPair(memeKubPair).getReserves();
+        assertTrue(
+            uint256(reserve0) >= MIN_POOL_LIQUIDITY || uint256(reserve1) >= MIN_POOL_LIQUIDITY,
+            "Pool liquidity too low"
+        );
+    }
+
+    function testPoolRatioManipulation() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Try to manipulate pool ratios by using extreme values
+        uint256 largeContribution = TARGET_RAISE / 2;
+        vm.prank(alice);
+        launcher.contributeKUB{value: largeContribution}(launchId);
+
+        // Calculate PONDER amount that would create skewed ratios
+        uint256 skewedPonderAmount = _getPonderEquivalent(largeContribution * 3);
+
+        vm.startPrank(bob);
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
+        launcher.contributePONDER(launchId, skewedPonderAmount);
+        vm.stopPrank();
+    }
+
+    function testPriceSettingAttackResistance() public {
+        uint256 launchId = _createTestLaunch();
+
+        // First make a partial contribution
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE - 1 ether}(launchId);
+        vm.stopPrank();
+
+        // Setup attacker
+        address attacker = makeAddr("attacker");
+        vm.deal(attacker, 1000 ether);
+
+        // Get token and pool info
+        (address token,,,,,,) = launcher.getLaunchInfo(launchId);
+
+        // Complete the launch
+        vm.prank(alice);
+        launcher.contributeKUB{value: 1 ether}(launchId);
+
+        // Get pool info and initial price
+        (address memeKubPair,,) = launcher.getPoolInfo(launchId);
+        (uint112 initialReserve0, uint112 initialReserve1,) = PonderPair(memeKubPair).getReserves();
+        uint256 initialPrice = uint256(initialReserve1) * 1e18 / uint256(initialReserve0);
+
+        // Try to manipulate price
+        vm.startPrank(attacker);
+        address[] memory path = new address[](2);
+        path[0] = address(weth);
+        path[1] = token;
+
+        router.swapExactETHForTokens{value: 100 ether}(
+            0,
+            path,
+            attacker,
+            block.timestamp + 1
+        );
+        vm.stopPrank();
+
+        // Check price impact
+        (uint112 finalReserve0, uint112 finalReserve1,) = PonderPair(memeKubPair).getReserves();
+        uint256 finalPrice = uint256(finalReserve1) * 1e18 / uint256(finalReserve0);
+
+        // Verify price impact is limited
+        uint256 priceImpact = (initialPrice > finalPrice)
+            ? ((initialPrice - finalPrice) * 100) / initialPrice
+            : ((finalPrice - initialPrice) * 100) / initialPrice;
+
+        assertTrue(
+            priceImpact <= 10,  // Price impact should be limited to 10%
+            "Price impact too large"
+        );
+    }
+
+    function testRefundWithMixedContributions() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make mixed contributions
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        uint256 ponderAmount = 1000 ether; // Will be worth 100 ETH at 0.1 ETH/PONDER
+        launcher.contributePONDER(launchId, ponderAmount);
+        vm.stopPrank();
+
+        // Cancel launch
+        vm.prank(creator);
+        launcher.cancelLaunch(launchId);
+
+        // Record balances before refund
+        uint256 aliceKubBefore = address(alice).balance;
+        uint256 bobPonderBefore = ponder.balanceOf(bob);
+
+        // Claim refunds
+        vm.startPrank(alice);
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+
+        // Verify correct refund amounts
+        assertEq(address(alice).balance - aliceKubBefore, 1000 ether, "KUB refund incorrect");
+        assertEq(ponder.balanceOf(bob) - bobPonderBefore, ponderAmount, "PONDER refund incorrect");
+    }
+
+    function testRefundStateConsistency() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make contribution
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+
+        // Get initial state
+        (uint256 kubContributedBefore,,,) = launcher.getContributorInfo(launchId, alice);
+        vm.stopPrank();
+
+        // Cancel launch
+        vm.startPrank(creator);
+        launcher.cancelLaunch(launchId);
+        vm.stopPrank();
+
+        // Refund
+        vm.startPrank(alice);
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+        launcher.claimRefund(launchId);
+
+        // Check final state
+        (uint256 kubContributedAfter,,,) = launcher.getContributorInfo(launchId, alice);
+
+        assertGt(kubContributedBefore, 0, "Initial contribution not recorded");
+        assertEq(kubContributedAfter, 0, "Contribution not cleared after refund");
+        vm.stopPrank();
+    }
+
+    function testMultipleRefundAttempts() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make contribution
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+        vm.stopPrank();
+
+        // Cancel launch
+        vm.startPrank(creator);
+        launcher.cancelLaunch(launchId);
+        vm.stopPrank();
+
+        // First refund
+        vm.startPrank(alice);
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+        launcher.claimRefund(launchId);
+
+        // Try to refund again
+        vm.expectRevert(FiveFiveFiveLauncher.NoContributionToRefund.selector);
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+    }
+
+    function testRefundWithoutTokenApproval() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make contribution
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+        vm.stopPrank();
+
+        // Cancel launch
+        vm.startPrank(creator);
+        launcher.cancelLaunch(launchId);
+        vm.stopPrank();
+
+        // Try refund without approval
+        vm.startPrank(alice);
+        vm.expectRevert("Token approval required for refund");
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+    }
+
+    function testRefundAfterSuccessfulLaunch() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Complete the launch successfully
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE}(launchId);
+
+        // Setup for refund attempt
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+
+        // Force past launch deadline
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Try to claim refund after successful launch
+        vm.expectRevert("Launch succeeded");
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+    }
+
+    function testRefundDuringActiveLaunch() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make contribution
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+
+        // Try refund before deadline/cancel
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+        vm.expectRevert("Launch still active");
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+    }
+
+    function testRefundAtomicTransactions() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Setup mixed contribution (both KUB and PONDER)
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+        launcher.contributePONDER(launchId, 10000 ether);
+        vm.stopPrank();
+
+        // Cancel launch
+        vm.prank(creator);
+        launcher.cancelLaunch(launchId);
+
+        // Record initial balances
+        uint256 initialKUB = address(alice).balance;
+        uint256 initialPONDER = ponder.balanceOf(alice);
+
+        // Setup token approvals
+        vm.startPrank(alice);
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+
+        // Process refund and verify atomicity
+        launcher.claimRefund(launchId);
+
+        // Verify both KUB and PONDER were refunded atomically
+        assertEq(address(alice).balance - initialKUB, 1000 ether, "KUB refund incorrect");
+        assertEq(ponder.balanceOf(alice) - initialPONDER, 10000 ether, "PONDER refund incorrect");
+        vm.stopPrank();
+    }
+
+    function testRefundWithContractReceiver() public {
+        uint256 launchId = _createTestLaunch();
+        ReentrantAttacker attacker = new ReentrantAttacker(payable(address(launcher)));
+
+        // Setup contribution
+        vm.deal(address(attacker), 1 ether);
+        vm.prank(address(attacker));
+        attacker.attack{value: 1 ether}(launchId);
+
+        // Cancel launch
+        vm.prank(creator);
+        launcher.cancelLaunch(launchId);
+
+        // Setup token approvals
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        vm.prank(address(attacker));
+        attacker.approveTokens(tokenAddress, type(uint256).max);
+
+        // Verify refund succeeds without reentrancy
+        vm.prank(address(attacker));
+        launcher.claimRefund(launchId);
+
+        // Verify no reentrancy occurred
+        assertFalse(attacker.hasReentered(), "Refund should be reentrant-safe");
+    }
+
+    function testRefundStateValidation() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make initial contribution
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: 1 ether}(launchId);
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
+
+        // Try refund before cancellation/deadline - should revert with "Launch still active"
+        vm.expectRevert("Launch still active");
+        launcher.claimRefund(launchId);
+
+        // Complete the launch
+        launcher.contributeKUB{value: TARGET_RAISE - 1 ether}(launchId);
+
+        // Move past launch deadline
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Try refund after successful launch - should revert with "Launch succeeded"
+        vm.expectRevert("Launch succeeded");
+        launcher.claimRefund(launchId);
+        vm.stopPrank();
+    }
+
+    function testDeadlineProtection() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Contribute to complete launch
+        vm.prank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE}(launchId);
+
+        // Try adding late liquidity (3 minutes after launch completion)
+        vm.warp(block.timestamp + 3 minutes);
+
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        address pair = factory.getPair(tokenAddress, router.WETH());
+
+        vm.startPrank(attacker);
+        vm.expectRevert(); // Should fail due to deadline
+        router.addLiquidityETH{value: 1 ether}(
+            tokenAddress,
+            1000 ether,
+            0,
+            0,
+            attacker,
+            block.timestamp
+        );
+        vm.stopPrank();
+    }
+
+    function testMinimumPoolLiquidity() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Calculate minimum contribution needed for valid pool
+        uint256 minPoolLiquidity = MIN_POOL_LIQUIDITY;
+        uint256 minRequired = (minPoolLiquidity * BASIS_POINTS) / KUB_TO_MEME_KUB_LP;
+
+        // Need to contribute enough to actually complete the launch
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE}(launchId);
+        vm.stopPrank();
+
+        // Now verify pool was created with sufficient liquidity
+        (address memeKubPair,,) = launcher.getPoolInfo(launchId);
+        assertTrue(memeKubPair != address(0), "Pool should be created");
+
+        // Verify pool has minimum liquidity
+        uint256 liquidity = PonderERC20(memeKubPair).totalSupply();
+        assertTrue(liquidity >= minPoolLiquidity, "Pool liquidity too low");
+
+        // Verify reserves are properly set
+        (uint112 reserve0, uint112 reserve1,) = PonderPair(memeKubPair).getReserves();
+        assertTrue(uint256(reserve0) > 0 && uint256(reserve1) > 0, "Pool reserves not set");
+    }
+
+    function testLargeAndSmallDualPools() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Contribute different amounts to create asymmetric pools
+        // 80% KUB (4444 KUB)
+        uint256 kubAmount = (TARGET_RAISE * 80) / 100;
+        vm.prank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+
+        // 20% PONDER (~1111 KUB worth)
+        uint256 ponderValue = (TARGET_RAISE * 20) / 100;
+        uint256 ponderAmount = ponderValue * 10; // Convert to PONDER at 0.1 KUB/PONDER
+
+        vm.startPrank(bob);
+        launcher.contributePONDER(launchId, ponderAmount);
+        vm.stopPrank();
+
+        // Verify pools were created with correct proportions
+        (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
+
+        // Check KUB pool (should be larger)
+        (uint112 kubReserve0, uint112 kubReserve1,) = PonderPair(memeKubPair).getReserves();
+        uint256 kubPoolValue = uint256(kubReserve1); // KUB value
+
+        // Check PONDER pool (should be smaller but above minimum)
+        (uint112 ponderReserve0, uint112 ponderReserve1,) = PonderPair(memePonderPair).getReserves();
+        uint256 ponderPoolValue = _getPonderValue(uint256(ponderReserve1)); // Convert PONDER to KUB value
+
+        assertTrue(kubPoolValue > ponderPoolValue, "KUB pool should be larger");
+        assertTrue(ponderPoolValue >= MIN_POOL_LIQUIDITY, "PONDER pool should meet minimum");
+        assertTrue(hasSecondaryPool, "Secondary pool should be created");
+    }
+
+
+    function testDualPoolSlippageProtection() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Setup normal contributions
+        uint256 kubAmount = (TARGET_RAISE * 80) / 100;
+        vm.prank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+
+        uint256 ponderValue = (TARGET_RAISE * 20) / 100;
+        uint256 ponderAmount = ponderValue * 10;
+
+        // Try to manipulate PONDER price right before contribution
+        address[] memory path = _getPath(address(ponder), address(weth));
+
+        vm.startPrank(bob);
+        ponder.approve(address(router), ponderAmount * 2);
+
+        // Execute large swap to move price
+        router.swapExactTokensForTokens(
+            ponderAmount,
+            0,
+            path,
+            bob,
+            block.timestamp
+        );
+
+        // Contribution should fail due to price impact
+        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
+        launcher.contributePONDER(launchId, ponderAmount);
+        vm.stopPrank();
+    }
+
+    function testInitialPriceManipulationResistance() public {
+        uint256 launchId = _createTestLaunch();
+        (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
+        LaunchToken token = LaunchToken(tokenAddress);
+
+        // Enable transfers first
+        vm.prank(address(launcher));
+        token.enableTransfers();
+
+        // Wait for trading restriction period to end
+        vm.warp(block.timestamp + 15 minutes);
+
+        // Create pairs
+        address kubPair = factory.createPair(tokenAddress, address(weth));
+
+        // Give attacker tokens and funds
+        deal(tokenAddress, attacker, 2000 ether);
+        deal(address(weth), attacker, 2000 ether);
+
+        // Attempt price manipulation by adding manipulated liquidity
+        vm.startPrank(attacker);
+        // Approve tokens
+        token.approve(address(router), 500 ether);
+        IERC20(address(weth)).approve(address(router), 0.05 ether);
+
+        // Add manipulated liquidity
+        router.addLiquidityETH{value: 0.05 ether}(
+            tokenAddress,
+            500 ether,
+            0, // No min amount
+            0, // No min amount
+            attacker,
+            block.timestamp
+        );
+        vm.stopPrank();
+
+        // Try to complete launch - should revert
+        vm.startPrank(alice);
+        vm.expectRevert(FiveFiveFiveLauncher.PriceOutOfBounds.selector);
+        launcher.contributeKUB{value: TARGET_RAISE}(launchId);
+        vm.stopPrank();
+
+        // Verify pairs still have no official liquidity
+        (address memeKubPair,,) = launcher.getPoolInfo(launchId);
+        assertEq(memeKubPair, address(0), "KUB pair should not be set");
+
+        // Launch should not be marked as completed
+        (,,,,,bool launched,) = launcher.getLaunchInfo(launchId);
+        assertFalse(launched, "Launch should not complete when manipulated");
+    }
+
+    function testBelowMinimumPonderPoolSkipped() public {
+        uint256 launchId = _createTestLaunch();
+
+        // First contribute most in KUB but leave room for PONDER and final contribution
+        uint256 kubAmount = TARGET_RAISE - 1.5 ether;  // Leave 1.5 ETH worth of space
+        vm.prank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+
+        // Small PONDER contribution
+        uint256 tinyPonderValue = 0.5 ether; // Below MIN_POOL_LIQUIDITY
+        uint256 ponderAmount = tinyPonderValue * 10;
+        uint256 initialPonderSupply = ponder.totalSupply();
+
+        vm.prank(bob);
+        launcher.contributePONDER(launchId, ponderAmount);
+
+        // Complete launch with remaining amount
+        vm.prank(alice);
+        launcher.contributeKUB{value: 1 ether}(launchId);
+
+        // Verify pool creation results
+        (address memeKubPair, address memePonderPair, bool hasSecondaryPool) =
+                            launcher.getPoolInfo(launchId);
+
+        assertFalse(hasSecondaryPool, "Should not create secondary pool");
+        assertTrue(memeKubPair != address(0), "Should create KUB pool");
+        assertTrue(memePonderPair == address(0), "Should not create PONDER pool");
+
+        // Verify PONDER was burned
+        uint256 finalPonderSupply = ponder.totalSupply();
+        assertEq(
+            initialPonderSupply - finalPonderSupply,
+            ponderAmount,
+            "All PONDER should be burned when skipping pool"
+        );
+    }
+
+    function testCancelLaunchSecurityChecks() public {
+        // Test 1: Cannot cancel non-existent launch
+        vm.expectRevert(FiveFiveFiveLauncher.LaunchNotCancellable.selector);
+        launcher.cancelLaunch(999);
+
+        // Create a test launch with unique name/symbol
+        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+            name: "Security Test Token",
+            symbol: "STT",
+            imageURI: "ipfs://test"
+        });
+
+        vm.prank(creator);
+        uint256 launchId = launcher.createLaunch(params);
+
+        // Test 2: Only creator can cancel
+        vm.prank(alice);
+        vm.expectRevert(FiveFiveFiveLauncher.Unauthorized.selector);
+        launcher.cancelLaunch(launchId);
+
+        // Test 3: Cannot cancel after deadline
+        vm.warp(block.timestamp + 7 days + 1);
+        vm.prank(creator);
+        vm.expectRevert(FiveFiveFiveLauncher.LaunchDeadlinePassed.selector);
+        launcher.cancelLaunch(launchId);
+
+        // Reset time and create new launch with different name
+        vm.warp(1000);
+        params.name = "Security Test Token 2";
+        params.symbol = "STT2";
+
+        vm.startPrank(creator);
+        uint256 launchId2 = launcher.createLaunch(params);
+
+        // Contribute almost enough to complete
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        launcher.contributeKUB{value: TARGET_RAISE - 1 ether}(launchId2);
+        vm.stopPrank();
+
+        // Complete launch
+        vm.prank(bob);
+        launcher.contributeKUB{value: 1 ether}(launchId2);
+
+        // Test 4: Cannot cancel completed launch
+        vm.prank(creator);
+        vm.expectRevert(FiveFiveFiveLauncher.AlreadyLaunched.selector);
+        launcher.cancelLaunch(launchId2);
+    }
+
+    function testCancelLaunchNameSymbolReuse() public {
+        // Create first launch
+        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+            name: "Test Token",
+            symbol: "TEST",
+            imageURI: "ipfs://test"
+        });
+
+        vm.startPrank(creator);
+        uint256 launchId = launcher.createLaunch(params);
+
+        // Cancel first launch
+        launcher.cancelLaunch(launchId);
+
+        // Should be able to reuse name and symbol
+        uint256 launchId2 = launcher.createLaunch(params);
+        vm.stopPrank();
+
+        // Verify second launch was created successfully
+        (,string memory name, string memory symbol,,,,) = launcher.getLaunchInfo(launchId2);
+        assertEq(name, "Test Token");
+        assertEq(symbol, "TEST");
+    }
+
+    function testCancelLaunchEvent() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Make some contributions
+        vm.prank(alice);
+        launcher.contributeKUB{value: 1000 ether}(launchId);
+
+        vm.prank(bob);
+        launcher.contributePONDER(launchId, 10000 ether);
+
+        // Record contributions before cancel
+        (uint256 kubCollected, uint256 ponderCollected,,) = launcher.getContributionInfo(launchId);
+
+        // Watch for event emission
+        vm.expectEmit(true, true, false, true);
+        emit LaunchCancelled(launchId, creator, kubCollected, ponderCollected);
+
+        // Cancel launch
+        vm.prank(creator);
+        launcher.cancelLaunch(launchId);
+    }
+
     receive() external payable {}
 }
+
+
+contract MaliciousRejecter {
+    bool public shouldReject;
+
+    function setShouldReject(bool _shouldReject) external {
+        shouldReject = _shouldReject;
+    }
+
+    function attemptContribution(address payable launcher, uint256 launchId, uint256 amount) external {
+        FiveFiveFiveLauncher(launcher).contributeKUB{value: amount}(launchId);
+    }
+
+    // Reject ETH transfers when shouldReject is true
+    receive() external payable {
+        require(!shouldReject, "ETH rejected");
+    }
+
+    // Prevent token transfers when rejecting
+    function onERC20Received(address, uint256) external view returns (bool) {
+        return !shouldReject;
+    }
+}
+
+contract TokenRejecter {
+    FiveFiveFiveLauncher public immutable launcher;
+    bool public shouldReject;
+
+    constructor(address payable _launcher) {
+        launcher = FiveFiveFiveLauncher(_launcher);
+    }
+
+    function setShouldReject(bool _reject) external {
+        shouldReject = _reject;
+    }
+
+    function attemptContribution(uint256 launchId) external payable {
+        require(!shouldReject, "ETH transfer rejected at source");
+        launcher.contributeKUB{value: msg.value}(launchId);
+    }
+
+    receive() external payable {
+        require(!shouldReject, "ETH rejected");
+    }
+}
+

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../mocks/ERC20.sol";
+import "../mocks/ERC20Mock.sol";
 import "../../src/core/PonderFactory.sol";
 import "../../src/core/PonderPair.sol";
 import "../../src/core/PonderPriceOracle.sol";
@@ -11,10 +11,10 @@ contract PonderPriceOracleTest is Test {
     PonderFactory public factory;
     PonderPriceOracle public oracle;
 
-    ERC20 public baseToken;    // KUB
-    ERC20 public stablecoin;   // USDT
-    ERC20 public token0;       // Test token A
-    ERC20 public token1;       // Test token B
+    ERC20Mock public baseToken;    // KUB
+    ERC20Mock public stablecoin;   // USDT
+    ERC20Mock public token0;       // Test token A
+    ERC20Mock public token1;       // Test token B
 
     PonderPair public baseStablePair;  // KUB/USDT pair
     PonderPair public testPair;        // TKNA/TKNB pair
@@ -41,10 +41,10 @@ contract PonderPriceOracleTest is Test {
         factory = new PonderFactory(address(this), address(1), address(2));
 
         // Deploy tokens with different decimals
-        baseToken = new ERC20("KUB", "KUB", 18);
-        stablecoin = new ERC20("USDT", "USDT", 6);
-        token0 = new ERC20("Token A", "TKNA", 18);
-        token1 = new ERC20("Token B", "TKNB", 18);
+        baseToken = new ERC20Mock("KUB", "KUB", 18);
+        stablecoin = new ERC20Mock("USDT", "USDT", 6);
+        token0 = new ERC20Mock("Token A", "TKNA", 18);
+        token1 = new ERC20Mock("Token B", "TKNB", 18);
 
         // Create all required pairs
         baseStablePair = PonderPair(factory.createPair(address(baseToken), address(stablecoin)));
@@ -274,7 +274,7 @@ contract PonderPriceOracleTest is Test {
 
     function _executeTrade(
         PonderPair pair,
-        ERC20 tokenIn,
+        ERC20Mock tokenIn,
         uint256 amountIn
     ) private {
         vm.startPrank(alice);
@@ -296,8 +296,8 @@ contract PonderPriceOracleTest is Test {
 
     function testExtremePriceScenarios() public {
         // Create new tokens for extreme ratio test
-        ERC20 tokenExtreme1 = new ERC20("Extreme1", "EXT1", 18);
-        ERC20 tokenExtreme2 = new ERC20("Extreme2", "EXT2", 18);
+        ERC20Mock tokenExtreme1 = new ERC20Mock("Extreme1", "EXT1", 18);
+        ERC20Mock tokenExtreme2 = new ERC20Mock("Extreme2", "EXT2", 18);
 
         // Setup extreme ratio (1:1000000)
         vm.startPrank(alice);
@@ -349,7 +349,7 @@ contract PonderPriceOracleTest is Test {
         oracle.update(address(0x123));
 
         // Test with non-pair contract
-        ERC20 fakeToken = new ERC20("Fake", "FAKE", 18);
+        ERC20Mock fakeToken = new ERC20Mock("Fake", "FAKE", 18);
         vm.expectRevert();
         oracle.update(address(fakeToken));
     }
