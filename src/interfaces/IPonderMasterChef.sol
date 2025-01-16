@@ -32,7 +32,7 @@ interface IPonderMasterChef {
     function pendingPonder(uint256 _pid, address _user) external view returns (uint256);
 
     /// @notice Add a new LP pool
-    function add(uint256 _allocPoint, address _lpToken, uint16 _depositFeeBP, uint16 _boostMultiplier, bool _withUpdate) external;
+    function add(uint256 _allocPoint, address _lpToken, uint16 _depositFeeBP, uint16 _boostMultiplier) external;
 
     /// @notice Update allocation points of a pool
     function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) external;

@@ -103,7 +103,7 @@ contract PonderMasterChefTest is Test {
 
     function testSinglePool() public {
         // Add pool
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
 
         // Alice deposits
         vm.startPrank(alice);
@@ -122,7 +122,7 @@ contract PonderMasterChefTest is Test {
 
     function testBoostMultiplier() public {
         // Add pool with max 3x boost
-        masterChef.add(1, address(pair), 0, 30000, true);
+        masterChef.add(1, address(pair), 0, 30000);
         uint256 depositAmount = 100e18;
 
         // Alice deposits LP
@@ -148,7 +148,7 @@ contract PonderMasterChefTest is Test {
     }
 
     function testEmergencyWithdraw() public {
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
         uint256 depositAmount = 100e18;
 
         vm.startPrank(alice);
@@ -166,7 +166,7 @@ contract PonderMasterChefTest is Test {
 
     function testDepositWithFee() public {
         uint16 depositFeeBP = 500; // 5% fee
-        masterChef.add(1, address(pair), depositFeeBP, 20000, true);
+        masterChef.add(1, address(pair), depositFeeBP, 20000);
         uint256 depositAmount = 100e18;
 
         vm.startPrank(alice);
@@ -180,11 +180,11 @@ contract PonderMasterChefTest is Test {
 
     function testRevertExcessiveDepositFee() public {
         vm.expectRevert(ExcessiveDepositFee);
-        masterChef.add(1, address(pair), 1001, 20000, true); // More than 10% fee
+        masterChef.add(1, address(pair), 1001, 20000); // More than 10% fee
     }
     function testEmissionsCapWithMaxBoosts() public {
         // Setup initial state
-        masterChef.add(1, address(pair), 0, 30000, true); // Allow up to 3x boost
+        masterChef.add(1, address(pair), 0, 30000); // Allow up to 3x boost
         uint256 farmingCap = 400_000_000e18; // 400M maximum farming allocation
 
         // Setup 5 users with max boost to try to exceed emissions
@@ -253,7 +253,7 @@ contract PonderMasterChefTest is Test {
     }
 
     function testEmissionsRateWithVaryingBoosts() public {
-        masterChef.add(1, address(pair), 0, 30000, true); // Allow up to 3x boost
+        masterChef.add(1, address(pair), 0, 30000); // Allow up to 3x boost
 
         // Setup 3 users with different boost levels
         address user1 = address(0x1); // Will have no boost
@@ -331,7 +331,7 @@ contract PonderMasterChefTest is Test {
 
     function testDynamicStartTime() public {
         // Add pool
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
 
         // Verify farming hasn't started
         assertEq(masterChef.farmingStarted(), false);
@@ -362,7 +362,7 @@ contract PonderMasterChefTest is Test {
 
     function testNoRewardsBeforeFirstDeposit() public {
         // Add pool
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
 
         // Move time forward 30 days
         vm.warp(block.timestamp + 30 days);
@@ -391,7 +391,7 @@ contract PonderMasterChefTest is Test {
 
     function testFullEmissionPeriod() public {
         // Add pool
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
 
         // Get initial timestamp and supply
         uint256 startTime = block.timestamp;
@@ -421,7 +421,7 @@ contract PonderMasterChefTest is Test {
     function testMultiplePoolsStartTimes() public {
         // Add first pool
         vm.startPrank(owner);
-        masterChef.add(100, address(pair), 0, 20000, true);
+        masterChef.add(100, address(pair), 0, 20000);
         vm.stopPrank();
 
         // Move forward 1 week
@@ -441,7 +441,7 @@ contract PonderMasterChefTest is Test {
         // Create and setup second pair
         vm.startPrank(owner);
         address pair2 = factory.createPair(address(tokenA), address(tokenC));
-        masterChef.add(100, pair2, 0, 20000, true);
+        masterChef.add(100, pair2, 0, 20000);
 
         // Setup liquidity for second pair
         tokenA.mint(bob, INITIAL_LP_SUPPLY);
@@ -478,7 +478,7 @@ contract PonderMasterChefTest is Test {
 
     function testEmergencyWithdrawBeforeStart() public {
         // Add pool
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
 
         // Alice deposits
         vm.startPrank(alice);
@@ -499,7 +499,7 @@ contract PonderMasterChefTest is Test {
 
     function testFrontRunningPrevention() public {
         // Add pool
-        masterChef.add(1, address(pair), 0, 20000, true);
+        masterChef.add(1, address(pair), 0, 20000);
 
         // Setup Alice's LP tokens
         vm.startPrank(alice);
@@ -544,7 +544,7 @@ contract PonderMasterChefTest is Test {
 
     function testBoostShareManipulation() public {
         // Add pool with 3x max boost
-        masterChef.add(1, address(pair), 0, 30000, true);  // 3x max boost
+        masterChef.add(1, address(pair), 0, 30000);  // 3x max boost
 
         // Setup Alice's LP tokens
         vm.startPrank(alice);
@@ -587,7 +587,7 @@ contract PonderMasterChefTest is Test {
 
     function testBoostWithoutLP() public {
         // Setup pool
-        masterChef.add(1, address(pair), 0, 30000, true);
+        masterChef.add(1, address(pair), 0, 30000);
 
         // Try to boost without LP tokens
         vm.startPrank(alice);
@@ -598,7 +598,7 @@ contract PonderMasterChefTest is Test {
     }
 
     function testBoostWithFakeTransfer() public {
-        masterChef.add(1, address(pair), 0, 30000, true);
+        masterChef.add(1, address(pair), 0, 30000);
 
         vm.startPrank(alice);
         pair.approve(address(masterChef), 100e18);
@@ -643,7 +643,7 @@ contract PonderMasterChefTest is Test {
     }
 
     function testSequentialBoostManipulation() public {
-        masterChef.add(1, address(pair), 0, 30000, true);  // 3x max boost
+        masterChef.add(1, address(pair), 0, 30000);  // 3x max boost
 
         vm.startPrank(alice);
         // Deposit LP tokens first
@@ -679,7 +679,7 @@ contract PonderMasterChefTest is Test {
 
     function testPendingPonderAccuracy() public {
         // Add pool with high allocation points to get meaningful rewards
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
 
         vm.startPrank(alice);
         // Approve and deposit LP tokens
@@ -699,7 +699,7 @@ contract PonderMasterChefTest is Test {
 
     function testPendingPonderWithWeightChange() public {
         // Add pool and initial deposit
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
 
         vm.startPrank(alice);
         pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
@@ -728,7 +728,7 @@ contract PonderMasterChefTest is Test {
     }
 
     function testPendingPonderAfterMintingEnd() public {
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
 
         vm.startPrank(alice);
         pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
@@ -752,7 +752,7 @@ contract PonderMasterChefTest is Test {
     }
 
     function testPendingPonderMaxSupply() public {
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
 
         // Get current supply and max supply
         uint256 maxSupply = ponder.MAXIMUM_SUPPLY();
@@ -784,7 +784,7 @@ contract PonderMasterChefTest is Test {
 
     function testBoostShareExploitPrevention() public {
         // Add pool with 3x max boost
-        masterChef.add(1000, address(pair), 0, 30000, true); // 3x max boost
+        masterChef.add(1000, address(pair), 0, 30000); // 3x max boost
 
         // Setup three users with equal LP amounts
         uint256 lpAmount = 100e18;
@@ -901,27 +901,27 @@ contract PonderMasterChefTest is Test {
     function testAddPoolZeroAddress() public {
         // Should revert when trying to add pool with zero address LP token
         vm.expectRevert(ZeroAddress);
-        masterChef.add(100, address(0), 0, 20000, true);
+        masterChef.add(100, address(0), 0, 20000);
     }
 
     function testAddPoolExcessiveAllocation() public {
         // Should revert when allocation points exceed MAX_ALLOC_POINT
         vm.expectRevert(ExcessiveAllocation);
-        masterChef.add(10001, address(pair), 0, 20000, true);
+        masterChef.add(10001, address(pair), 0, 20000);
     }
 
     function testAddPoolDuplicatePrevention() public {
         // First add should succeed
-        masterChef.add(100, address(pair), 0, 20000, true);
+        masterChef.add(100, address(pair), 0, 20000);
 
         // Second add with same LP token should fail
         vm.expectRevert(DuplicatePool);
-        masterChef.add(100, address(pair), 0, 20000, true);
+        masterChef.add(100, address(pair), 0, 20000);
     }
 
     function testAddPoolRewardPreservation() public {
         // Setup initial pool
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
 
         // Alice deposits in first pool
         vm.startPrank(alice);
@@ -937,7 +937,7 @@ contract PonderMasterChefTest is Test {
 
         // Create and add new pool
         address pair2 = factory.createPair(address(tokenA), address(tokenC));
-        masterChef.add(1000, pair2, 0, 20000, true);
+        masterChef.add(1000, pair2, 0, 20000);
 
         // Verify rewards weren't diluted
         uint256 pendingAfter = masterChef.pendingPonder(0, alice);
@@ -946,7 +946,7 @@ contract PonderMasterChefTest is Test {
 
     function testAddPoolForcedUpdate() public {
         // Setup initial pool
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
 
         // Alice deposits
         vm.startPrank(alice);
@@ -961,7 +961,7 @@ contract PonderMasterChefTest is Test {
         address pair2 = factory.createPair(address(tokenA), address(tokenC));
 
         // Add new pool with withUpdate = false (should still update due to fix)
-        masterChef.add(1000, pair2, 0, 20000, false);
+        masterChef.add(1000, pair2, 0, 20000);
 
         // Verify rewards were properly accounted
         uint256 pendingRewards = masterChef.pendingPonder(0, alice);
@@ -971,12 +971,12 @@ contract PonderMasterChefTest is Test {
 
     function testAddPoolAllocationTracking() public {
         // Add first pool
-        masterChef.add(1000, address(pair), 0, 20000, true);
+        masterChef.add(1000, address(pair), 0, 20000);
         assertEq(masterChef.totalAllocPoint(), 1000, "Initial allocation incorrect");
 
         // Create and add second pool
         address pair2 = factory.createPair(address(tokenA), address(tokenC));
-        masterChef.add(500, pair2, 0, 20000, true);
+        masterChef.add(500, pair2, 0, 20000);
 
         // Verify total allocation
         assertEq(masterChef.totalAllocPoint(), 1500, "Total allocation tracking incorrect");

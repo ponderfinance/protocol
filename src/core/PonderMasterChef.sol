@@ -183,8 +183,7 @@ contract PonderMasterChef is IPonderMasterChef {
         uint256 _allocPoint,
         address _lpToken,
         uint16 _depositFeeBP,
-        uint16 _boostMultiplier,
-        bool _withUpdate
+        uint16 _boostMultiplier
     ) external onlyOwner {
         // Input validation
         if (_lpToken == address(0)) revert ZeroAddress();
