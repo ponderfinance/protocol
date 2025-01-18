@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../../src/core/PonderFactory.sol";
-import "../../src/core/PonderPair.sol";
+import "../../src/core/factory/PonderFactory.sol";
+import "../../src/core/pair/PonderPair.sol";
 import "../mocks/ERC20Mint.sol";
 
 contract PriceAccumulatorTest is Test {

@@ -35,6 +35,19 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "function",
+    "name": "LAUNCHER_TIMELOCK",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "allPairs",
     "inputs": [
       {
@@ -64,6 +77,13 @@ export const ponderfactoryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "applyLauncher",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -154,7 +174,33 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "function",
+    "name": "launcherDelay",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "migrator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingLauncher",
     "inputs": [],
     "outputs": [
       {
@@ -245,6 +291,25 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "event",
+    "name": "FeeToUpdated",
+    "inputs": [
+      {
+        "name": "oldFeeTo",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newFeeTo",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "LauncherUpdated",
     "inputs": [
       {
@@ -305,7 +370,22 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidFeeReceiver",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidLauncher",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "PairExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TimelockNotFinished",
     "inputs": []
   },
   {

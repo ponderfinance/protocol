@@ -66,6 +66,19 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_ALLOC_POINT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_EXTRA_BOOST_PERCENT",
     "inputs": [],
     "outputs": [
@@ -113,11 +126,6 @@ export const pondermasterchefAbi = [
         "name": "_boostMultiplier",
         "type": "uint16",
         "internalType": "uint16"
-      },
-      {
-        "name": "_withUpdate",
-        "type": "bool",
-        "internalType": "bool"
       }
     ],
     "outputs": [],
@@ -864,6 +872,16 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "error",
+    "name": "DuplicatePool",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExcessiveAllocation",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ExcessiveDepositFee",
     "inputs": []
   },
@@ -879,6 +897,11 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidBoostMultiplier",
     "inputs": []
   },
@@ -890,6 +913,11 @@ export const pondermasterchefAbi = [
   {
     "type": "error",
     "name": "InvalidPool",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
     "inputs": []
   },
   {

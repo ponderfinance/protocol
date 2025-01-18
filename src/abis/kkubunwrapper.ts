@@ -29,6 +29,45 @@ export const kkubunwrapperAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_WITHDRAWAL_AMOUNT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "REQUIRED_KYC_LEVEL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "WITHDRAWAL_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "acceptOwnership",
     "inputs": [],
     "outputs": [],
@@ -43,16 +82,16 @@ export const kkubunwrapperAbi = [
   },
   {
     "type": "function",
-    "name": "emergencyWithdrawTokens",
-    "inputs": [
+    "name": "getLockedBalance",
+    "inputs": [],
+    "outputs": [
       {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -63,6 +102,26 @@ export const kkubunwrapperAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pause",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "paused",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -82,6 +141,20 @@ export const kkubunwrapperAbi = [
   },
   {
     "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "resetWithdrawalLimit",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "transferOwnership",
     "inputs": [
       {
@@ -90,6 +163,13 @@ export const kkubunwrapperAbi = [
         "internalType": "address"
       }
     ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "unpause",
+    "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -126,25 +206,31 @@ export const kkubunwrapperAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
   },
   {
     "type": "event",
-    "name": "EmergencyWithdrawTokens",
+    "name": "OwnershipTransferStarted",
     "inputs": [
       {
-        "name": "token",
+        "name": "previousOwner",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -170,6 +256,32 @@ export const kkubunwrapperAbi = [
   },
   {
     "type": "event",
+    "name": "Paused",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Unpaused",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "UnwrappedKKUB",
     "inputs": [
       {
@@ -188,28 +300,108 @@ export const kkubunwrapperAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "WithdrawalLimitReset",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "BlacklistedAddress",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "NotOwner",
+    "name": "EnforcedPause",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "NotPendingOwner",
+    "name": "ExpectedPause",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "TransferFailed",
+    "name": "FailedCall",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "ZeroAddress",
+    "name": "InsufficientBalance",
+    "inputs": [
+      {
+        "name": "balance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientKYCLevel",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WithdrawFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WithdrawalTooFrequent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAmount",
     "inputs": []
   }
 ] as const;

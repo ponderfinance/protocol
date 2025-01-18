@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "../core/PonderERC20.sol";
-import "../interfaces/IPonderFactory.sol";
+import "../core/factory/IPonderFactory.sol";
 import "../interfaces/IPonderRouter.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../core/PonderToken.sol";

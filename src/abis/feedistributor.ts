@@ -45,6 +45,32 @@ export const feedistributorAbi = [
   },
   {
     "type": "function",
+    "name": "DISTRIBUTION_COOLDOWN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_PAIRS_PER_DISTRIBUTION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MINIMUM_AMOUNT",
     "inputs": [],
     "outputs": [
@@ -111,6 +137,29 @@ export const feedistributorAbi = [
   },
   {
     "type": "function",
+    "name": "emergencyTokenRecover",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "factory",
     "inputs": [],
     "outputs": [
@@ -134,6 +183,38 @@ export const feedistributorAbi = [
       },
       {
         "name": "_teamRatio",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastDistributionTimestamp",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastPairDistribution",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -290,6 +371,31 @@ export const feedistributorAbi = [
   },
   {
     "type": "event",
+    "name": "DistributionAttempt",
+    "inputs": [
+      {
+        "name": "currentTime",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "lastDistribution",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timeSinceLastDistribution",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "DistributionRatiosUpdated",
     "inputs": [
       {
@@ -300,6 +406,31 @@ export const feedistributorAbi = [
       },
       {
         "name": "teamRatio",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EmergencyTokenRecovered",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -378,7 +509,32 @@ export const feedistributorAbi = [
   },
   {
     "type": "error",
+    "name": "DistributionTooFrequent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientAccumulation",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientOutputAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPair",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPairCount",
     "inputs": []
   },
   {
@@ -398,7 +554,17 @@ export const feedistributorAbi = [
   },
   {
     "type": "error",
+    "name": "PairNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "RatioSumIncorrect",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
   {

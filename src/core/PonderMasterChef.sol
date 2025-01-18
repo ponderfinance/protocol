@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "../interfaces/IPonderMasterChef.sol";
-import "../interfaces/IPonderFactory.sol";
-import "../interfaces/IPonderPair.sol";
+import "./factory/IPonderFactory.sol";
+import "./pair/IPonderPair.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./PonderToken.sol";
 import "forge-std/Test.sol";

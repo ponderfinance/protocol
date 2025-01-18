@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../interfaces/IPonderPair.sol";
-import "../interfaces/IPonderFactory.sol";
+import "../core/pair/IPonderPair.sol";
+import "../core/factory/IPonderFactory.sol";
 import "../interfaces/IPonderPriceOracle.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 

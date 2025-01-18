@@ -166,6 +166,45 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "function",
+    "name": "MIN_KUB_CONTRIBUTION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_PONDER_CONTRIBUTION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_POOL_LIQUIDITY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "PONDER_TO_BURN",
     "inputs": [],
     "outputs": [
@@ -459,6 +498,29 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "function",
+    "name": "getMinimumRequirements",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "minKub",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minPonder",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minPoolLiquidity",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "getPoolInfo",
     "inputs": [
       {
@@ -482,6 +544,30 @@ export const fivefivefivelauncherAbi = [
         "name": "hasSecondaryPool",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRemainingToRaise",
+    "inputs": [
+      {
+        "name": "launchId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "remainingTotal",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "remainingPonderValue",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -557,6 +643,11 @@ export const fivefivefivelauncherAbi = [
           },
           {
             "name": "cancelled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "isFinalizingLaunch",
             "type": "bool",
             "internalType": "bool"
           }
@@ -680,6 +771,44 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "function",
+    "name": "usedNames",
+    "inputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "usedSymbols",
+    "inputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "withdrawLP",
     "inputs": [
       {
@@ -771,6 +900,37 @@ export const fivefivefivelauncherAbi = [
       },
       {
         "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LaunchCancelled",
+    "inputs": [
+      {
+        "name": "launchId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "kubCollected",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "ponderCollected",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -886,6 +1046,62 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "event",
+    "name": "PonderPoolSkipped",
+    "inputs": [
+      {
+        "name": "launchId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "ponderAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "ponderValueInKub",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RefundProcessed",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "kubAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "ponderAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "tokenAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TokensDistributed",
     "inputs": [
       {
@@ -916,6 +1132,21 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
+    "name": "ContributionFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ContributionTooSmall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EthTransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ExcessiveContribution",
     "inputs": []
   },
@@ -926,12 +1157,32 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
+    "name": "ExcessivePriceDeviation",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ImageRequired",
     "inputs": []
   },
   {
     "type": "error",
     "name": "InsufficientLPTokens",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientPoolLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientPriceHistory",
     "inputs": []
   },
   {
@@ -956,12 +1207,27 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
-    "name": "LaunchCancelled",
+    "name": "LaunchBeingFinalized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchDeadlinePassed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchDoesNotExist",
     "inputs": []
   },
   {
     "type": "error",
     "name": "LaunchExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchNotCancellable",
     "inputs": []
   },
   {
@@ -976,12 +1242,37 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
+    "name": "PoolCreationFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PriceOutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "RefundFailed",
     "inputs": []
   },
   {
     "type": "error",
     "name": "StalePrice",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TokenNameExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TokenSymbolExists",
     "inputs": []
   },
   {

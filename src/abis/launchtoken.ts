@@ -50,33 +50,7 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "FEE_DENOMINATOR",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "KUB_CREATOR_FEE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "KUB_PROTOCOL_FEE",
+    "name": "MIN_CLAIM_INTERVAL",
     "inputs": [],
     "outputs": [
       {
@@ -102,33 +76,20 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "PONDER_CREATOR_FEE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PONDER_PROTOCOL_FEE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "TOTAL_SUPPLY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TRADING_RESTRICTION_PERIOD",
     "inputs": [],
     "outputs": [
       {
@@ -151,6 +112,13 @@ export const launchtokenAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptLauncher",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -320,6 +288,19 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
+    "name": "isVestingInitialized",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "kubPair",
     "inputs": [],
     "outputs": [
@@ -333,6 +314,19 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
+    "name": "lastClaimTime",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "launcher",
     "inputs": [],
     "outputs": [
@@ -340,6 +334,19 @@ export const launchtokenAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxTxAmount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -372,6 +379,19 @@ export const launchtokenAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingLauncher",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -460,6 +480,19 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
+    "name": "setMaxTxAmount",
+    "inputs": [
+      {
+        "name": "_maxTxAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setPairs",
     "inputs": [
       {
@@ -535,6 +568,32 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
+    "name": "tradingEnabledAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tradingRestricted",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "transfer",
     "inputs": [
       {
@@ -584,6 +643,19 @@ export const launchtokenAbi = [
         "internalType": "bool"
       }
     ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferLauncher",
+    "inputs": [
+      {
+        "name": "newLauncher",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -659,6 +731,44 @@ export const launchtokenAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LauncherTransferred",
+    "inputs": [
+      {
+        "name": "previousLauncher",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newLauncher",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "NewPendingLauncher",
+    "inputs": [
+      {
+        "name": "previousPending",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newPending",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -765,7 +875,155 @@ export const launchtokenAbi = [
   },
   {
     "type": "error",
+    "name": "ClaimTooFrequent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ContractBuyingRestricted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureS",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InsufficientAllowance",
+    "inputs": [
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allowance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InsufficientBalance",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "balance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidApprover",
+    "inputs": [
+      {
+        "name": "approver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidReceiver",
+    "inputs": [
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidSender",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidSpender",
+    "inputs": [
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ExcessiveAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientAllowance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLauncherBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCreator",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxTransferExceeded",
     "inputs": []
   },
   {
@@ -775,7 +1033,22 @@ export const launchtokenAbi = [
   },
   {
     "type": "error",
+    "name": "NotPendingLauncher",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "PairAlreadySet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TradingRestricted",
     "inputs": []
   },
   {
@@ -790,7 +1063,22 @@ export const launchtokenAbi = [
   },
   {
     "type": "error",
+    "name": "VestingAlreadyInitialized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "VestingNotInitialized",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "VestingNotStarted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
     "inputs": []
   }
 ] as const;

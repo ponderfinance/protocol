@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../src/core/PonderFactory.sol";
-import "../../src/core/PonderPair.sol";
+import "../../src/core/factory/PonderFactory.sol";
+import "../../src/core/pair/PonderPair.sol";
 import "../../src/periphery/PonderRouter.sol";
 import "../mocks/ERC20Mint.sol";
 import "../mocks/MockKKUBUnwrapper.sol";
@@ -224,7 +224,7 @@ contract PonderFeeTest is Test {
 
         // Disable fees
         vm.prank(address(this));
-        factory.setFeeTo(address(0));
+        factory.setFeeTo(address(1));
 
         // Record LP balance before next round
         uint256 balanceBeforeSecondRound = pair.balanceOf(feeCollector);

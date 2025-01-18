@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../src/core/PonderFactory.sol";
-import "../../src/core/PonderPair.sol";
+import "../../src/core/factory/PonderFactory.sol";
+import "../../src/core/pair/PonderPair.sol";
 import "../../src/periphery/PonderRouter.sol";
 import "../mocks/ERC20Mint.sol";
 import "../mocks/MockKKUBUnwrapper.sol";

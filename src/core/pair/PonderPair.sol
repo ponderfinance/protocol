@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./PonderERC20.sol";
-import "../interfaces/IPonderPair.sol";
-import "../interfaces/IPonderFactory.sol";
-import "../interfaces/IPonderCallee.sol";
-import "../interfaces/ILaunchToken.sol";
-import "../libraries/Math.sol";
-import "../libraries/UQ112x112.sol";
+import "../PonderERC20.sol";
+import "./IPonderPair.sol";
+import "../factory/IPonderFactory.sol";
+import "../../interfaces/IPonderCallee.sol";
+import "../../interfaces/ILaunchToken.sol";
+import "../../libraries/Math.sol";
+import "../../libraries/UQ112x112.sol";
 
 contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     using UQ112x112 for uint224;

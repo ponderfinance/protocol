@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "../../src/core/PonderFactory.sol";
+import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/PonderMasterChef.sol";
 import "../../src/core/PonderPriceOracle.sol";
 import "../../src/core/PonderToken.sol";
@@ -11,43 +11,49 @@ import "../../src/launch/FiveFiveFiveLauncher.sol";
 import "../../src/periphery/KKUBUnwrapper.sol";
 import "../../src/periphery/PonderRouter.sol";
 import "forge-std/Script.sol";
+import "./IDeployBitkub.sol";
 
-contract DeployBitkubScript is Script {
-    uint256 constant PONDER_PER_SECOND = 3168000000000000000; // 3.168 ether
-    uint256 constant INITIAL_KUB_AMOUNT = 1000 ether;
-    uint256 constant LIQUIDITY_ALLOCATION = 200_000_000 ether;
-
+contract DeployBitkubScript is Script, IDeployBitkubScript {
+    // Immutable addresses
     address constant USDT = 0x7d984C24d2499D840eB3b7016077164e15E5faA6;
     address constant KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
 
+    // Custom errors
     error InvalidAddress();
     error PairCreationFailed();
     error DeploymentFailed(string name);
     error LiquidityAddFailed();
+    error DeploymentDeadlineExceeded();
+    error UnauthorizedDeployer();
+    error ConfigurationFailed(string name);
 
-    struct DeploymentState {
-        address deployer;
-        address teamReserve;
-        address marketing;
-        PonderToken ponder;
-        PonderFactory factory;
-        KKUBUnwrapper kkubUnwrapper;
-        PonderRouter router;
-        PonderPriceOracle oracle;
-        address ponderKubPair;
-        PonderMasterChef masterChef;
-        FiveFiveFiveLauncher launcher;
-        PonderStaking staking;
-        FeeDistributor feeDistributor;
+    // Events
+    event DeploymentStarted(address indexed deployer, uint256 deadline);
+    event ContractDeployed(string indexed name, address indexed addr);
+    event LiquidityAdded(uint256 kubAmount, uint256 ponderAmount);
+    event ConfigurationFinalized(
+        address indexed ponder,
+        address indexed masterChef,
+        address indexed feeDistributor
+    );
+
+    // Modifiers
+    modifier onlyDeployer(address _deployer) {
+        if (msg.sender != _deployer) revert UnauthorizedDeployer();
+        _;
+    }
+
+    modifier withinDeadline(uint256 deadline) {
+        if (block.timestamp > deadline) revert DeploymentDeadlineExceeded();
+        _;
     }
 
     function validateAddresses(
         address teamReserve,
         address marketing,
         address deployer
-    ) internal pure {
-        if (
-        teamReserve == address(0) ||
+    ) public pure override {
+        if (teamReserve == address(0) ||
         marketing == address(0) ||
             deployer == address(0)
         ) {
@@ -63,11 +69,28 @@ contract DeployBitkubScript is Script {
 
         validateAddresses(teamReserve, marketing, deployer);
 
+        // Initialize deployment configuration
+        DeployConfig memory config = DeployConfig({
+            ponderPerSecond: vm.envOr("PONDER_PER_SECOND", uint256(3168000000000000000)),
+            initialKubAmount: vm.envOr("INITIAL_KUB_AMOUNT", uint256(1000 ether)),
+            liquidityAllocation: vm.envOr("LIQUIDITY_ALLOCATION", uint256(200_000_000 ether)),
+            deploymentDeadline: block.timestamp + 5 minutes,
+            liquidityDeadline: block.timestamp + 2 minutes
+        });
+
         vm.startBroadcast(deployerPrivateKey);
 
-        DeploymentState memory state = deployCore(deployer, teamReserve, marketing);
-        setupInitialPrices(state);
-        finalizeConfiguration(state);
+        emit DeploymentStarted(deployer, config.deploymentDeadline);
+
+        DeploymentState memory state = deployCore(
+            deployer,
+            teamReserve,
+            marketing,
+            config
+        );
+
+        setupInitialPrices(state, config);
+        finalizeConfiguration(state, deployer, config);
 
         vm.stopBroadcast();
 
@@ -77,45 +100,59 @@ contract DeployBitkubScript is Script {
     function deployCore(
         address deployer,
         address teamReserve,
-        address marketing
-    ) internal returns (DeploymentState memory state) {
+        address marketing,
+        DeployConfig memory config
+    ) public
+    override
+    withinDeadline(config.deploymentDeadline)
+    returns (DeploymentState memory state)
+    {
         state.deployer = deployer;
         state.teamReserve = teamReserve;
         state.marketing = marketing;
 
-        // Deploy factory and periphery
+        // Deploy factory
         state.factory = new PonderFactory(deployer, address(0), address(0));
-        _verifyContract("PonderFactory", address(state.factory));
+        verifyContract("PonderFactory", address(state.factory));
+        emit ContractDeployed("PonderFactory", address(state.factory));
 
+        // Deploy periphery contracts
         state.kkubUnwrapper = new KKUBUnwrapper(KKUB);
-        _verifyContract("KKUBUnwrapper", address(state.kkubUnwrapper));
+        verifyContract("KKUBUnwrapper", address(state.kkubUnwrapper));
+        emit ContractDeployed("KKUBUnwrapper", address(state.kkubUnwrapper));
 
         state.router = new PonderRouter(
             address(state.factory),
             KKUB,
             address(state.kkubUnwrapper)
         );
-        _verifyContract("PonderRouter", address(state.router));
+        verifyContract("PonderRouter", address(state.router));
+        emit ContractDeployed("PonderRouter", address(state.router));
 
-        // Deploy PONDER - initial liquidity will be minted to msg.sender (deployer)
+        // Deploy PONDER token
         state.ponder = new PonderToken(teamReserve, marketing, address(0));
-        _verifyContract("PonderToken", address(state.ponder));
+        verifyContract("PonderToken", address(state.ponder));
+        emit ContractDeployed("PonderToken", address(state.ponder));
 
-        // Create pair
+        // Create and verify PONDER-KUB pair
         state.factory.createPair(address(state.ponder), KKUB);
+
         state.ponderKubPair = state.factory.getPair(address(state.ponder), KKUB);
         if (state.ponderKubPair == address(0)) revert PairCreationFailed();
+        emit ContractDeployed("PONDER-KUB Pair", state.ponderKubPair);
 
-        // Deploy remaining contracts
+        // Deploy oracle and core contracts
         state.oracle = new PonderPriceOracle(address(state.factory), KKUB, USDT);
-        _verifyContract("PonderPriceOracle", address(state.oracle));
+        verifyContract("PonderPriceOracle", address(state.oracle));
+        emit ContractDeployed("PriceOracle", address(state.oracle));
 
         state.staking = new PonderStaking(
             address(state.ponder),
             address(state.router),
             address(state.factory)
         );
-        _verifyContract("PonderStaking", address(state.staking));
+        verifyContract("PonderStaking", address(state.staking));
+        emit ContractDeployed("Staking", address(state.staking));
 
         state.feeDistributor = new FeeDistributor(
             address(state.factory),
@@ -124,7 +161,8 @@ contract DeployBitkubScript is Script {
             address(state.staking),
             teamReserve
         );
-        _verifyContract("FeeDistributor", address(state.feeDistributor));
+        verifyContract("FeeDistributor", address(state.feeDistributor));
+        emit ContractDeployed("FeeDistributor", address(state.feeDistributor));
 
         state.launcher = new FiveFiveFiveLauncher(
             address(state.factory),
@@ -133,54 +171,92 @@ contract DeployBitkubScript is Script {
             address(state.ponder),
             address(state.oracle)
         );
-        _verifyContract("Launcher", address(state.launcher));
+        verifyContract("Launcher", address(state.launcher));
+        emit ContractDeployed("Launcher", address(state.launcher));
 
         state.masterChef = new PonderMasterChef(
             state.ponder,
             state.factory,
             teamReserve,
-            PONDER_PER_SECOND
+            config.ponderPerSecond
         );
-        _verifyContract("MasterChef", address(state.masterChef));
+        verifyContract("MasterChef", address(state.masterChef));
+        emit ContractDeployed("MasterChef", address(state.masterChef));
 
         return state;
     }
 
-    function setupInitialPrices(DeploymentState memory state) internal {
-        // Tokens are already minted to deployer, just need to approve router
-        state.ponder.approve(address(state.router), LIQUIDITY_ALLOCATION);
+    function setupInitialPrices(
+        DeploymentState memory state,
+        DeployConfig memory config
+    ) public override withinDeadline(config.deploymentDeadline) {
+        // Check deployer's balance first
+        uint256 deployerBalance = state.ponder.balanceOf(state.deployer);
+        if (deployerBalance < config.liquidityAllocation) {
+            console.log("Expected balance:", config.liquidityAllocation);
+            console.log("Actual balance:", deployerBalance);
+            console.log("Deployer address:", state.deployer);
+            revert LiquidityAddFailed();
+        }
 
-        // Approve the router to spend PONDER
-        state.ponder.approve(address(state.router), LIQUIDITY_ALLOCATION);
+        // Since we're broadcasting as the deployer, just approve directly
+        bool approveSuccess = state.ponder.approve(
+            address(state.router),
+            config.liquidityAllocation
+        );
+        if (!approveSuccess) revert LiquidityAddFailed();
 
-        // Add liquidity
-        state.router.addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
-            address(state.ponder),
-            LIQUIDITY_ALLOCATION,
-            LIQUIDITY_ALLOCATION,
-            INITIAL_KUB_AMOUNT,
-            state.deployer,
-            block.timestamp + 1 hours
+        // Add initial liquidity
+        (bool success,) = address(state.router).call{value: config.initialKubAmount}(
+            abi.encodeWithSelector(
+                state.router.addLiquidityETH.selector,
+                address(state.ponder),
+                config.liquidityAllocation,
+                config.liquidityAllocation,
+                config.initialKubAmount,
+                state.deployer,
+                config.liquidityDeadline
+            )
         );
 
-        console.log("Initial liquidity added successfully");
+        if (!success) revert LiquidityAddFailed();
+
+        emit LiquidityAdded(config.initialKubAmount, config.liquidityAllocation);
     }
 
-    function finalizeConfiguration(DeploymentState memory state) internal {
+    function finalizeConfiguration(
+        DeploymentState memory state,
+        address deployer,
+        DeployConfig memory config
+    ) public override onlyDeployer(deployer) withinDeadline(config.deploymentDeadline) {
+        // First verify deployer is feeToSetter in factory
+        if (state.factory.feeToSetter() != deployer) revert UnauthorizedDeployer();
+
+        // Configure PONDER token
         state.ponder.setMinter(address(state.masterChef));
         state.ponder.setLauncher(address(state.launcher));
+
+        // Configure factory - no need for vm.prank since we're already broadcasting as deployer
         state.factory.setLauncher(address(state.launcher));
         state.factory.setPonder(address(state.ponder));
         state.factory.setFeeTo(address(state.feeDistributor));
+
+        emit ConfigurationFinalized(
+            address(state.ponder),
+            address(state.masterChef),
+            address(state.feeDistributor)
+        );
     }
 
-    function _verifyContract(string memory name, address contractAddress) internal view {
+    function verifyContract(
+        string memory name,
+        address contractAddress
+    ) public view override {
         uint256 size;
         assembly {
             size := extcodesize(contractAddress)
         }
         if (size == 0) revert DeploymentFailed(name);
-        console.log(name, "deployed at:", contractAddress);
     }
 
     function logDeployment(DeploymentState memory state) internal view {
@@ -206,9 +282,12 @@ contract DeployBitkubScript is Script {
 
         console.log("\nInitial Liquidity Details:");
         console.log("--------------------------------");
-        console.log("Initial KUB:", INITIAL_KUB_AMOUNT / 1e18);
-        console.log("Initial PONDER:", LIQUIDITY_ALLOCATION / 1e18);
-        console.log("Initial PONDER/KUB Rate:", LIQUIDITY_ALLOCATION / INITIAL_KUB_AMOUNT);
+        // Get pair reserves for rate calculation
+        (uint112 ponderReserve, uint112 kubReserve,) = IPonderPair(state.ponderKubPair).getReserves();
+
+        console.log("Initial KUB:", uint256(kubReserve) / 1e18);
+        console.log("Initial PONDER:", uint256(ponderReserve) / 1e18);
+        console.log("Initial PONDER/KUB Rate:", uint256(ponderReserve) / uint256(kubReserve));
 
         console.log("\nToken Allocation Summary:");
         console.log("--------------------------------");

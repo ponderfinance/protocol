@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../../src/core/PonderPair.sol";
+import "../../src/core/pair/PonderPair.sol";
 
 contract InitCodeHashGenerator is Test {
     function testGenerateInitCodeHash() public {

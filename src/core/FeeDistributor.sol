@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "../interfaces/IFeeDistributor.sol";
-import "../interfaces/IPonderFactory.sol";
-import "../interfaces/IPonderPair.sol";
+import "./factory/IPonderFactory.sol";
+import "./pair/IPonderPair.sol";
 import "../interfaces/IPonderRouter.sol";
 import "../interfaces/IPonderStaking.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";

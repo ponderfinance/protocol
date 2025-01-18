@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 import "../../src/core/FeeDistributor.sol";
 import "../../src/core/PonderStaking.sol";
 import "../../src/core/PonderToken.sol";
-import "../../src/core/PonderFactory.sol";
-import "../../src/core/PonderPair.sol";
+import "../../src/core/factory/PonderFactory.sol";
+import "../../src/core/pair/PonderPair.sol";
 import "../../src/periphery/PonderRouter.sol";
 
 /**

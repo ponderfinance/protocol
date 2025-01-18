@@ -3,11 +3,12 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/launch/FiveFiveFiveLauncher.sol";
-import "../../src/core/PonderFactory.sol";
+import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/PonderToken.sol";
 import "../../src/core/PonderPriceOracle.sol";
 import "../../src/periphery/PonderRouter.sol";
 import "../../src/launch/LaunchToken.sol";
+import "../../src/launch/types/FiveFiveFiveLauncherTypes.sol";
 import "../mocks/ERC20Mock.sol";
 import "../mocks/WETH9.sol";
 import "../mocks/MockKKUBUnwrapper.sol";
@@ -156,7 +157,7 @@ contract FiveFiveFiveLauncherTest is Test {
     function testCreateLaunch() public {
         vm.startPrank(creator);
 
-        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Test Token",
             symbol: "TEST",
             imageURI: "ipfs://test"
@@ -307,7 +308,7 @@ contract FiveFiveFiveLauncherTest is Test {
     }
 
     function _createTestLaunch() internal returns (uint256) {
-        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Test Token",
             symbol: "TEST",
             imageURI: "ipfs://test"
@@ -363,7 +364,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 ponderAmount = maxPonderValue * 10 * 1e18 / PONDER_PRICE; // Convert to PONDER amount with 18 decimals
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -407,7 +408,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 ponderAmount = (remainingKub * 10) + 100 ether; // Add excess amount
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -442,7 +443,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         vm.startPrank(bob);
         ponder.approve(address(launcher), ponderAmount);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -611,7 +612,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 excessiveContribution = remainingNeeded + 100 ether;
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributeKUB{value: excessiveContribution}(launchId);
         vm.stopPrank();
     }
@@ -674,7 +675,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.startPrank(alice);
 
         // Should revert with excessive contribution error
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributeKUB{value: contribution}(launchId);
 
         // Now try with exact amount
@@ -700,7 +701,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.startPrank(bob);
 
         // Try excessive amount first - should revert
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount * 2);
 
         // Now try exact amount - should succeed
@@ -794,7 +795,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Bob tries to contribute while first tx processing
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributeKUB{value: 2 ether}(launchId);
         vm.stopPrank();
 
@@ -895,7 +896,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 launchId = _createTestLaunch();
 
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.ContributionTooSmall.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
         launcher.contributeKUB{value: MIN_KUB_CONTRIBUTION - 1}(launchId);
         vm.stopPrank();
     }
@@ -904,7 +905,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 launchId = _createTestLaunch();
 
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.ContributionTooSmall.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION - 1);
         vm.stopPrank();
     }
@@ -1025,7 +1026,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.contributeKUB{value: MIN_KUB_CONTRIBUTION}(launchId);
 
         // Test below minimum
-        vm.expectRevert(FiveFiveFiveLauncher.ContributionTooSmall.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
         launcher.contributeKUB{value: MIN_KUB_CONTRIBUTION - 1}(launchId);
         vm.stopPrank();
     }
@@ -1038,7 +1039,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION);
 
         // Test below minimum
-        vm.expectRevert(FiveFiveFiveLauncher.ContributionTooSmall.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION - 1);
         vm.stopPrank();
     }
@@ -1113,19 +1114,19 @@ contract FiveFiveFiveLauncherTest is Test {
         assertEq(ponderValue, maxPonderValue, "Should accept exactly 20% in PONDER value");
 
         // Try to contribute any more PONDER
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION);
         vm.stopPrank();
     }
 
     function testDuplicateTokenName() public {
-        FiveFiveFiveLauncher.LaunchParams memory params1 = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params1 = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Test Token",
             symbol: "TEST1",
             imageURI: "ipfs://test"
         });
 
-        FiveFiveFiveLauncher.LaunchParams memory params2 = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params2 = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Test Token",  // Same name
             symbol: "TEST2",
             imageURI: "ipfs://test2"
@@ -1135,24 +1136,24 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.createLaunch(params1);
 
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncher.TokenNameExists.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.TokenNameExists.selector);
         launcher.createLaunch(params2);
     }
 
     function testInvalidCharactersInName() public {
-        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Test<>Token",  // Invalid characters
             symbol: "TEST",
             imageURI: "ipfs://test"
         });
 
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncher.InvalidTokenParams.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.InvalidTokenParams.selector);
         launcher.createLaunch(params);
     }
 
     function testValidTokenCreation() public {
-        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Valid-Token_Name",
             symbol: "VTN",
             imageURI: "ipfs://test"
@@ -1175,7 +1176,7 @@ contract FiveFiveFiveLauncherTest is Test {
         // Try to launch simultaneously
         for(uint i = 0; i < 3; i++) {
             vm.prank(launchers[i]);
-            FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+            FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
                 name: string.concat("Token", vm.toString(i)),
                 symbol: string.concat("TKN", vm.toString(i)),
                 imageURI: "ipfs://test"
@@ -1264,7 +1265,7 @@ contract FiveFiveFiveLauncherTest is Test {
         );
 
         // Try to contribute - should fail due to price deviation
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePriceDeviation.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1282,7 +1283,7 @@ contract FiveFiveFiveLauncherTest is Test {
         ponder.approve(address(launcher), 1000 ether);
 
         // Should revert with StalePrice since no recent price data
-        vm.expectRevert(FiveFiveFiveLauncher.StalePrice.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.StalePrice.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1295,7 +1296,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.warp(block.timestamp + 2 hours + 1); // Using explicit time since PRICE_STALENESS_THRESHOLD = 2 hours
 
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.StalePrice.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.StalePrice.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1336,7 +1337,7 @@ contract FiveFiveFiveLauncherTest is Test {
         }
 
         // Should fail due to accumulated deviation
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePriceDeviation.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1369,7 +1370,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.contributeKUB{value: 0.6 ether}(launchId);
 
         vm.prank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessiveContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributeKUB{value: 0.6 ether}(launchId);
     }
 
@@ -1408,7 +1409,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 skewedPonderAmount = _getPonderEquivalent(largeContribution * 3);
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
         launcher.contributePONDER(launchId, skewedPonderAmount);
         vm.stopPrank();
     }
@@ -1554,7 +1555,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.claimRefund(launchId);
 
         // Try to refund again
-        vm.expectRevert(FiveFiveFiveLauncher.NoContributionToRefund.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.NoContributionToRefund.selector);
         launcher.claimRefund(launchId);
         vm.stopPrank();
     }
@@ -1808,7 +1809,7 @@ contract FiveFiveFiveLauncherTest is Test {
         );
 
         // Contribution should fail due to price impact
-        vm.expectRevert(FiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePriceDeviation.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -1851,7 +1852,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Try to complete launch - should revert
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.PriceOutOfBounds.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.PriceOutOfBounds.selector);
         launcher.contributeKUB{value: TARGET_RAISE}(launchId);
         vm.stopPrank();
 
@@ -1903,11 +1904,11 @@ contract FiveFiveFiveLauncherTest is Test {
 
     function testCancelLaunchSecurityChecks() public {
         // Test 1: Cannot cancel non-existent launch
-        vm.expectRevert(FiveFiveFiveLauncher.LaunchNotCancellable.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.LaunchNotCancellable.selector);
         launcher.cancelLaunch(999);
 
         // Create a test launch with unique name/symbol
-        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Security Test Token",
             symbol: "STT",
             imageURI: "ipfs://test"
@@ -1918,13 +1919,13 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Test 2: Only creator can cancel
         vm.prank(alice);
-        vm.expectRevert(FiveFiveFiveLauncher.Unauthorized.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.Unauthorized.selector);
         launcher.cancelLaunch(launchId);
 
         // Test 3: Cannot cancel after deadline
         vm.warp(block.timestamp + 7 days + 1);
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncher.LaunchDeadlinePassed.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.LaunchDeadlinePassed.selector);
         launcher.cancelLaunch(launchId);
 
         // Reset time and create new launch with different name
@@ -1948,13 +1949,13 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Test 4: Cannot cancel completed launch
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncher.AlreadyLaunched.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.AlreadyLaunched.selector);
         launcher.cancelLaunch(launchId2);
     }
 
     function testCancelLaunchNameSymbolReuse() public {
         // Create first launch
-        FiveFiveFiveLauncher.LaunchParams memory params = FiveFiveFiveLauncher.LaunchParams({
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
             name: "Test Token",
             symbol: "TEST",
             imageURI: "ipfs://test"

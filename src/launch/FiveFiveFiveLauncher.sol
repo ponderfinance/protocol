@@ -1,186 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../core/PonderFactory.sol";
-import "../interfaces/IPonderFactory.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "../core/factory/PonderFactory.sol";
+import "../core/factory/IPonderFactory.sol";
 import "../libraries/PonderLaunchGuard.sol";
 import "./LaunchToken.sol";
 import "../core/PonderToken.sol";
 import "../core/PonderPriceOracle.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IFiveFiveFiveLauncher} from "./IFiveFiveFiveLauncher.sol";
+import {FiveFiveFiveLauncherStorage} from "./storage/FiveFiveFiveStorage.sol";
 
-contract FiveFiveFiveLauncher is ReentrancyGuard  {
+/// @title FiveFiveFiveLauncher
+/// @author taayyohh
+/// @notice Implementation of the 555 token launch platform
+/// @dev Handles token launches with dual liquidity pools (KUB and PONDER)
+contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStorage, ReentrancyGuard {
+    /*//////////////////////////////////////////////////////////////
+                         IMMUTABLES
+    //////////////////////////////////////////////////////////////*/
 
-    // Base launch information
-    struct LaunchBaseInfo {
-        address tokenAddress;
-        string name;
-        string symbol;
-        string imageURI;
-        bool launched;
-        address creator;
-        uint256 lpUnlockTime;
-        uint256 launchDeadline;
-        bool cancelled;
-        bool isFinalizingLaunch;
-    }
-
-    // Track all contribution amounts
-    struct ContributionState {
-        uint256 kubCollected;
-        uint256 ponderCollected;
-        uint256 ponderValueCollected;
-        uint256 tokensDistributed;
-    }
-
-    // Token distribution tracking
-    struct TokenAllocation {
-        uint256 tokensForContributors;
-        uint256 tokensForLP;
-    }
-
-    // Pool addresses and state
-    struct PoolInfo {
-        address memeKubPair;
-        address memePonderPair;
-    }
-
-    // Main launch info struct with minimized nesting
-    struct LaunchInfo {
-        LaunchBaseInfo base;
-        ContributionState contributions;
-        TokenAllocation allocation;
-        PoolInfo pools;
-        mapping(address => ContributorInfo) contributors;
-    }
-
-    // Individual contributor tracking
-    struct ContributorInfo {
-        uint256 kubContributed;
-        uint256 ponderContributed;
-        uint256 ponderValue;
-        uint256 tokensReceived;
-    }
-
-    // Input parameters for launch creation
-    struct LaunchParams {
-        string name;
-        string symbol;
-        string imageURI;
-    }
-
-    // Internal state for handling contributions
-    struct ContributionResult {
-        uint256 contribution;
-        uint256 tokensToDistribute;
-        uint256 refund;
-    }
-
-    // Configuration for pool creation
-    struct PoolConfig {
-        uint256 kubAmount;
-        uint256 tokenAmount;
-        uint256 ponderAmount;
-    }
-
-    // State for handling launch finalization
-    struct FinalizationState {
-        address tokenAddress;
-        uint256 kubAmount;
-        uint256 ponderAmount;
-        uint256 tokenAmount;
-    }
-
-    /// @notice Custom errors
-    error LaunchNotFound();
-    error AlreadyLaunched();
-    error InvalidPayment();
-    error InvalidAmount();
-    error ImageRequired();
-    error InvalidTokenParams();
-    error Unauthorized();
-    error LPStillLocked();
-    error StalePrice();
-    error ExcessiveContribution();
-    error InsufficientLPTokens();
-    error ExcessivePonderContribution();
-    error LaunchExpired();
-    error LaunchNotCancellable();
-    error NoContributionToRefund();
-    error RefundFailed();
-    error ContributionTooSmall();
-    error InsufficientPoolLiquidity();
-    error TokenNameExists();
-    error TokenSymbolExists();
-    error ContributionFailed();
-    error LaunchBeingFinalized();
-    error EthTransferFailed();
-    error ExcessivePriceDeviation();
-    error InsufficientPriceHistory();
-    error PriceOutOfBounds();
-    error PoolCreationFailed();
-    error InsufficientLiquidity();
-    error LaunchDoesNotExist();
-    error LaunchDeadlinePassed();
-
-    mapping(string => bool) public usedNames;
-    mapping(string => bool) public usedSymbols;
-
-    // Constants
-    uint256 public constant LAUNCH_DURATION = 7 days;
-    uint256 public constant TARGET_RAISE = 5555 ether;
-    uint256 public constant BASIS_POINTS = 10000;
-    uint256 public constant LP_LOCK_PERIOD = 180 days;
-    uint256 public constant MAX_PONDER_PERCENT = 2000; // 20% max PONDER contribution
-
-    // Distribution constants
-    uint256 public constant KUB_TO_MEME_KUB_LP = 6000;
-    uint256 public constant KUB_TO_PONDER_KUB_LP = 2000;
-    uint256 public constant KUB_TO_MEME_PONDER_LP = 2000;
-    uint256 public constant PONDER_TO_MEME_PONDER = 8000;
-    uint256 public constant PONDER_TO_BURN = 2000;
-    uint256 public constant PRICE_STALENESS_THRESHOLD = 2 hours;
-
-    // Token distribution percentages
-    uint256 public constant CREATOR_PERCENT = 1000; // 10%
-    uint256 public constant LP_PERCENT = 2000;      // 20%
-    uint256 public constant CONTRIBUTOR_PERCENT = 7000; // 70%
-
-    uint256 public constant MIN_KUB_CONTRIBUTION = 0.01 ether;  // Minimum 0.01 KUB
-    uint256 public constant MIN_PONDER_CONTRIBUTION = 0.1 ether; // Minimum 0.1 PONDER
-    uint256 public constant MIN_POOL_LIQUIDITY = 50 ether;       // Minimum 1 KUB worth for pool creation
-
-
-    // Core protocol references
+    /// @notice Core protocol contracts
     IPonderFactory public immutable factory;
     IPonderRouter public immutable router;
     PonderToken public immutable ponder;
     PonderPriceOracle public immutable priceOracle;
 
-    // State variables
-    address public owner;
-    address public feeCollector;
-    uint256 public launchCount;
-    mapping(uint256 => LaunchInfo) public launches;
-
-    // Events
-    event LaunchCreated(uint256 indexed launchId, address indexed token, address creator, string imageURI);
-    event KUBContributed(uint256 indexed launchId, address contributor, uint256 amount);
-    event PonderContributed(uint256 indexed launchId, address contributor, uint256 amount, uint256 kubValue);
-    event TokensDistributed(uint256 indexed launchId, address indexed recipient, uint256 amount);
-    event LaunchCompleted(uint256 indexed launchId, uint256 kubRaised, uint256 ponderRaised);
-    event LPTokensWithdrawn(uint256 indexed launchId, address indexed creator, uint256 amount);
-    event PonderBurned(uint256 indexed launchId, uint256 amount);
-    event DualPoolsCreated(uint256 indexed launchId, address memeKubPair, address memePonderPair, uint256 kubLiquidity, uint256 ponderLiquidity);
-    event PonderPoolSkipped(uint256 indexed launchId, uint256 ponderAmount, uint256 ponderValueInKub);
-    event RefundProcessed(address indexed user, uint256 kubAmount, uint256 ponderAmount, uint256 tokenAmount);
-    event LaunchCancelled(
-        uint256 indexed launchId,
-        address indexed creator,
-        uint256 kubCollected,
-        uint256 ponderCollected
-    );
-
+    /// @notice Sets up the launcher with required protocol contracts
+    /// @param _factory Address of the PonderFactory contract
+    /// @param _router Address of the PonderRouter contract
+    /// @param _feeCollector Address to collect fees
+    /// @param _ponder Address of the PONDER token
+    /// @param _priceOracle Address of the price oracle
     constructor(
         address _factory,
         address payable _router,
@@ -188,6 +39,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         address _ponder,
         address _priceOracle
     ) {
+        if (_factory == address(0) || _router == address(0) ||
+        _feeCollector == address(0) || _ponder == address(0) ||
+            _priceOracle == address(0)) revert ZeroAddress();
+
         factory = IPonderFactory(_factory);
         router = IPonderRouter(_router);
         ponder = PonderToken(_ponder);
@@ -196,6 +51,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         owner = msg.sender;
     }
 
+    /// @notice Creates a new token launch
+    /// @param params Launch parameters including name, symbol, and imageURI
+    /// @return launchId Unique identifier for the launch
     function createLaunch(
         LaunchParams calldata params
     ) external returns (uint256 launchId) {
@@ -214,6 +72,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         emit LaunchCreated(launchId, address(token), msg.sender, params.imageURI);
     }
 
+    /// @dev Deploys a new token contract for the launch
+    /// @param params Launch parameters
+    /// @return token The deployed token contract
     function _deployToken(LaunchParams calldata params) internal returns (LaunchToken) {
         return new LaunchToken(
             params.name,
@@ -225,6 +86,11 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @dev Initializes a new launch with the deployed token
+    /// @param launchId ID of the launch
+    /// @param tokenAddress Address of the deployed token
+    /// @param params Launch parameters
+    /// @param creator Address of the launch creator
     function _initializeLaunch(
         uint256 launchId,
         address tokenAddress,
@@ -253,6 +119,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         launch.base.launchDeadline = block.timestamp + LAUNCH_DURATION;
     }
 
+
+    /// @notice Allows users to contribute KUB to a launch
+    /// @param launchId The ID of the launch to contribute to
     function contributeKUB(uint256 launchId) external payable nonReentrant {
         LaunchInfo storage launch = launches[launchId];
 
@@ -364,6 +233,8 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @dev Validates that a launch is in an active state
+    /// @param launch The launch to validate
     function _validateLaunchState(LaunchInfo storage launch) internal view {
         if (launch.base.tokenAddress == address(0)) revert LaunchNotFound();
         if (launch.base.launched) revert AlreadyLaunched();
@@ -371,6 +242,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         if (block.timestamp > launch.base.launchDeadline) revert LaunchExpired();
     }
 
+    /// @dev Calculates contribution result for KUB
+    /// @param launch The launch info
+    /// @param amount The amount being contributed
+    /// @return result Contribution calculation results
     function _calculateKubContribution(
         LaunchInfo storage launch,
         uint256 amount
@@ -378,7 +253,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
         result.contribution = amount > remaining ? remaining : amount;
 
-        // Only check minimum contribution, not pool liquidity
+
         if (result.contribution < MIN_KUB_CONTRIBUTION) {
             revert ContributionTooSmall();
         }
@@ -388,6 +263,11 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return result;
     }
 
+    /// @dev Processes a KUB contribution
+    /// @param launchId The ID of the launch
+    /// @param launch The launch info
+    /// @param amount The amount being contributed
+    /// @param contributor The address of the contributor
     function _processKubContribution(
         uint256 launchId,
         LaunchInfo storage launch,
@@ -412,6 +292,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         emit KUBContributed(launchId, contributor, amount);
     }
 
+
+    /// @notice Allows users to contribute PONDER to a launch
+    /// @param launchId The ID of the launch to contribute to
+    /// @param amount Amount of PONDER to contribute
     function contributePONDER(uint256 launchId, uint256 amount) external {
         LaunchInfo storage launch = launches[launchId];
         _validateLaunchState(launch);
@@ -453,6 +337,11 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         _checkAndFinalizeLaunch(launchId, launch);
     }
 
+    /// @dev Calculates contribution result for PONDER
+    /// @param launch The launch info
+    /// @param amount The PONDER amount
+    /// @param kubValue The KUB value of the PONDER amount
+    /// @return result Contribution calculation results
     function _calculatePonderContribution(
         LaunchInfo storage launch,
         uint256 amount,
@@ -490,6 +379,13 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return result;
     }
 
+    /// @dev Processes a PONDER contribution
+    /// @param launchId The ID of the launch
+    /// @param launch The launch info
+    /// @param result The contribution calculation results
+    /// @param kubValue The KUB value of the PONDER contribution
+    /// @param amount The PONDER amount
+    /// @param contributor The address of the contributor
     function _processPonderContribution(
         uint256 launchId,
         LaunchInfo storage launch,
@@ -520,6 +416,8 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         emit PonderContributed(launchId, contributor, ponderToAccept, result.contribution);
     }
 
+    /// @notice Allows contributors to claim refunds for failed or cancelled launches
+    /// @param launchId The ID of the launch to claim refund from
     function claimRefund(uint256 launchId) external nonReentrant {
         LaunchInfo storage launch = launches[launchId];
 
@@ -568,15 +466,15 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
 
         // Process KUB refund last
         if (kubToRefund > 0) {
-            (bool success, ) = msg.sender.call{value: kubToRefund}("");
-            if (!success) revert RefundFailed();
+            _safeTransferETH(msg.sender, kubToRefund);
         }
 
         // Emit refund event
         emit RefundProcessed(msg.sender, kubToRefund, ponderToRefund, tokensToReturn);
     }
 
-    // Add ability for creator to cancel launch
+    /// @notice Allows creator to cancel their launch
+    /// @param launchId The ID of the launch to cancel
     function cancelLaunch(uint256 launchId) external {
         LaunchInfo storage launch = launches[launchId];
 
@@ -605,6 +503,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @dev Checks if a launch should be finalized and initiates finalization if needed
+    /// @param launchId The ID of the launch
+    /// @param launch The launch info
     function _checkAndFinalizeLaunch(uint256 launchId, LaunchInfo storage launch) internal {
         uint256 totalValue = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
         if (totalValue == TARGET_RAISE) {
@@ -614,6 +515,8 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         }
     }
 
+    /// @notice Finalizes a launch by creating liquidity pools and enabling trading
+    /// @param launchId The ID of the launch to finalize
     function _finalizeLaunch(uint256 launchId) internal {
         LaunchInfo storage launch = launches[launchId];
 
@@ -647,6 +550,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         launch.base.isFinalizingLaunch = false;
     }
 
+    /// @dev Calculates amounts for pool creation based on collected contributions
+    /// @param launch The launch info
+    /// @return pools Pool configuration with token amounts
     function _calculatePoolAmounts(LaunchInfo storage launch) internal view returns (PoolConfig memory pools) {
         pools.kubAmount = (launch.contributions.kubCollected * KUB_TO_MEME_KUB_LP) / BASIS_POINTS;
         pools.ponderAmount = (launch.contributions.ponderCollected * PONDER_TO_MEME_PONDER) / BASIS_POINTS;
@@ -654,6 +560,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return pools;
     }
 
+    /// @dev Creates liquidity pools for the token
+    /// @param launchId The ID of the launch
+    /// @param launch The launch info
+    /// @param pools Pool configuration
     function _createPools(uint256 launchId, LaunchInfo storage launch, PoolConfig memory pools) private {
         // 1. Early checks
         if (pools.kubAmount < MIN_POOL_LIQUIDITY) {
@@ -664,7 +574,6 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         address memeKubPair = _getOrCreatePair(launch.base.tokenAddress, router.WETH());
 
         // 3. Check reserves BEFORE doing any transfers
-        // This will catch any pre-existing liquidity that could manipulate price
         (uint112 kubR0, uint112 kubR1,) = PonderPair(memeKubPair).getReserves();
         if (kubR0 != 0 || kubR1 != 0) {
             revert PriceOutOfBounds();
@@ -718,6 +627,11 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+
+    /// @dev Gets or creates a trading pair
+    /// @param tokenA First token address
+    /// @param tokenB Second token address
+    /// @return Address of the pair
     function _getOrCreatePair(address tokenA, address tokenB) private returns (address) {
         address pair = factory.getPair(tokenA, tokenB);
         if (pair == address(0)) {
@@ -743,7 +657,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return pair;
     }
 
-    // Helper function to add KUB liquidity
+    /// @dev Adds KUB liquidity to a pool
+    /// @param tokenAddress Token address
+    /// @param kubAmount Amount of KUB
+    /// @param tokenAmount Amount of tokens
     function _addKubLiquidity(
         address tokenAddress,
         uint256 kubAmount,
@@ -761,6 +678,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @dev Adds PONDER liquidity to a pool
+    /// @param tokenAddress Token address
+    /// @param ponderAmount Amount of PONDER
+    /// @param tokenAmount Amount of tokens
     function _addPonderLiquidity(
         address tokenAddress,
         uint256 ponderAmount,
@@ -781,6 +702,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @dev Burns PONDER tokens based on pool creation outcome
+    /// @param launchId The ID of the launch
+    /// @param launch The launch info
+    /// @param burnAll Whether to burn all PONDER tokens
     function _burnPonderTokens(uint256 launchId, LaunchInfo storage launch, bool burnAll) internal {
         uint256 ponderToBurn;
         if (burnAll) {
@@ -797,6 +722,8 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         }
     }
 
+    /// @dev Enables trading for the launched token
+    /// @param launch The launch info
     function _enableTrading(LaunchInfo storage launch) internal {
         LaunchToken token = LaunchToken(launch.base.tokenAddress);
         token.setPairs(launch.pools.memeKubPair, launch.pools.memePonderPair);
@@ -942,6 +869,8 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return pair;
     }
 
+    /// @notice Allows creator to withdraw LP tokens after lock period
+    /// @param launchId The ID of the launch to withdraw from
     function withdrawLP(uint256 launchId) external {
         LaunchInfo storage launch = launches[launchId];
         if(msg.sender != launch.base.creator) revert Unauthorized();
@@ -953,6 +882,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         emit LPTokensWithdrawn(launchId, launch.base.creator, block.timestamp);
     }
 
+    /// @dev Withdraws LP tokens from a specific pair
+    /// @param pair The pair address
+    /// @param recipient The address to receive the LP tokens
     function _withdrawPairLP(address pair, address recipient) internal {
         if (pair == address(0)) return;
         uint256 balance = PonderERC20(pair).balanceOf(address(this));
@@ -961,6 +893,9 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         }
     }
 
+/// @dev Gets the KUB value of PONDER tokens using the price oracle
+    /// @param amount Amount of PONDER to value
+    /// @return KUB value of the PONDER amount
     function _getPonderValue(uint256 amount) internal view returns (uint256) {
         address ponderKubPair = factory.getPair(address(ponder), router.WETH());
         (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
@@ -1002,19 +937,22 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return spotPrice;
     }
 
+    /// @dev Validates token name and symbol parameters
+    /// @param name Token name to validate
+    /// @param symbol Token symbol to validate
     function _validateTokenParams(string memory name, string memory symbol) internal view {
         bytes memory nameBytes = bytes(name);
         bytes memory symbolBytes = bytes(symbol);
 
-        // Existing checks
+        // Length checks
         if(nameBytes.length == 0 || nameBytes.length > 32) revert InvalidTokenParams();
         if(symbolBytes.length == 0 || symbolBytes.length > 8) revert InvalidTokenParams();
 
-        // New checks
+        // Uniqueness checks
         if(usedNames[name]) revert TokenNameExists();
         if(usedSymbols[symbol]) revert TokenSymbolExists();
 
-        // Validate characters (basic sanitization)
+        // Validate name characters
         for(uint i = 0; i < nameBytes.length; i++) {
             // Only allow alphanumeric and basic punctuation
             bytes1 char = nameBytes[i];
@@ -1028,7 +966,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
             )) revert InvalidTokenParams();
         }
 
-        // Similar validation for symbol
+        // Validate symbol characters
         for(uint i = 0; i < symbolBytes.length; i++) {
             bytes1 char = symbolBytes[i];
             if(!(
@@ -1039,7 +977,8 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         }
     }
 
-    // View functions with minimal stack usage
+    /// @notice View functions with minimal stack usage
+    /// @inheritdoc IFiveFiveFiveLauncher
     function getContributorInfo(uint256 launchId, address contributor) external view returns (
         uint256 kubContributed,
         uint256 ponderContributed,
@@ -1055,6 +994,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @inheritdoc IFiveFiveFiveLauncher
     function getContributionInfo(uint256 launchId) external view returns (
         uint256 kubCollected,
         uint256 ponderCollected,
@@ -1070,6 +1010,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @inheritdoc IFiveFiveFiveLauncher
     function getPoolInfo(uint256 launchId) external view returns (
         address memeKubPair,
         address memePonderPair,
@@ -1083,6 +1024,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @inheritdoc IFiveFiveFiveLauncher
     function getLaunchInfo(uint256 launchId) external view returns (
         address tokenAddress,
         string memory name,
@@ -1106,6 +1048,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         );
     }
 
+    /// @inheritdoc IFiveFiveFiveLauncher
     function getMinimumRequirements() external pure returns (
         uint256 minKub,
         uint256 minPonder,
@@ -1114,6 +1057,7 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return (MIN_KUB_CONTRIBUTION, MIN_PONDER_CONTRIBUTION, MIN_POOL_LIQUIDITY);
     }
 
+    /// @inheritdoc IFiveFiveFiveLauncher
     function getRemainingToRaise(uint256 launchId) external view returns (
         uint256 remainingTotal,
         uint256 remainingPonderValue
@@ -1131,6 +1075,10 @@ contract FiveFiveFiveLauncher is ReentrancyGuard  {
         return (remaining, remainingPonder < remaining ? remainingPonder : remaining);
     }
 
+
+    /// @dev Safely transfers ETH
+    /// @param to Address to transfer to
+    /// @param value Amount to transfer
     function _safeTransferETH(address to, uint256 value) internal {
         (bool success, ) = to.call{value: value}("");
         if (!success) revert EthTransferFailed();
