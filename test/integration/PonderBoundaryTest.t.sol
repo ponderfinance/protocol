@@ -78,7 +78,7 @@ contract PonderBoundaryTest is Test {
         tokenA.mint(address(pair), overflowAmount);
         tokenB.mint(address(pair), overflowAmount);
 
-        vm.expectRevert("OVERFLOW");
+        vm.expectRevert(abi.encodeWithSignature("Overflow()"));
         pair.mint(alice);
 
         vm.stopPrank();
@@ -153,7 +153,7 @@ contract PonderBoundaryTest is Test {
         tokenB.mint(address(pair), additionalAmount);
 
         // This should overflow
-        vm.expectRevert("OVERFLOW");
+        vm.expectRevert(abi.encodeWithSignature("Overflow()"));
         pair.mint(alice);
 
         vm.stopPrank();
@@ -212,7 +212,7 @@ contract PonderBoundaryTest is Test {
         tokenA.transfer(address(pair), sqrtOverflowAmount);
         tokenB.transfer(address(pair), sqrtOverflowAmount);
 
-        vm.expectRevert("OVERFLOW");
+        vm.expectRevert(abi.encodeWithSignature("Overflow()"));
         pair.mint(alice);
 
         vm.stopPrank();
@@ -363,7 +363,7 @@ contract PonderBoundaryTest is Test {
         tokenB.approve(address(router), minLiquidity);
 
         // Try below minimum
-        vm.expectRevert("INSUFFICIENT_LIQUIDITY_MINTED");
+        vm.expectRevert(abi.encodeWithSignature("InsufficientLiquidityMinted()"));
         router.addLiquidity(
             address(tokenA),
             address(tokenB),

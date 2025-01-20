@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./IPonderMasterChef.sol";
-import "../factory/IPonderFactory.sol";
-import "../pair/IPonderPair.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../token/PonderToken.sol";
+import { IPonderMasterChef } from "./IPonderMasterChef.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
+import { IPonderPair } from "../pair/IPonderPair.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { PonderToken } from "../token/PonderToken.sol";
 
 /**
 * @title PonderMasterChef
@@ -15,10 +15,10 @@ import "../token/PonderToken.sol";
 */
 contract PonderMasterChef is IPonderMasterChef {
     /// @notice The PONDER token contract
-    PonderToken public immutable ponder;
+    PonderToken public immutable PONDER;
 
     /// @notice DEX factory for validating LP tokens
-    IPonderFactory public immutable factory;
+    IPonderFactory public immutable FACTORY;
 
     /// @notice PONDER tokens created per second (fixed rate)
     uint256 public ponderPerSecond;
@@ -79,6 +79,7 @@ contract PonderMasterChef is IPonderMasterChef {
     error TransferFailed();
     error ExcessiveAllocation();
     error DuplicatePool();
+    error NoTokensTransferred();
 
     /// @notice Events for weighted shares tracking
     event WeightedSharesUpdated(uint256 indexed pid, address indexed user, uint256 newShares, uint256 totalShares);
@@ -103,8 +104,8 @@ contract PonderMasterChef is IPonderMasterChef {
         uint256 _ponderPerSecond
     ) {
         if (_teamReserve == address(0)) revert ZeroAddress();
-        ponder = _ponder;
-        factory = _factory;
+        PONDER = _ponder;
+        FACTORY = _factory;
         teamReserve = _teamReserve;
         ponderPerSecond = _ponderPerSecond;
         owner = msg.sender;
@@ -145,9 +146,9 @@ contract PonderMasterChef is IPonderMasterChef {
             uint256 ponderReward = (timeElapsed * ponderPerSecond * pool.allocPoint) / totalAllocPoint;
 
             // Check if reward would exceed remaining supply
-            uint256 remainingMintable = ponder.MAXIMUM_SUPPLY() - ponder.totalSupply();
-            if (ponderReward > remainingMintable) {
-                ponderReward = remainingMintable;
+            uint256 remainingMintableForAccrual = PONDER.MAXIMUM_SUPPLY() - PONDER.totalSupply();
+            if (ponderReward > remainingMintableForAccrual) {
+                ponderReward = remainingMintableForAccrual;
             }
 
             // Calculate rewards based on boosted shares
@@ -160,13 +161,13 @@ contract PonderMasterChef is IPonderMasterChef {
             0;
 
         // Additional safety check for max supply
-        uint256 remainingMintable = ponder.MAXIMUM_SUPPLY() - ponder.totalSupply();
-        if (pending > remainingMintable) {
-            pending = remainingMintable;
+        uint256 remainingMintableForPending = PONDER.MAXIMUM_SUPPLY() - PONDER.totalSupply();
+        if (pending > remainingMintableForPending) {
+            pending = remainingMintableForPending;
         }
 
         // No rewards after minting end
-        if (block.timestamp > ponder.deploymentTime() + ponder.MINTING_END()) {
+        if (block.timestamp > PONDER.DEPLOYMENT_TIME() + PONDER.MINTING_END()) {
             pending = 0;
         }
     }
@@ -202,7 +203,7 @@ contract PonderMasterChef is IPonderMasterChef {
         // Validate LP token is from our factory
         address token0 = IPonderPair(_lpToken).token0();
         address token1 = IPonderPair(_lpToken).token1();
-        if (factory.getPair(token0, token1) != _lpToken) revert InvalidPair();
+        if (FACTORY.getPair(token0, token1) != _lpToken) revert InvalidPair();
 
         uint256 lastRewardTime = farmingStarted ? block.timestamp : 0;
         totalAllocPoint += _allocPoint;
@@ -263,7 +264,7 @@ contract PonderMasterChef is IPonderMasterChef {
         pool.lastRewardTime = block.timestamp;
 
         // Mint rewards after updating accPonderPerShare
-        ponder.mint(address(this), ponderReward);
+        PONDER.mint(address(this), ponderReward);
     }
 
 
@@ -362,7 +363,7 @@ contract PonderMasterChef is IPonderMasterChef {
             uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
             uint256 actualAmount = afterBalance - beforeBalance;
 
-            if (actualAmount == 0) revert("No tokens transferred");
+            if (actualAmount == 0) revert NoTokensTransferred();
 
             // Handle deposit fee if any
             if (pool.depositFeeBP > 0) {
@@ -483,15 +484,15 @@ contract PonderMasterChef is IPonderMasterChef {
         if (user.ponderStaked + _amount > maxPonderStake) revert BoostTooHigh();
 
         // Handle transfer and balance check
-        uint256 beforeBalance = ponder.balanceOf(address(this));
+        uint256 beforeBalance = PONDER.balanceOf(address(this));
 
         // First check if transfer succeeded
-        if (!ponder.transferFrom(msg.sender, address(this), _amount)) {
+        if (!PONDER.transferFrom(msg.sender, address(this), _amount)) {
             revert TransferFailed();
         }
 
         // Then verify we actually received tokens
-        uint256 actualAmount = ponder.balanceOf(address(this)) - beforeBalance;
+        uint256 actualAmount = PONDER.balanceOf(address(this)) - beforeBalance;
         if (actualAmount == 0) revert ZeroAmount();
         if (actualAmount != _amount) revert InvalidAmount();
 
@@ -536,7 +537,7 @@ contract PonderMasterChef is IPonderMasterChef {
         }
 
         user.ponderStaked -= _amount;
-        ponder.transfer(msg.sender, _amount);
+        PONDER.transfer(msg.sender, _amount);
 
         _updateUserWeightedShares(_pid, msg.sender);
         user.rewardDebt = (user.weightedShares * poolInfo[_pid].accPonderPerShare) / 1e12;
@@ -550,11 +551,11 @@ contract PonderMasterChef is IPonderMasterChef {
      * @param _amount Amount of PONDER to transfer
      */
     function safePonderTransfer(address _to, uint256 _amount) internal {
-        uint256 ponderBalance = ponder.balanceOf(address(this));
+        uint256 ponderBalance = PONDER.balanceOf(address(this));
         if (_amount > ponderBalance) {
-            ponder.transfer(_to, ponderBalance);
+            PONDER.transfer(_to, ponderBalance);
         } else {
-            ponder.transfer(_to, _amount);
+            PONDER.transfer(_to, _amount);
         }
     }
 

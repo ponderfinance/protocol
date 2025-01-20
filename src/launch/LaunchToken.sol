@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../core/token/PonderERC20.sol";
-import "../core/factory/IPonderFactory.sol";
-import "../periphery/router/IPonderRouter.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../core/token/PonderToken.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { PonderERC20 } from "../core/token/PonderERC20.sol";
+import { IPonderFactory } from "../core/factory/IPonderFactory.sol";
+import { PonderToken } from "../core/token/PonderToken.sol";
+import { IPonderRouter } from "../periphery/router/IPonderRouter.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract LaunchToken is PonderERC20, ReentrancyGuard {
     /// @notice Core protocol addresses
     address public launcher;
     address public pendingLauncher;
-    IPonderFactory public immutable factory;
-    IPonderRouter public immutable router;
-    PonderToken public immutable ponder;
+    IPonderFactory public immutable FACTORY;
+    IPonderRouter public immutable ROUTER;
+    PonderToken public immutable PONDER;
 
     /// @notice Trading state
     bool public transfersEnabled;
@@ -81,9 +80,9 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
     ) PonderERC20(_name, _symbol) {
         if (_launcher == address(0)) revert ZeroAddress();
         launcher = _launcher;
-        factory = IPonderFactory(_factory);
-        router = IPonderRouter(_router);
-        ponder = PonderToken(_ponder);
+        FACTORY = IPonderFactory(_factory);
+        ROUTER = IPonderRouter(_router);
+        PONDER = PonderToken(_ponder);
         _mint(_launcher, TOTAL_SUPPLY);
     }
 
@@ -127,15 +126,15 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
                 }
 
                 // Check if this is a pair being created
-                address kubPairCheck = factory.getPair(address(this), address(router.WETH()));
-                address ponderPairCheck = factory.getPair(address(this), address(ponder));
+                address kubPairCheck = FACTORY.getPair(address(this), address(ROUTER.WETH()));
+                address ponderPairCheck = FACTORY.getPair(address(this), address(PONDER));
 
-                if (to != address(router) &&
-                to != address(factory) &&
+                if (to != address(ROUTER) &&
+                to != address(FACTORY) &&
                 to != kubPairCheck &&
                 to != ponderPairCheck &&
-                from != address(router) &&
-                from != address(factory) &&
+                from != address(ROUTER) &&
+                from != address(FACTORY) &&
                 from != kubPairCheck &&
                     from != ponderPairCheck) {
                     revert ContractBuyingRestricted();

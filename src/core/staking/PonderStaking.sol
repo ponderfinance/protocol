@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../token/PonderERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../../periphery/router/IPonderRouter.sol";
-import "../factory/IPonderFactory.sol";
+import { PonderERC20 } from "../token/PonderERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
 
 /**
  * @title PonderStaking
@@ -13,13 +13,13 @@ import "../factory/IPonderFactory.sol";
  */
 contract PonderStaking is PonderERC20 {
     /// @notice The PONDER token contract
-    IERC20 public immutable ponder;
+    IERC20 public immutable PONDER;
 
     /// @notice Ponder protocol router for swaps
-    IPonderRouter public immutable router;
+    IPonderRouter public immutable ROUTER;
 
     /// @notice Factory contract reference
-    IPonderFactory public immutable factory;
+    IPonderFactory public immutable FACTORY;
 
     /// @notice Address that can perform admin functions
     address public owner;
@@ -76,9 +76,9 @@ contract PonderStaking is PonderERC20 {
         if (_ponder == address(0) || _router == address(0) || _factory == address(0))
             revert ZeroAddress();
 
-        ponder = IERC20(_ponder);
-        router = IPonderRouter(_router);
-        factory = IPonderFactory(_factory);
+        PONDER = IERC20(_ponder);
+        ROUTER = IPonderRouter(_router);
+        FACTORY = IPonderFactory(_factory);
         owner = msg.sender;
         lastRebaseTime = block.timestamp;
     }
@@ -92,12 +92,12 @@ contract PonderStaking is PonderERC20 {
         if (amount == 0) revert InvalidAmount();
 
         // Get the total amount of PONDER in the contract
-        uint256 totalPonder = ponder.balanceOf(address(this));
+        uint256 totalPonder = PONDER.balanceOf(address(this));
         // Get the total shares
         uint256 totalShares = totalSupply();
 
         // Transfer PONDER tokens from user
-        ponder.transferFrom(msg.sender, address(this), amount);
+        PONDER.transferFrom(msg.sender, address(this), amount);
 
         // Calculate shares to mint
         if (totalShares == 0) {
@@ -121,7 +121,7 @@ contract PonderStaking is PonderERC20 {
         if (shares > balanceOf(msg.sender)) revert InvalidSharesAmount();
 
         uint256 totalShares = totalSupply();
-        uint256 totalPonderBefore = ponder.balanceOf(address(this));
+        uint256 totalPonderBefore = PONDER.balanceOf(address(this));
 
         // Calculate amount of PONDER to return based on share of total
         amount = (shares * totalPonderBefore) / totalShares;
@@ -133,11 +133,11 @@ contract PonderStaking is PonderERC20 {
         _burn(msg.sender, shares);
 
         // Transfer PONDER to user
-        if (!ponder.transfer(msg.sender, amount)) revert TransferFailed();
+        if (!PONDER.transfer(msg.sender, amount)) revert TransferFailed();
 
         // Ensure final balance matches expected
         uint256 expectedFinalBalance = totalPonderBefore - amount;
-        uint256 actualFinalBalance = ponder.balanceOf(address(this));
+        uint256 actualFinalBalance = PONDER.balanceOf(address(this));
         if (actualFinalBalance != expectedFinalBalance) revert InvalidBalance();
 
         emit Withdrawn(msg.sender, amount, shares);
@@ -151,7 +151,7 @@ contract PonderStaking is PonderERC20 {
     function getPonderAmount(uint256 shares) external view returns (uint256) {
         uint256 totalShares = totalSupply();
         if (totalShares == 0) return shares;
-        return (shares * ponder.balanceOf(address(this))) / totalShares;
+        return (shares * PONDER.balanceOf(address(this))) / totalShares;
     }
 
     /**

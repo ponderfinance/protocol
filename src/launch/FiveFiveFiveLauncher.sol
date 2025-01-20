@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "../core/factory/PonderFactory.sol";
-import "../core/factory/IPonderFactory.sol";
-import "./libraries/PonderLaunchGuard.sol";
-import "./LaunchToken.sol";
-import "../core/token/PonderToken.sol";
-import "../core/oracle/PonderPriceOracle.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IPonderFactory} from "../core/factory/IPonderFactory.sol";
+import {IPonderRouter} from "../periphery/router/IPonderRouter.sol";
+import {LaunchToken} from "./LaunchToken.sol";
+import {PonderToken} from "../core/token/PonderToken.sol";
+import {PonderPriceOracle} from "../core/oracle/PonderPriceOracle.sol";
 import {IFiveFiveFiveLauncher} from "./IFiveFiveFiveLauncher.sol";
 import {FiveFiveFiveLauncherStorage} from "./storage/FiveFiveFiveStorage.sol";
+import {PonderPair} from "../core/pair/PonderPair.sol";
+import {PonderERC20} from "../core/token/PonderERC20.sol";
 
 /// @title FiveFiveFiveLauncher
 /// @author taayyohh
@@ -21,10 +22,10 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Core protocol contracts
-    IPonderFactory public immutable factory;
-    IPonderRouter public immutable router;
-    PonderToken public immutable ponder;
-    PonderPriceOracle public immutable priceOracle;
+    IPonderFactory public immutable FACTORY;
+    IPonderRouter public immutable ROUTER;
+    PonderToken public immutable PONDER;
+    PonderPriceOracle public immutable PRICE_ORACLE;
 
     /// @notice Sets up the launcher with required protocol contracts
     /// @param _factory Address of the PonderFactory contract
@@ -43,10 +44,10 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         _feeCollector == address(0) || _ponder == address(0) ||
             _priceOracle == address(0)) revert ZeroAddress();
 
-        factory = IPonderFactory(_factory);
-        router = IPonderRouter(_router);
-        ponder = PonderToken(_ponder);
-        priceOracle = PonderPriceOracle(_priceOracle);
+        FACTORY = IPonderFactory(_factory);
+        ROUTER = IPonderRouter(_router);
+        PONDER = PonderToken(_ponder);
+        PRICE_ORACLE = PonderPriceOracle(_priceOracle);
         feeCollector = _feeCollector;
         owner = msg.sender;
     }
@@ -80,9 +81,9 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
             params.name,
             params.symbol,
             address(this),
-            address(factory),
-            payable(address(router)),
-            address(ponder)
+            address(FACTORY),
+            payable(address(ROUTER)),
+            address(PONDER)
         );
     }
 
@@ -250,7 +251,10 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         LaunchInfo storage launch,
         uint256 amount
     ) internal view returns (ContributionResult memory result) {
-        uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
+        uint256 remaining = TARGET_RAISE - (
+            launch.contributions.kubCollected +
+            launch.contributions.ponderValueCollected
+        );
         result.contribution = amount > remaining ? remaining : amount;
 
 
@@ -305,18 +309,23 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
 
         // Check against 20% PONDER cap
         uint256 totalPonderValue = launch.contributions.ponderValueCollected + kubValue;
-        if (totalPonderValue > (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS) {
+        uint256 maxPonderAllowed = (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS;
+        if (totalPonderValue > maxPonderAllowed) {
             revert ExcessivePonderContribution();
         }
 
         // Check against remaining needed
-        uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
+        uint256 totalCollected =
+            launch.contributions.kubCollected +
+            launch.contributions.ponderValueCollected;
+
+        uint256 remaining = TARGET_RAISE - totalCollected;
         if (kubValue > remaining) revert ExcessiveContribution();
 
         uint256 tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) / TARGET_RAISE;
 
         // Transfer exact amount needed
-        ponder.transferFrom(msg.sender, address(this), amount);
+        PONDER.transferFrom(msg.sender, address(this), amount);
 
         // Update state
         launch.contributions.ponderCollected += amount;
@@ -354,8 +363,9 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
             revert ExcessivePonderContribution();
         }
 
-        // Calculate remaining raise needed in KUB terms
-        uint256 remaining = TARGET_RAISE - (launch.contributions.kubCollected + launch.contributions.ponderValueCollected);
+        uint256 totalContributed = launch.contributions.kubCollected +
+                            launch.contributions.ponderValueCollected;
+        uint256 remaining = TARGET_RAISE - totalContributed;
 
         // If kubValue exceeds remaining, calculate partial amount
         if (kubValue > remaining) {
@@ -383,21 +393,19 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
     /// @param launchId The ID of the launch
     /// @param launch The launch info
     /// @param result The contribution calculation results
-    /// @param kubValue The KUB value of the PONDER contribution
     /// @param amount The PONDER amount
     /// @param contributor The address of the contributor
     function _processPonderContribution(
         uint256 launchId,
         LaunchInfo storage launch,
         ContributionResult memory result,
-        uint256 kubValue,
         uint256 amount,
         address contributor
     ) internal {
         uint256 ponderToAccept = amount - result.refund;
 
         // Transfer exact amount needed first
-        ponder.transferFrom(contributor, address(this), ponderToAccept);
+        PONDER.transferFrom(contributor, address(this), ponderToAccept);
 
         // Update state after transfer
         launch.contributions.ponderCollected += ponderToAccept;
@@ -422,15 +430,13 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         LaunchInfo storage launch = launches[launchId];
 
         // Check if refund is possible
-        require(
-            block.timestamp > launch.base.launchDeadline || launch.base.cancelled,
-            "Launch still active"
-        );
-        require(
-            !launch.base.launched &&
-            launch.contributions.kubCollected + launch.contributions.ponderValueCollected < TARGET_RAISE,
-            "Launch succeeded"
-        );
+        if (!(block.timestamp > launch.base.launchDeadline || launch.base.cancelled)) {
+            revert LaunchStillActive();
+        }
+        if (launch.base.launched ||
+            launch.contributions.kubCollected + launch.contributions.ponderValueCollected >= TARGET_RAISE) {
+            revert LaunchSucceeded();
+        }
 
         ContributorInfo storage contributor = launch.contributors[msg.sender];
         if (contributor.kubContributed == 0 && contributor.ponderContributed == 0) {
@@ -451,17 +457,16 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         // Get token approvals before any transfers
         if (tokensToReturn > 0) {
             LaunchToken token = LaunchToken(launch.base.tokenAddress);
-            require(
-                token.allowance(msg.sender, address(this)) >= tokensToReturn,
-                "Token approval required for refund"
-            );
+            if (token.allowance(msg.sender, address(this)) < tokensToReturn) {
+                revert TokenApprovalRequired();
+            }
             // Transfer tokens back first
             token.transferFrom(msg.sender, address(this), tokensToReturn);
         }
 
         // Process PONDER refund
         if (ponderToRefund > 0) {
-            ponder.transfer(msg.sender, ponderToRefund);
+            PONDER.transfer(msg.sender, ponderToRefund);
         }
 
         // Process KUB refund last
@@ -571,7 +576,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // 2. Get the KUB pair
-        address memeKubPair = _getOrCreatePair(launch.base.tokenAddress, router.WETH());
+        address memeKubPair = _getOrCreatePair(launch.base.tokenAddress, ROUTER.WETH());
 
         // 3. Check reserves BEFORE doing any transfers
         (uint112 kubR0, uint112 kubR1,) = PonderPair(memeKubPair).getReserves();
@@ -584,7 +589,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         if (launch.contributions.ponderCollected > 0) {
             uint256 ponderPoolValue = _getPonderValue(pools.ponderAmount);
             if (ponderPoolValue >= MIN_POOL_LIQUIDITY) {
-                address memePonderPair = _getOrCreatePair(launch.base.tokenAddress, address(ponder));
+                address memePonderPair = _getOrCreatePair(launch.base.tokenAddress, address(PONDER));
                 (uint112 ponderR0, uint112 ponderR1,) = PonderPair(memePonderPair).getReserves();
                 if (ponderR0 != 0 || ponderR1 != 0) {
                     revert PriceOutOfBounds();
@@ -612,7 +617,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
                 _burnPonderTokens(launchId, launch, false);
             } else {
                 // Burn all PONDER if no pool created
-                ponder.burn(launch.contributions.ponderCollected);
+                PONDER.burn(launch.contributions.ponderCollected);
                 emit PonderBurned(launchId, launch.contributions.ponderCollected);
                 emit PonderPoolSkipped(launchId, pools.ponderAmount, ponderPoolValue);
             }
@@ -633,26 +638,26 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
     /// @param tokenB Second token address
     /// @return Address of the pair
     function _getOrCreatePair(address tokenA, address tokenB) private returns (address) {
-        address pair = factory.getPair(tokenA, tokenB);
+        address pair = FACTORY.getPair(tokenA, tokenB);
         if (pair == address(0)) {
-            pair = factory.createPair(tokenA, tokenB);
+            pair = FACTORY.createPair(tokenA, tokenB);
         }
         return pair;
     }
 
     function _getOrCreateKubPair(address tokenAddress) private returns (address) {
-        address weth = router.WETH();
-        address pair = factory.getPair(tokenAddress, weth);
+        address weth = ROUTER.WETH();
+        address pair = FACTORY.getPair(tokenAddress, weth);
         if (pair == address(0)) {
-            pair = factory.createPair(tokenAddress, weth);
+            pair = FACTORY.createPair(tokenAddress, weth);
         }
         return pair;
     }
 
     function _getOrCreatePonderPair(address tokenAddress) private returns (address) {
-        address pair = factory.getPair(tokenAddress, address(ponder));
+        address pair = FACTORY.getPair(tokenAddress, address(PONDER));
         if (pair == address(0)) {
-            pair = factory.createPair(tokenAddress, address(ponder));
+            pair = FACTORY.createPair(tokenAddress, address(PONDER));
         }
         return pair;
     }
@@ -666,9 +671,9 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         uint256 kubAmount,
         uint256 tokenAmount
     ) private {
-        LaunchToken(tokenAddress).approve(address(router), tokenAmount);
+        LaunchToken(tokenAddress).approve(address(ROUTER), tokenAmount);
 
-        router.addLiquidityETH{value: kubAmount}(
+        ROUTER.addLiquidityETH{value: kubAmount}(
             tokenAddress,
             tokenAmount,
             tokenAmount * 995 / 1000,  // 0.5% slippage
@@ -687,12 +692,12 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         uint256 ponderAmount,
         uint256 tokenAmount
     ) private {
-        LaunchToken(tokenAddress).approve(address(router), tokenAmount);
-        ponder.approve(address(router), ponderAmount);
+        LaunchToken(tokenAddress).approve(address(ROUTER), tokenAmount);
+        PONDER.approve(address(ROUTER), ponderAmount);
 
-        router.addLiquidity(
+        ROUTER.addLiquidity(
             tokenAddress,
-            address(ponder),
+            address(PONDER),
             tokenAmount,
             ponderAmount,
             tokenAmount * 995 / 1000,  // 0.5% slippage
@@ -717,7 +722,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         if (ponderToBurn > 0) {
-            ponder.burn(ponderToBurn);
+            PONDER.burn(ponderToBurn);
             emit PonderBurned(launchId, ponderToBurn);
         }
     }
@@ -744,9 +749,9 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // Get or create pair and verify no existing manipulated state
-        address memeKubPair = factory.getPair(launch.base.tokenAddress, router.WETH());
+        address memeKubPair = FACTORY.getPair(launch.base.tokenAddress, ROUTER.WETH());
         if (memeKubPair == address(0)) {
-            memeKubPair = factory.createPair(launch.base.tokenAddress, router.WETH());
+            memeKubPair = FACTORY.createPair(launch.base.tokenAddress, ROUTER.WETH());
         }
         launch.pools.memeKubPair = memeKubPair;
 
@@ -757,10 +762,10 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // Approve exact amount
-        LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount);
+        LaunchToken(launch.base.tokenAddress).approve(address(ROUTER), pools.tokenAmount);
 
         // Add liquidity
-        router.addLiquidityETH{value: pools.kubAmount}(
+        ROUTER.addLiquidityETH{value: pools.kubAmount}(
             launch.base.tokenAddress,
             pools.tokenAmount,
             pools.tokenAmount * 995 / 1000,  // 0.5% max slippage
@@ -833,9 +838,9 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // Get or create pair
-        address pair = factory.getPair(tokenAddress, address(ponder));
+        address pair = FACTORY.getPair(tokenAddress, address(PONDER));
         if (pair == address(0)) {
-            pair = factory.createPair(tokenAddress, address(ponder));
+            pair = FACTORY.createPair(tokenAddress, address(PONDER));
         }
 
         // Check existing reserves
@@ -845,13 +850,13 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // Approve tokens with exact amounts
-        LaunchToken(tokenAddress).approve(address(router), tokenAmount);
-        ponder.approve(address(router), ponderAmount);
+        LaunchToken(tokenAddress).approve(address(ROUTER), tokenAmount);
+        PONDER.approve(address(ROUTER), ponderAmount);
 
         // Add liquidity with reasonable slippage
-        router.addLiquidity(
+        ROUTER.addLiquidity(
             tokenAddress,
-            address(ponder),
+            address(PONDER),
             tokenAmount,
             ponderAmount,
             tokenAmount * 995 / 1000,  // 0.5% slippage
@@ -897,7 +902,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
     /// @param amount Amount of PONDER to value
     /// @return KUB value of the PONDER amount
     function _getPonderValue(uint256 amount) internal view returns (uint256) {
-        address ponderKubPair = factory.getPair(address(ponder), router.WETH());
+        address ponderKubPair = FACTORY.getPair(address(PONDER), ROUTER.WETH());
         (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
 
         // First check if price is stale
@@ -906,16 +911,16 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // Get spot price for contribution value
-        uint256 spotPrice = priceOracle.getCurrentPrice(
+        uint256 spotPrice = PRICE_ORACLE.getCurrentPrice(
             ponderKubPair,
-            address(ponder),
+            address(PONDER),
             amount
         );
 
         // Get TWAP price for manipulation check
-        uint256 twapPrice = priceOracle.consult(
+        uint256 twapPrice = PRICE_ORACLE.consult(
             ponderKubPair,
-            address(ponder),
+            address(PONDER),
             amount,
             1 hours // 1 hour TWAP period
         );
@@ -953,7 +958,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         if(usedSymbols[symbol]) revert TokenSymbolExists();
 
         // Validate name characters
-        for(uint i = 0; i < nameBytes.length; i++) {
+        for(uint256 i = 0; i < nameBytes.length; i++) {
             // Only allow alphanumeric and basic punctuation
             bytes1 char = nameBytes[i];
             if(!(
@@ -967,7 +972,7 @@ contract FiveFiveFiveLauncher is IFiveFiveFiveLauncher, FiveFiveFiveLauncherStor
         }
 
         // Validate symbol characters
-        for(uint i = 0; i < symbolBytes.length; i++) {
+        for(uint256 i = 0; i < symbolBytes.length; i++) {
             bytes1 char = symbolBytes[i];
             if(!(
                 (char >= 0x30 && char <= 0x39) ||

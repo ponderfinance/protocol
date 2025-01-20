@@ -273,7 +273,7 @@ contract KKUBUnwrapperTest is Test {
 
 
     function testRevertTransferOwnershipToZeroAddress() public {
-        vm.expectRevert(bytes("Ownable: new owner is the zero address"));
+        vm.expectRevert(abi.encodeWithSignature("InvalidNewOwner()"));
         unwrapper.transferOwnership(address(0));
     }
 

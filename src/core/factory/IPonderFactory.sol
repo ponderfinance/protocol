@@ -70,7 +70,7 @@ interface IPonderFactory {
      * @notice Returns the address of a pair by its index
      * @return pair Address of the pair contract at the specified index
      */
-    function allPairs(uint) external view returns (address pair);
+    function allPairs(uint256 index) external view returns (address pair);
 
     /**
      * @notice Returns the total number of pairs created through the factory

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../types/FiveFiveFiveLauncherTypes.sol";
-import "./FiveFiveFiveConstants.sol";
-import "../LaunchToken.sol";
-import "../../core/token/PonderToken.sol";
-import "../../core/token/PonderERC20.sol";
+import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
+import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
+import { LaunchToken } from "../LaunchToken.sol";
+import { PonderToken } from "../../core/token/PonderToken.sol";
+import { PonderERC20 } from "../../core/token/PonderERC20.sol";
 
 /// @title FiveFiveFiveRefundLib
 /// @author taayyohh
@@ -45,20 +45,19 @@ library FiveFiveFiveRefundLib {
     /// @notice Processes refund for a failed or cancelled launch
     function processRefund(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
-        uint256 launchId,
         address claimer,
         PonderToken ponder
     ) external {
         // First check if launch is active
         if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
-            revert("Launch still active");
+            revert FiveFiveFiveLauncherTypes.LaunchStillActive();
         }
 
         // Check if launch was successful
         if (launch.base.launched ||
             launch.contributions.kubCollected + launch.contributions.ponderValueCollected >=
             FiveFiveFiveConstants.TARGET_RAISE) {
-            revert("Launch succeeded");
+            revert FiveFiveFiveLauncherTypes.LaunchSucceeded();
         }
 
         // Get contributor info
@@ -82,7 +81,7 @@ library FiveFiveFiveRefundLib {
         if (tokensToReturn > 0) {
             LaunchToken token = LaunchToken(launch.base.tokenAddress);
             if (token.allowance(claimer, address(this)) < tokensToReturn) {
-                revert("Token approval required for refund");
+                revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
             }
             token.transferFrom(claimer, address(this), tokensToReturn);
         }
@@ -95,7 +94,7 @@ library FiveFiveFiveRefundLib {
         // Process KUB refund
         if (kubToRefund > 0) {
             (bool success, ) = claimer.call{value: kubToRefund}("");
-            require(success, "KUB transfer failed");
+            if (!success) revert FiveFiveFiveLauncherTypes.KubTransferFailed();
         }
 
         emit RefundProcessed(claimer, kubToRefund, ponderToRefund, tokensToReturn);

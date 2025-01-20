@@ -16,7 +16,6 @@ interface IPonderPriceOracle {
     ) external view returns (uint256 amountOut);
 
     function getPriceInStablecoin(
-        address pair,
         address tokenIn,
         uint256 amountIn
     ) external view returns (uint256 amountOut);

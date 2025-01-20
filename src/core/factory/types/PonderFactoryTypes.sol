@@ -45,11 +45,11 @@ library PonderFactoryTypes {
     /**
      * @dev Timelock duration for launcher updates
      */
-    uint256 constant LAUNCHER_TIMELOCK = 2 days;
+    uint256 internal constant LAUNCHER_TIMELOCK = 2 days;
 
     /**
      * @dev Hash of the init code of the pair contract
      * @notice Used for deterministic pair addresses
      */
-    bytes32 constant INIT_CODE_PAIR_HASH = 0x5b2c36488f6f5358809016c6ef0a4062c13d936275a7f4ce9f23145c6a79fc18;
+    bytes32 internal constant INIT_CODE_PAIR_HASH = 0x5b2c36488f6f5358809016c6ef0a4062c13d936275a7f4ce9f23145c6a79fc18;
 }

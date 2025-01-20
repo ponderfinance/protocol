@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../LaunchToken.sol";
-import "../../core/token/PonderToken.sol";
-import "../../core/factory/IPonderFactory.sol";
-import "../../periphery/router/IPonderRouter.sol";
-import "./FiveFiveFiveConstants.sol";
-import {FiveFiveFiveLauncherTypes} from "../types/FiveFiveFiveLauncherTypes.sol";
-import "./FiveFiveFiveValidation.sol";
+import { LaunchToken } from "../LaunchToken.sol";
+import { PonderToken } from "../../core/token/PonderToken.sol";
+import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
+import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
+import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
+import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 
 /// @title FiveFiveFiveInitLib
 /// @author taayyohh
@@ -22,14 +21,12 @@ library FiveFiveFiveInitLib {
 
     /// @notice Initializes a new launch
     /// @param launch The launch info struct
-    /// @param launchId The launch ID
     /// @param params Launch parameters
     /// @param creator The launch creator address
     /// @param caller The calling contract's address (launcher)
     /// @return token The address of the deployed token
     function initializeLaunch(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
-        uint256 launchId,
         FiveFiveFiveLauncherTypes.LaunchParams calldata params,
         address creator,
         IPonderFactory factory,
@@ -114,7 +111,7 @@ library FiveFiveFiveInitLib {
 
         // Validate name characters
         bytes memory nameBytes = bytes(params.name);
-        for(uint i = 0; i < nameBytes.length; i++) {
+        for(uint256 i = 0; i < nameBytes.length; i++) {
             bytes1 char = nameBytes[i];
             if(!(
                 (char >= 0x30 && char <= 0x39) || // 0-9
@@ -130,7 +127,7 @@ library FiveFiveFiveInitLib {
 
         // Validate symbol characters
         bytes memory symbolBytes = bytes(params.symbol);
-        for(uint i = 0; i < symbolBytes.length; i++) {
+        for(uint256 i = 0; i < symbolBytes.length; i++) {
             bytes1 char = symbolBytes[i];
             if(!(
                 (char >= 0x30 && char <= 0x39) || // 0-9

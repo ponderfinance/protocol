@@ -152,4 +152,8 @@ interface FiveFiveFiveLauncherTypes {
     error InsufficientLiquidity();           /// Not enough liquidity
     error LaunchDeadlinePassed();            /// Launch deadline expired
     error ZeroAddress();
+    error LaunchStillActive();
+    error LaunchSucceeded();
+    error TokenApprovalRequired();
+    error KubTransferFailed();
 }

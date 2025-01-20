@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./IFeeDistributor.sol";
-import "../factory/IPonderFactory.sol";
-import "../pair/IPonderPair.sol";
-import "../../periphery/router/IPonderRouter.sol";
-import "../staking/IPonderStaking.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../../libraries/TransferHelper.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { IFeeDistributor } from "./IFeeDistributor.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
+import { IPonderPair } from "../pair/IPonderPair.sol";
+import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
+import { IPonderStaking } from "../staking/IPonderStaking.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title FeeDistributor
@@ -20,16 +19,16 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
     mapping(address => bool) private processedPairs;
 
     /// @notice Factory contract reference for pair creation and fee collection
-    IPonderFactory public immutable factory;
+    IPonderFactory public immutable FACTORY;
 
     /// @notice Router contract used for token conversions
-    IPonderRouter public immutable router;
+    IPonderRouter public immutable ROUTER;
 
     /// @notice PONDER token address
-    address public immutable ponder;
+    address public immutable PONDER;
 
     /// @notice xPONDER staking contract that receives 80% of fees
-    IPonderStaking public immutable staking;
+    IPonderStaking public immutable STAKING;
 
     /// @notice Team address that receives 20% of protocol fees
     address public team;
@@ -71,6 +70,10 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
     error InvalidPair();
     error DistributionTooFrequent();
     error InsufficientAccumulation();
+    error InvalidPairAddress();
+    error InvalidRecipient();
+    error InvalidRecoveryAmount();
+    error InvalidReserves();
 
     /**
      * @notice Contract constructor
@@ -92,10 +95,10 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
             revert ZeroAddress();
         }
 
-        factory = IPonderFactory(_factory);
-        router = IPonderRouter(_router);
-        ponder = _ponder;
-        staking = IPonderStaking(_staking);
+        FACTORY = IPonderFactory(_factory);
+        ROUTER = IPonderRouter(_router);
+        PONDER = _ponder;
+        STAKING = IPonderStaking(_staking);
         team = _team;
         owner = msg.sender;
 
@@ -110,7 +113,8 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
      */
     function collectFeesFromPair(address pair) public nonReentrant {
         // CHECKS
-        require(pair != address(0), "Invalid pair address");
+        if (pair == address(0)) revert InvalidPairAddress();
+
         IPonderPair pairContract = IPonderPair(pair);
         address token0 = pairContract.token0();
         address token1 = pairContract.token1();
@@ -149,7 +153,7 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
      * @param token Address of the token to convert
      */
     function convertFees(address token) external nonReentrant {
-        if (token == ponder) return;
+        if (token == PONDER) return;
 
         uint256 amount = IERC20(token).balanceOf(address(this));
         if (amount < MINIMUM_AMOUNT) revert InvalidAmount();
@@ -158,15 +162,15 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         uint256 minOutAmount = _calculateMinimumPonderOut(token, amount);
 
         // Approve router
-        IERC20(token).approve(address(router), amount);
+        IERC20(token).approve(address(ROUTER), amount);
 
         // Setup path
         address[] memory path = new address[](2);
         path[0] = token;
-        path[1] = ponder;
+        path[1] = PONDER;
 
         // Perform swap with strict output requirements
-        try router.swapExactTokensForTokens(
+        try ROUTER.swapExactTokensForTokens(
             amount,
             minOutAmount,
             path,
@@ -194,7 +198,7 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
             }
         }
 
-        uint256 totalAmount = IERC20(ponder).balanceOf(address(this));
+        uint256 totalAmount = IERC20(PONDER).balanceOf(address(this));
         if (totalAmount < MINIMUM_AMOUNT) revert InvalidAmount();
 
         // Update timestamp BEFORE transfers
@@ -206,14 +210,14 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
 
         // Transfer to staking
         if (stakingAmount > 0) {
-            if (!IERC20(ponder).transfer(address(staking), stakingAmount)) {
+            if (!IERC20(PONDER).transfer(address(STAKING), stakingAmount)) {
                 revert TransferFailed();
             }
         }
 
         // Transfer to team
         if (teamAmount > 0) {
-            if (!IERC20(ponder).transfer(team, teamAmount)) {
+            if (!IERC20(PONDER).transfer(team, teamAmount)) {
                 revert TransferFailed();
             }
         }
@@ -265,7 +269,7 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
 
         // Convert collected fees to PONDER with slippage protection
         address[] memory uniqueTokens = _getUniqueTokens(pairs);
-        uint256 preBalance = IERC20(ponder).balanceOf(address(this));
+        uint256 preBalance = IERC20(PONDER).balanceOf(address(this));
 
         for (uint256 i = 0; i < uniqueTokens.length; i++) {
             address token = uniqueTokens[i];
@@ -279,11 +283,11 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         }
 
         // Verify minimum accumulated PONDER
-        uint256 postBalance = IERC20(ponder).balanceOf(address(this));
+        uint256 postBalance = IERC20(PONDER).balanceOf(address(this));
         if (postBalance - preBalance < MINIMUM_AMOUNT) revert InsufficientAccumulation();
 
         // Distribute converted PONDER
-        if (IERC20(ponder).balanceOf(address(this)) >= MINIMUM_AMOUNT) {
+        if (IERC20(PONDER).balanceOf(address(this)) >= MINIMUM_AMOUNT) {
             _distribute();
         }
     }
@@ -298,7 +302,7 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         address token,
         uint256 amountIn
     ) internal view returns (uint256 minOut) {
-        address pair = factory.getPair(token, ponder);
+        address pair = FACTORY.getPair(token, PONDER);
         if (pair == address(0)) revert PairNotFound();
 
         (uint112 reserve0, uint112 reserve1, ) = IPonderPair(pair).getReserves();
@@ -309,14 +313,14 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
                 (reserve1, reserve0);
 
         // Add check for extreme reserve imbalance
-        if (tokenReserve == 0 || ponderReserve == 0) revert("Invalid reserves");
+        if (tokenReserve == 0 || ponderReserve == 0) revert InvalidReserves();
 
         uint256 reserveRatio = (uint256(tokenReserve) * 1e18) / uint256(ponderReserve);
         if (reserveRatio > 100e18 || reserveRatio < 1e16) revert SwapFailed();
 
-        uint256 amountOut = router.getAmountsOut(
+        uint256 amountOut = ROUTER.getAmountsOut(
             amountIn,
-            _getPath(token, ponder)
+            _getPath(token, PONDER)
         )[1];
 
         // Make slippage tolerance more strict - 0.5% instead of 1%
@@ -348,17 +352,17 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         uint256 amountIn,
         uint256 minOutAmount
     ) internal {
-        if (token == ponder) return;
+        if (token == PONDER) return;
 
         // Approve router if needed
-        IERC20(token).approve(address(router), amountIn);
+        IERC20(token).approve(address(ROUTER), amountIn);
 
         // Setup path for swap
         address[] memory path = new address[](2);
         path[0] = token;
-        path[1] = ponder;
+        path[1] = PONDER;
 
-        try router.swapExactTokensForTokens(
+        try ROUTER.swapExactTokensForTokens(
             amountIn,
             minOutAmount,
             path,
@@ -451,10 +455,10 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
                 if (tempTokens[j] == token1) found1 = true;
             }
 
-            if (!found0 && token0 != ponder) {
+            if (!found0 && token0 != PONDER) {
                 tempTokens[count++] = token0;
             }
-            if (!found1 && token1 != ponder) {
+            if (!found1 && token1 != PONDER) {
                 tempTokens[count++] = token1;
             }
         }
@@ -474,8 +478,8 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         address to,
         uint256 amount
     ) external onlyOwner {
-        require(to != address(0), "Invalid recipient");
-        require(amount > 0, "Invalid amount");
+        if (to == address(0)) revert InvalidRecipient();
+        if (amount == 0) revert InvalidRecoveryAmount();
 
         IERC20(token).transfer(to, amount);
         emit EmergencyTokenRecovered(token, to, amount);

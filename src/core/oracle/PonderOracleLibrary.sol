@@ -1,12 +1,13 @@
-// src/libraries/PonderOracleLibrary.sol
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../core/pair/IPonderPair.sol";
-import "../../libraries/UQ112x112.sol";
+import { IPonderPair } from "../../core/pair/IPonderPair.sol";
+import { UQ112x112 } from "../../libraries/UQ112x112.sol";
 
 library PonderOracleLibrary {
     using UQ112x112 for uint224;
+
+    error ElapsedTimeZero();
 
     // Helper function to get the latest cumulative price from a Ponder pair
     function currentCumulativePrices(
@@ -41,7 +42,7 @@ library PonderOracleLibrary {
         uint32 timeElapsed,
         uint256 amountIn
     ) internal pure returns (uint256 amountOut) {
-        require(timeElapsed > 0, 'PonderOracleLibrary: ELAPSED_TIME_ZERO');
+        if (timeElapsed == 0) revert ElapsedTimeZero();
 
         // Calculate the average price
         uint256 priceDiff = priceCumulativeEnd - priceCumulativeStart;

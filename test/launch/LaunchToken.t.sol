@@ -107,9 +107,9 @@ contract LaunchTokenTest is Test {
         assertEq(token.name(), "Test Token");
         assertEq(token.symbol(), "TEST");
         assertEq(token.launcher(), launcher);
-        assertEq(address(token.factory()), address(factory));
-        assertEq(address(token.router()), address(router));
-        assertEq(address(token.ponder()), address(ponder));
+        assertEq(address(token.FACTORY()), address(factory));
+        assertEq(address(token.ROUTER()), address(router));
+        assertEq(address(token.PONDER()), address(ponder));
         assertEq(token.totalSupply(), token.TOTAL_SUPPLY());
         assertTrue(token.transfersEnabled());
         assertNotEq(token.kubPair(), address(0));
@@ -733,7 +733,7 @@ contract ReentrancyTestToken is LaunchToken {
 
         // If recipient is a contract and not a special address, try the callback
         if (to.code.length > 0 &&
-        to != address(router) &&
+        to != address(ROUTER) &&
         to != kubPair &&
             to != ponderPair) {
             ReentrancyAttacker(to).onTokenTransfer(from, amount);

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./FiveFiveFiveConstants.sol";
-import {FiveFiveFiveLauncherTypes} from "../types/FiveFiveFiveLauncherTypes.sol";
-import "../../core/oracle/PonderPriceOracle.sol";
-import "../../core/pair/PonderPair.sol";
-import "../../core/factory/IPonderFactory.sol";
+import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
+import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
+import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
+import { PonderPair } from "../../core/pair/PonderPair.sol";
+
 
 /// @title FiveFiveFiveValidation
 /// @author taayyohh
@@ -75,7 +75,7 @@ library FiveFiveFiveValidation {
         }
 
         // Name character validation
-        for(uint i = 0; i < nameBytes.length; i++) {
+        for(uint256 i = 0; i < nameBytes.length; i++) {
             bytes1 char = nameBytes[i];
             if(!(
                 (char >= 0x30 && char <= 0x39) || // 0-9
@@ -90,7 +90,7 @@ library FiveFiveFiveValidation {
         }
 
         // Symbol character validation
-        for(uint i = 0; i < symbolBytes.length; i++) {
+        for(uint256 i = 0; i < symbolBytes.length; i++) {
             bytes1 char = symbolBytes[i];
             if(!(
                 (char >= 0x30 && char <= 0x39) || // 0-9

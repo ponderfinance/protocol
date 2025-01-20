@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
-import "@openzeppelin/contracts/access/Ownable2Step.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "./IWETH.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
+import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
+import { IWETH } from "./IWETH.sol";
 
 interface IKKUB is IWETH {
     function blacklist(address addr) external view returns (bool);
@@ -41,18 +41,20 @@ contract KKUBUnwrapper is ReentrancyGuard, Pausable, Ownable2Step {
     error BlacklistedAddress();
     error ZeroAmount();
     error InsufficientKYCLevel();
+    error ZeroAddressNotAllowed();
+    error InvalidNewOwner();
 
     event UnwrappedKKUB(address indexed recipient, uint256 amount);
     event EmergencyWithdraw(uint256 amount, uint256 timestamp);
     event WithdrawalLimitReset();
 
-    constructor(address _KKUB) Ownable(msg.sender) {
-        require(_KKUB != address(0), "Zero address");
-        KKUB = _KKUB;
+    constructor(address _kkub) Ownable(msg.sender) {
+        if (_kkub == address(0)) revert ZeroAddressNotAllowed();
+        KKUB = _kkub;
     }
 
     function transferOwnership(address newOwner) public virtual override {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        if (newOwner == address(0)) revert InvalidNewOwner();
         super.transferOwnership(newOwner);
     }
 

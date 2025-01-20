@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IPonderPair is IERC20 {
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
@@ -21,8 +21,9 @@ interface IPonderPair is IERC20 {
     error FeeTooHigh(uint256 totalFeeAmount, uint256 amountIn);
     error ReserveCalculationFailed(uint256 balance0, uint256 balance1, uint256 reserve0, uint256 reserve1);
 
-
+    // solhint-disable-next-line func-name-mixedcase
     function MINIMUM_LIQUIDITY() external pure returns (uint256);
+
     function factory() external view returns (address);
     function token0() external view returns (address);
     function token1() external view returns (address);

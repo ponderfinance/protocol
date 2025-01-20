@@ -121,9 +121,9 @@ contract PonderStakingTest is Test {
     }
 
     function test_InitialState() public {
-        assertEq(address(staking.ponder()), address(ponder));
-        assertEq(address(staking.router()), address(router));
-        assertEq(address(staking.factory()), address(factory));
+        assertEq(address(staking.PONDER()), address(ponder));
+        assertEq(address(staking.ROUTER()), address(router));
+        assertEq(address(staking.FACTORY()), address(factory));
         assertEq(staking.owner(), owner);
     }
 

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../pair/IPonderPair.sol";
-import "../factory/IPonderFactory.sol";
-import "./PonderOracleLibrary.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { IPonderPair } from "../pair/IPonderPair.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
+import { PonderOracleLibrary } from "./PonderOracleLibrary.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title PonderPriceOracle
 /// @notice Price oracle for Ponder pairs with TWAP support and fallback mechanisms
@@ -15,13 +15,13 @@ contract PonderPriceOracle {
         uint224 price1Cumulative;
     }
 
-    uint public constant PERIOD = 24 hours;
-    uint public constant MIN_UPDATE_DELAY = 5 minutes;
+    uint256 public constant PERIOD = 24 hours;
+    uint256 public constant MIN_UPDATE_DELAY = 5 minutes;
     uint16 public constant OBSERVATION_CARDINALITY = 24; // Store 2 hours of 5-min updates
 
-    address public immutable factory;
-    address public immutable baseToken; // Base token for routing (e.g. WETH, KUB)
-    address public immutable stablecoin; // Stablecoin for USD prices
+    address public immutable FACTORY;
+    address public immutable BASE_TOKEN; // Base token for routing (e.g. WETH, KUB)
+    address public immutable STABLECOIN; // Stablecoin for USD prices
 
     mapping(address => Observation[]) public observations;
     mapping(address => uint256) public currentIndex;
@@ -42,9 +42,9 @@ contract PonderPriceOracle {
     );
 
     constructor(address _factory, address _baseToken, address _stablecoin) {
-        factory = _factory;
-        baseToken = _baseToken;
-        stablecoin = _stablecoin;
+        FACTORY = _factory;
+        BASE_TOKEN = _baseToken;
+        STABLECOIN = _stablecoin;
     }
 
     /// @notice Get number of stored observations for a pair
@@ -61,7 +61,7 @@ contract PonderPriceOracle {
             revert InvalidPair();
         }
 
-        (uint price0Cumulative, uint price1Cumulative, uint32 blockTimestamp) =
+        (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) =
                             PonderOracleLibrary.currentCumulativePrices(pair);
 
         Observation[] storage history = observations[pair];
@@ -189,14 +189,13 @@ contract PonderPriceOracle {
 
     /// @notice Get price in stablecoin units through base token if needed
     function getPriceInStablecoin(
-        address pair,
         address tokenIn,
         uint256 amountIn
     ) external view returns (uint256 amountOut) {
         if (amountIn == 0) return 0;
 
         // Try direct stablecoin pair first using TWAP
-        address stablePair = IPonderFactory(factory).getPair(tokenIn, stablecoin);
+        address stablePair = IPonderFactory(FACTORY).getPair(tokenIn, STABLECOIN);
         if (stablePair != address(0)) {
             return this.getCurrentPrice(stablePair, tokenIn, amountIn);
         }
@@ -242,7 +241,7 @@ contract PonderPriceOracle {
     }
 
     function _isValidPair(address pair) internal view returns (bool) {
-        return IPonderFactory(factory).getPair(
+        return IPonderFactory(FACTORY).getPair(
             IPonderPair(pair).token0(),
             IPonderPair(pair).token1()
         ) == pair;

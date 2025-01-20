@@ -858,7 +858,7 @@ contract PonderPairTest is Test {
         vm.startPrank(alice);
         token0.transfer(address(standardPair), 500);  // Less than required 1000 units
         token1.transfer(address(standardPair), 500);
-        vm.expectRevert("Insufficient initial liquidity");
+        vm.expectRevert(abi.encodeWithSignature("InsufficientInitialLiquidity()"));
         standardPair.mint(alice);
         vm.stopPrank();
 

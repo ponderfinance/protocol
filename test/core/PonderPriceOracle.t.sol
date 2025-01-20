@@ -168,7 +168,6 @@ contract PonderPriceOracleTest is Test {
 
         // Test direct stablecoin pair - convert 1 KUB (18 decimals) to USDT (6 decimals)
         uint256 baseTokenPrice = oracle.getPriceInStablecoin(
-            address(baseStablePair),
             address(baseToken),
             1e18
         );

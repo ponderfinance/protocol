@@ -50,7 +50,7 @@ contract PonderSecurityTest is Test {
         MaliciousToken malToken = new MaliciousToken();
 
         // Try to add liquidity with malicious token
-        vm.expectRevert("TransferHelper::transferFrom: transferFrom failed");
+        vm.expectRevert(abi.encodeWithSignature("TransferFromFailed()"));
         router.addLiquidity(
             address(malToken),
             address(tokenB),
@@ -106,7 +106,7 @@ contract PonderSecurityTest is Test {
 
         vm.stopPrank();
 
-        vm.expectRevert("LOCKED");
+        vm.expectRevert(abi.encodeWithSignature("Locked()"));
         attacker.executeAttack();
     }
 

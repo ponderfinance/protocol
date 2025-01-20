@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../token/PonderERC20.sol";
-import "./IPonderPair.sol";
-import "../factory/IPonderFactory.sol";
-import "./IPonderCallee.sol";
-import "../token/ILaunchToken.sol";
-import "../../libraries/Math.sol";
-import "../../libraries/UQ112x112.sol";
+import { PonderERC20 } from "../token/PonderERC20.sol";
+import { IPonderPair } from "./IPonderPair.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
+import { IPonderCallee } from "./IPonderCallee.sol";
+import { ILaunchToken } from "../token/ILaunchToken.sol";
+import { Math } from "../../libraries/Math.sol";
+import { UQ112x112 } from "../../libraries/UQ112x112.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 
 contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     using UQ112x112 for uint224;
@@ -48,8 +50,26 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     uint256 private accumulatedFee0;
     uint256 private accumulatedFee1;
 
+    error Locked();
+    error Forbidden();
+    error TransferFailed();
+    error InsufficientOutputAmount();
+    error InvalidToAddress();
+    error InsufficientLiquidity();
+    error InsufficientLiquidityBurned();
+    error InsufficientInitialLiquidity();
+    error InsufficientLiquidityMinted();
+    error InsufficientOutput();
+    error InvalidRecipient();
+    error InsufficientLiquiditySwap();
+    error InsufficientInputAmount();
+    error KValueCheckFailed();
+    error InvariantViolation();
+    error Overflow();
+
+
     modifier lock() {
-        require(unlocked == 1, "LOCKED");
+        if (unlocked != 1) revert Locked();
         unlocked = 0;
         _;
         unlocked = 1;
@@ -67,26 +87,46 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         return IPonderFactory(factory).ponder();
     }
     function initialize(address _token0, address _token1) external override {
-        require(msg.sender == factory, "Forbidden");
+        if (msg.sender != factory) revert Forbidden();
         token0 = _token0;
         token1 = _token1;
     }
 
-    function getReserves() public view override returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast) {
+    function getReserves()
+        public
+        view
+        override
+        returns (
+            uint112 _reserve0,
+            uint112 _reserve1,
+            uint32 _blockTimestampLast
+        )
+    {
         _reserve0 = reserve0;
         _reserve1 = reserve1;
         _blockTimestampLast = blockTimestampLast;
     }
 
     function _safeTransfer(address token, address to, uint256 value) private {
+        // Note: Low-level call is necessary for compatibility with non-standard ERC20 tokens
+        // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "Transfer failed");
+        if (!success || (data.length != 0 && !abi.decode(data, (bool)))) {
+            revert TransferFailed();
+        }
     }
 
     function _executeTransfers(address to, uint256 amount0Out, uint256 amount1Out, bytes calldata data) private {
         if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
         if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
-        if (data.length > 0) IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
+        if (data.length > 0) {
+            IPonderCallee(to).ponderCall(
+                msg.sender,
+                amount0Out,
+                amount1Out,
+                data
+            );
+        }
     }
 
     // Update the SwapData struct to include output flags
@@ -164,11 +204,11 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     }
 
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override lock {
-        require(amount0Out > 0 || amount1Out > 0, "Insufficient output amount");
-        require(to != token0 && to != token1, "Invalid to");
+        if (amount0Out == 0 && amount1Out == 0) revert InsufficientOutputAmount();
+        if (to == token0 || to == token1) revert InvalidToAddress();
 
         (uint112 _reserve0, uint112 _reserve1,) = getReserves();
-        require(amount0Out < _reserve0 && amount1Out < _reserve1, "Insufficient liquidity");
+        if (amount0Out >= _reserve0 || amount1Out >= _reserve1) revert InsufficientLiquidity();
 
         // New: Store the initial product of reserves (K invariant)
         uint256 initialK = uint256(_reserve0) * uint256(_reserve1);
@@ -190,14 +230,16 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         swapData.amount1In = swapData.balance1 > swapData.reserve1 - amount1Out ?
             swapData.balance1 - (swapData.reserve1 - amount1Out) : 0;
 
-        require(swapData.amount0In > 0 || swapData.amount1In > 0, "Insufficient input amount");
-
+        if (swapData.amount0In == 0 && swapData.amount1In == 0) {
+            revert InsufficientInputAmount();
+        }
         // Validate K value
-        require(_validateKValue(swapData), "K value check failed");
-
-        // New: Check the final product of reserves (K invariant) to prevent flash loan attacks
-        require(swapData.balance0 * swapData.balance1 >= initialK, "Invariant violation");
-
+        if (!_validateKValue(swapData)) {
+            revert KValueCheckFailed();
+        }
+        if (swapData.balance0 * swapData.balance1 < initialK) {
+            revert InvariantViolation();
+        }
         // Handle fees after K check
         bool isPonderPair = token0 == ponder() || token1 == ponder();
         if (swapData.amount0In > 0) {
@@ -251,7 +293,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
 
         amount0 = (liquidity * balance0) / _totalSupply;
         amount1 = (liquidity * balance1) / _totalSupply;
-        require(amount0 > 0 && amount1 > 0, "Insufficient liquidity burned");
+        if (amount0 == 0 || amount1 == 0) revert InsufficientLiquidityBurned();
 
         _burn(address(this), liquidity);
 
@@ -280,7 +322,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
         uint256 _totalSupply = totalSupply();
 
         if (_totalSupply == 0) {
-            require(amount0 >= 1000 && amount1 >= 1000, "Insufficient initial liquidity");
+            if (amount0 < 1000 || amount1 < 1000) revert InsufficientInitialLiquidity();
             liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
             _mint(address(1), MINIMUM_LIQUIDITY);
         } else {
@@ -290,7 +332,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
             );
         }
 
-        require(liquidity > 0, "INSUFFICIENT_LIQUIDITY_MINTED");
+        if (liquidity == 0) revert InsufficientLiquidityMinted();
         _mint(to, liquidity);
 
         _update(balance0, balance1, _reserve0, _reserve1);
@@ -300,7 +342,7 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     }
 
     function _update(uint256 balance0, uint256 balance1, uint112 _reserve0, uint112 _reserve1) private {
-        require(balance0 <= type(uint112).max && balance1 <= type(uint112).max, "OVERFLOW");
+        if (balance0 > type(uint112).max || balance1 > type(uint112).max) revert Overflow();
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
         uint32 timeElapsed = blockTimestamp > blockTimestampLast
             ? blockTimestamp - blockTimestampLast

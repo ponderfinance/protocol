@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../types/FiveFiveFiveLauncherTypes.sol";
-import "./FiveFiveFiveConstants.sol";
-import "./FiveFiveFiveValidation.sol";
-import "../LaunchToken.sol";
-import "../../core/token/PonderToken.sol";
+import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
+import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
+import { FiveFiveFiveValidation } from "./FiveFiveFiveValidation.sol";
+import { LaunchToken } from "../LaunchToken.sol";
+import { PonderToken } from "../../core/token/PonderToken.sol";
+
 
 /// @title FiveFiveFiveContributionLib
 /// @author taayyohh
@@ -54,7 +55,7 @@ library FiveFiveFiveContributionLib {
         address contributor
     ) external returns (bool shouldFinalize) {
         // Validate contribution first
-        (uint256 newTotal, bool shouldFin) = FiveFiveFiveValidation.validateKubContribution(
+        (,bool shouldFin) = FiveFiveFiveValidation.validateKubContribution(
             launch,
             amount
         );
@@ -144,13 +145,11 @@ library FiveFiveFiveContributionLib {
     /// @notice Calculates contribution amounts and distributions
     /// @param launch The launch info struct
     /// @param kubAmount Amount of KUB
-    /// @param ponderAmount Amount of PONDER
     /// @param ponderKubValue KUB value of PONDER amount
     /// @return result Struct containing all calculation results
     function calculateContribution(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 kubAmount,
-        uint256 ponderAmount,
         uint256 ponderKubValue
     ) public view returns (FiveFiveFiveLauncherTypes.ContributionResult memory result) {
         uint256 totalContribution = kubAmount + ponderKubValue;

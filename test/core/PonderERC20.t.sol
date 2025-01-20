@@ -80,7 +80,7 @@ contract PonderERC20Test is Test {
             keccak256(
                 abi.encodePacked(
                     "\x19\x01",
-                    token.DOMAIN_SEPARATOR(),
+                    token.domainSeparator(),
                     keccak256(
                         abi.encode(
                             token.PERMIT_TYPEHASH(),
@@ -123,7 +123,7 @@ contract PonderERC20Test is Test {
             keccak256(
                 abi.encodePacked(
                     "\x19\x01",
-                    token.DOMAIN_SEPARATOR(),
+                    token.domainSeparator(),
                     keccak256(
                         abi.encode(
                             token.PERMIT_TYPEHASH(),

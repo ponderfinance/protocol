@@ -301,10 +301,10 @@ contract FeeDistributorTest is Test {
      * @notice Test initial contract state
      */
     function test_InitialState() public {
-        assertEq(address(distributor.factory()), address(factory));
-        assertEq(address(distributor.router()), address(router));
-        assertEq(address(distributor.ponder()), address(ponder));
-        assertEq(address(distributor.staking()), address(staking));
+        assertEq(address(distributor.FACTORY()), address(factory));
+        assertEq(address(distributor.ROUTER()), address(router));
+        assertEq(address(distributor.PONDER()), address(ponder));
+        assertEq(address(distributor.STAKING()), address(staking));
         assertEq(distributor.team(), teamReserve);
         assertEq(distributor.stakingRatio(), 8000); // 80%
         assertEq(distributor.teamRatio(), 2000);    // 20%
@@ -635,7 +635,7 @@ contract FeeDistributorTest is Test {
         IPonderPair(reentrantPairAddr).swap(0, 1e18, address(this), empty);
 
         // Attempt reentrancy attack - should fail
-        vm.expectRevert("Transfer failed");
+        vm.expectRevert(abi.encodeWithSignature("TransferFailed()"));
         distributor.collectFeesFromPair(reentrantPairAddr);
     }
 

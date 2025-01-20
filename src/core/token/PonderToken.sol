@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./PonderERC20.sol";
+import { PonderERC20 } from "./PonderERC20.sol";
 
 contract PonderToken is PonderERC20 {
-    ///  @notice  555 Launcher address
+    /// @notice 555 Launcher address
     address public launcher;
 
     /// @notice Track total burned PONDER
@@ -20,7 +20,7 @@ contract PonderToken is PonderERC20 {
     uint256 public constant MINTING_END = 4 * 365 days;
 
     /// @notice Timestamp when token was deployed
-    uint256 public immutable deploymentTime;
+    uint256 public immutable DEPLOYMENT_TIME;
 
     /// @notice Address that can set the minter
     address public owner;
@@ -31,11 +31,10 @@ contract PonderToken is PonderERC20 {
     /// @notice Team/Reserve address
     address public teamReserve;
 
-    uint256 private immutable teamVestingEnd;
+    uint256 private immutable TEAM_VESTING_END;
 
     // Track unvested team allocation
     uint256 private reservedForTeam;
-
 
     /// @notice Marketing address
     address public marketing;
@@ -62,15 +61,14 @@ contract PonderToken is PonderERC20 {
     error OnlyLauncherOrOwner();
     error BurnAmountTooSmall();
     error BurnAmountTooLarge();
+    error InsufficientBalance();
 
     event MinterUpdated(address indexed previousMinter, address indexed newMinter);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event TeamTokensClaimed(uint256 amount);
     event LauncherUpdated(address indexed oldLauncher, address indexed newLauncher);
-    // @notice burn function that only launcher can call
     event TokensBurned(address indexed burner, uint256 amount);
-
 
     modifier onlyOwner {
         if (msg.sender != owner) revert Forbidden();
@@ -91,11 +89,11 @@ contract PonderToken is PonderERC20 {
 
         launcher = _launcher;
         owner = msg.sender;
-        deploymentTime = block.timestamp;
+        DEPLOYMENT_TIME = block.timestamp;
         teamReserve = _teamReserve;
         marketing = _marketing;
         teamVestingStart = block.timestamp;
-        teamVestingEnd = block.timestamp + VESTING_DURATION;
+        TEAM_VESTING_END = block.timestamp + VESTING_DURATION;
 
         // Initialize reserved amount for team
         reservedForTeam = TEAM_ALLOCATION;
@@ -117,17 +115,11 @@ contract PonderToken is PonderERC20 {
 
     function claimTeamTokens() external {
         if (msg.sender != teamReserve) revert Forbidden();
-
-        // First check vesting start
         if (block.timestamp < teamVestingStart) revert VestingNotStarted();
 
-        // Then calculate amount
         uint256 vestedAmount = _calculateVestedAmount();
-
-        // Check for zero amount last
         if (vestedAmount == 0) revert NoTokensAvailable();
 
-        // Update state
         reservedForTeam -= vestedAmount;
         teamTokensClaimed += vestedAmount;
 
@@ -136,19 +128,12 @@ contract PonderToken is PonderERC20 {
         emit TeamTokensClaimed(vestedAmount);
     }
 
-
-
-    /// @notice Mint new tokens for farming rewards, capped by maximum supply
     function mint(address to, uint256 amount) external onlyMinter {
-        if (block.timestamp > deploymentTime + MINTING_END) revert MintingDisabled();
-
-        // Check max supply including reserved but unclaimed team tokens
+        if (block.timestamp > DEPLOYMENT_TIME + MINTING_END) revert MintingDisabled();
         if (totalSupply() + amount + reservedForTeam > MAXIMUM_SUPPLY) revert SupplyExceeded();
-
         _mint(to, amount);
     }
 
-    /// @notice Update minting privileges
     function setMinter(address _minter) external onlyOwner {
         if (_minter == address(0)) revert ZeroAddress();
         address oldMinter = minter;
@@ -156,8 +141,6 @@ contract PonderToken is PonderERC20 {
         emit MinterUpdated(oldMinter, _minter);
     }
 
-    /// @notice Update launcher address - can only be called by owner
-    /// @param _launcher New launcher address
     function setLauncher(address _launcher) external onlyOwner {
         if (_launcher == address(0)) revert ZeroAddress();
         address oldLauncher = launcher;
@@ -165,14 +148,12 @@ contract PonderToken is PonderERC20 {
         emit LauncherUpdated(oldLauncher, _launcher);
     }
 
-    /// @notice Begin ownership transfer process
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
         pendingOwner = newOwner;
         emit OwnershipTransferStarted(owner, newOwner);
     }
 
-    /// @notice Complete ownership transfer process
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert Forbidden();
         address oldOwner = owner;
@@ -182,25 +163,14 @@ contract PonderToken is PonderERC20 {
     }
 
     function burn(uint256 amount) external {
-        // Check caller is either launcher or owner
-        if (msg.sender != launcher && msg.sender != owner) revert Forbidden();
+        if (msg.sender != launcher && msg.sender != owner) revert OnlyLauncherOrOwner();
+        if (amount < 1000) revert BurnAmountTooSmall();
+        if (amount > totalSupply() / 100) revert BurnAmountTooLarge();
+        if (balanceOf(msg.sender) < amount) revert InsufficientBalance();
 
-        // Check minimum burn amount to prevent dust attacks
-        if (amount < 1000) revert("Amount too small");
-
-        // Check maximum burn per transaction (e.g. 1% of total supply)
-        if (amount > totalSupply() / 100) revert("Exceeds max burn amount");
-
-        // Balance check (already in _burn but good to be explicit)
-        require(balanceOf(msg.sender) >= amount, "ERC20: burn amount exceeds balance");
-
-        // Perform burn
         _burn(msg.sender, amount);
-
-        // Update total burned tracking
         totalBurned += amount;
 
-        // Emit burn event
         emit TokensBurned(msg.sender, amount);
     }
 

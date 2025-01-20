@@ -1575,7 +1575,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Try refund without approval
         vm.startPrank(alice);
-        vm.expectRevert("Token approval required for refund");
+        vm.expectRevert(abi.encodeWithSignature("TokenApprovalRequired()"));
         launcher.claimRefund(launchId);
         vm.stopPrank();
     }
@@ -1595,7 +1595,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.warp(block.timestamp + 7 days + 1);
 
         // Try to claim refund after successful launch
-        vm.expectRevert("Launch succeeded");
+        vm.expectRevert(abi.encodeWithSignature("LaunchSucceeded()"));
         launcher.claimRefund(launchId);
         vm.stopPrank();
     }
@@ -1610,7 +1610,7 @@ contract FiveFiveFiveLauncherTest is Test {
         // Try refund before deadline/cancel
         (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
         LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
-        vm.expectRevert("Launch still active");
+        vm.expectRevert(abi.encodeWithSignature("LaunchStillActive()"));
         launcher.claimRefund(launchId);
         vm.stopPrank();
     }
@@ -1682,7 +1682,7 @@ contract FiveFiveFiveLauncherTest is Test {
         LaunchToken(tokenAddress).approve(address(launcher), type(uint256).max);
 
         // Try refund before cancellation/deadline - should revert with "Launch still active"
-        vm.expectRevert("Launch still active");
+        vm.expectRevert(abi.encodeWithSignature("LaunchStillActive()"));
         launcher.claimRefund(launchId);
 
         // Complete the launch
@@ -1692,7 +1692,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.warp(block.timestamp + 7 days + 1);
 
         // Try refund after successful launch - should revert with "Launch succeeded"
-        vm.expectRevert("Launch succeeded");
+        vm.expectRevert(abi.encodeWithSignature("LaunchSucceeded()"));
         launcher.claimRefund(launchId);
         vm.stopPrank();
     }

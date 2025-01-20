@@ -4,12 +4,15 @@ pragma solidity ^0.8.20;
 /// @title BitMath Library
 /// @notice Library for computing most and least significant bits of a uint256
 library BitMath {
+    /// @notice Custom error for when input value is zero
+    error ZeroValue();
+
     /// @notice Returns the index of the most significant bit of the number
     /// @dev Returns 0 if number is 0
     /// @param x The value for which to find the most significant bit
     /// @return r The index of the most significant bit
     function mostSignificantBit(uint256 x) internal pure returns (uint8 r) {
-        require(x > 0, "BitMath: ZERO_VALUE");
+        if (x == 0) revert ZeroValue();
 
         if (x >= 0x100000000000000000000000000000000) {
             x >>= 128;
@@ -47,7 +50,7 @@ library BitMath {
     /// @param x The value for which to find the least significant bit
     /// @return r The index of the least significant bit
     function leastSignificantBit(uint256 x) internal pure returns (uint8 r) {
-        require(x > 0, "BitMath: ZERO_VALUE");
+        if (x == 0) revert ZeroValue();
 
         r = 255;
         if (x & type(uint128).max > 0) {

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../core/factory/IPonderFactory.sol";
-import "../../core/pair/IPonderPair.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../unwrapper/IWETH.sol";
-import "../../libraries/TransferHelper.sol";
-import "../unwrapper/KKUBUnwrapper.sol";
+import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
+import { IPonderPair } from "../../core/pair/IPonderPair.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IWETH } from "../unwrapper/IWETH.sol";
+import { TransferHelper } from "../../libraries/TransferHelper.sol";
+import { KKUBUnwrapper } from "../unwrapper/KKUBUnwrapper.sol";
 
 
 /// @title Ponder Router for swapping tokens and managing liquidity
@@ -36,11 +36,14 @@ contract PonderRouter {
     error RefundFailed();
     error ZeroOutput();
     error ExcessivePriceImpact(uint256 impact);
+    error Locked();
+    error InsufficientWethBalance();
+    error WethApprovalFailed();
 
     /// @notice Address of KKUBUnwrapper contract used for unwrapping KKUB
-    address payable public immutable kkubUnwrapper;
+    address payable public immutable KKUB_UNWRAPPER;
     /// @notice Factory contract for creating and managing pairs
-    IPonderFactory public immutable factory;
+    IPonderFactory public immutable FACTORY;
     /// @notice Address of WETH/KKUB contract
     address public immutable WETH;
 
@@ -84,7 +87,7 @@ contract PonderRouter {
 
 
     modifier nonReentrant() {
-        if(locked) revert("LOCKED");
+        if(locked) revert Locked();
         locked = true;
         _;
         locked = false;
@@ -98,12 +101,12 @@ contract PonderRouter {
 
     /// @notice Contract constructor
     /// @param _factory Address of PonderFactory contract
-    /// @param _WETH Address of WETH/KKUB contract
+    /// @param _weth Address of WETH/KKUB contract
     /// @param _kkubUnwrapper Address of KKUBUnwrapper contract
-    constructor(address _factory, address _WETH, address _kkubUnwrapper) {
-        factory = IPonderFactory(_factory);
-        WETH = _WETH;
-        kkubUnwrapper = payable(_kkubUnwrapper);
+    constructor(address _factory, address _weth, address _kkubUnwrapper) {
+        FACTORY = IPonderFactory(_factory);
+        WETH = _weth;
+        KKUB_UNWRAPPER = payable(_kkubUnwrapper);
     }
 
     receive() external payable {
@@ -127,8 +130,8 @@ contract PonderRouter {
         uint256 amountAMin,
         uint256 amountBMin
     ) internal virtual returns (uint256 amountA, uint256 amountB) {
-        if (factory.getPair(tokenA, tokenB) == address(0)) {
-            factory.createPair(tokenA, tokenB);
+        if (FACTORY.getPair(tokenA, tokenB) == address(0)) {
+            FACTORY.createPair(tokenA, tokenB);
         }
 
         (uint256 reserveA, uint256 reserveB) = getReserves(tokenA, tokenB);
@@ -178,7 +181,7 @@ contract PonderRouter {
             amountADesired, amountBDesired,
             amountAMin, amountBMin
         );
-        address pair = factory.getPair(tokenA, tokenB);
+        address pair = FACTORY.getPair(tokenA, tokenB);
         TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
         TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
         liquidity = IPonderPair(pair).mint(to);
@@ -213,9 +216,9 @@ contract PonderRouter {
         if(amountTokenDesired == 0) revert InvalidAmount();
 
         // Get or create pair
-        address pair = factory.getPair(token, WETH);
+        address pair = FACTORY.getPair(token, WETH);
         if(pair == address(0)) {
-            pair = factory.createPair(token, WETH);
+            pair = FACTORY.createPair(token, WETH);
         }
 
         // Calculate optimal amounts
@@ -269,7 +272,7 @@ contract PonderRouter {
         address to,
         uint256 deadline
     ) public virtual ensure(deadline) returns (uint256 amountA, uint256 amountB) {
-        address pair = factory.getPair(tokenA, tokenB);
+        address pair = FACTORY.getPair(tokenA, tokenB);
         IPonderPair(pair).transferFrom(msg.sender, pair, liquidity);
         (amountA, amountB) = IPonderPair(pair).burn(to);
         if (amountA < amountAMin) revert InsufficientAAmount();
@@ -299,8 +302,8 @@ contract PonderRouter {
             deadline
         );
         TransferHelper.safeTransfer(token, to, amountToken);
-        IERC20(WETH).approve(kkubUnwrapper, amountETH);
-        KKUBUnwrapper(kkubUnwrapper).unwrapKKUB(amountETH, to);
+        IERC20(WETH).approve(KKUB_UNWRAPPER, amountETH);
+        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
     }
 
     /// @notice Remove liquidity from an ETH/KKUB pair supporting fee-on-transfer tokens
@@ -326,8 +329,8 @@ contract PonderRouter {
             deadline
         );
         TransferHelper.safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
-        IERC20(WETH).approve(kkubUnwrapper, amountETH);
-        KKUBUnwrapper(kkubUnwrapper).unwrapKKUB(amountETH, to);
+        IERC20(WETH).approve(KKUB_UNWRAPPER, amountETH);
+        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
     }
 
     /// @notice Internal swap function
@@ -339,12 +342,12 @@ contract PonderRouter {
             (address input, address output) = (path[i], path[i + 1]);
 
             // Get pair address
-            address pair = factory.getPair(input, output);
+            address pair = FACTORY.getPair(input, output);
             if (pair == address(0)) {
                 address sortedToken0;
                 address sortedToken1;
                 (sortedToken0, sortedToken1) = sortTokens(input, output);
-                pair = factory.getPair(sortedToken0, sortedToken1);
+                pair = FACTORY.getPair(sortedToken0, sortedToken1);
             }
 
             uint256 amountOut = amounts[i + 1];
@@ -358,7 +361,7 @@ contract PonderRouter {
                 : (amountOut, uint256(0)); // input is token1, so output goes to token0
 
             // Determine recipient
-            address to = i < path.length - 2 ? factory.getPair(output, path[i + 2]) : _to;
+            address to = i < path.length - 2 ? FACTORY.getPair(output, path[i + 2]) : _to;
 
             // Execute the swap
             IPonderPair(pair).swap(amount0Out, amount1Out, to, new bytes(0));
@@ -398,7 +401,7 @@ contract PonderRouter {
 
         // Only transfer and execute swap if both checks pass
         TransferHelper.safeTransferFrom(
-            path[0], msg.sender, factory.getPair(path[0], path[1]), amountIn
+            path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amountIn
         );
 
         _swap(amounts, path, to);
@@ -420,7 +423,7 @@ contract PonderRouter {
     ) external virtual ensure(deadline) returns (uint256[] memory amounts) {
         amounts = getAmountsIn(amountOut, path);
         if (amounts[0] > amountInMax) revert ExcessiveInputAmount();
-        TransferHelper.safeTransferFrom(path[0], msg.sender, factory.getPair(path[0], path[1]), amounts[0]);
+        TransferHelper.safeTransferFrom(path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amounts[0]);
         _swap(amounts, path, to);
     }
 
@@ -439,7 +442,7 @@ contract PonderRouter {
         amounts = getAmountsOut(msg.value, path);
         if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();
         IWETH(WETH).deposit{value: amounts[0]}();
-        assert(IWETH(WETH).transfer(factory.getPair(path[0], path[1]), amounts[0]));
+        assert(IWETH(WETH).transfer(FACTORY.getPair(path[0], path[1]), amounts[0]));
         _swap(amounts, path, to);
     }
 
@@ -459,10 +462,10 @@ contract PonderRouter {
         if (path[path.length - 1] != WETH) revert InvalidPath();
         amounts = getAmountsIn(amountOut, path);
         if (amounts[0] > amountInMax) revert ExcessiveInputAmount();
-        TransferHelper.safeTransferFrom(path[0], msg.sender, factory.getPair(path[0], path[1]), amounts[0]);
+        TransferHelper.safeTransferFrom(path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amounts[0]);
         _swap(amounts, path, address(this));
-        IERC20(WETH).approve(kkubUnwrapper, amountOut);
-        KKUBUnwrapper(kkubUnwrapper).unwrapKKUB(amountOut, to);
+        IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut);
+        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
     }
 
     /// @notice Swap exact tokens for ETH using KKUB unwrapper
@@ -483,17 +486,17 @@ contract PonderRouter {
 
         if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();
 
-        TransferHelper.safeTransferFrom(path[0], msg.sender, factory.getPair(path[0], path[1]), amounts[0]);
+        TransferHelper.safeTransferFrom(path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amounts[0]);
 
         _swap(amounts, path, address(this));
 
         uint256 amountOut = amounts[amounts.length - 1];
         uint256 wethBalance = IERC20(WETH).balanceOf(address(this));
 
-        require(wethBalance >= amountOut, "Insufficient WETH balance");
-        require(IERC20(WETH).approve(kkubUnwrapper, amountOut), "WETH approval failed");
+        if (wethBalance < amountOut) revert InsufficientWethBalance();
+        if (!IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut)) revert WethApprovalFailed();
 
-        KKUBUnwrapper(kkubUnwrapper).unwrapKKUB(amountOut, to);
+        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
     }
 
     /// @notice Swap ETH for exact tokens
@@ -535,7 +538,7 @@ contract PonderRouter {
         IWETH(WETH).deposit{value: amounts[0]}();
 
         // Transfer WETH to the first pair
-        if (!IWETH(WETH).transfer(factory.getPair(path[0], path[1]), amounts[0])) {
+        if (!IWETH(WETH).transfer(FACTORY.getPair(path[0], path[1]), amounts[0])) {
             revert TransferFailed();
         }
 
@@ -582,7 +585,7 @@ contract PonderRouter {
         address to,
         uint256 deadline
     ) external virtual ensure(deadline) {
-        TransferHelper.safeTransferFrom(path[0], msg.sender, factory.getPair(path[0], path[1]), amountIn);
+        TransferHelper.safeTransferFrom(path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amountIn);
         uint256 balanceBefore = IERC20(path[path.length - 1]).balanceOf(to);
         _swapSupportingFeeOnTransferTokens(path, to);
         if (IERC20(path[path.length - 1]).balanceOf(to) - balanceBefore < amountOutMin) {
@@ -604,7 +607,7 @@ contract PonderRouter {
         if (path[0] != WETH) revert InvalidPath();
         uint256 amountIn = msg.value;
         IWETH(WETH).deposit{value: amountIn}();
-        assert(IWETH(WETH).transfer(factory.getPair(path[0], path[1]), amountIn));
+        assert(IWETH(WETH).transfer(FACTORY.getPair(path[0], path[1]), amountIn));
         uint256 balanceBefore = IERC20(path[path.length - 1]).balanceOf(to);
         _swapSupportingFeeOnTransferTokens(path, to);
         if (IERC20(path[path.length - 1]).balanceOf(to) - balanceBefore < amountOutMin) {
@@ -626,12 +629,12 @@ contract PonderRouter {
         uint256 deadline
     ) external virtual ensure(deadline) {
         if (path[path.length - 1] != WETH) revert InvalidPath();
-        TransferHelper.safeTransferFrom(path[0], msg.sender, factory.getPair(path[0], path[1]), amountIn);
+        TransferHelper.safeTransferFrom(path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amountIn);
         _swapSupportingFeeOnTransferTokens(path, address(this));
         uint256 amountOut = IERC20(WETH).balanceOf(address(this));
         if (amountOut < amountOutMin) revert InsufficientOutputAmount();
-        IERC20(WETH).approve(kkubUnwrapper, amountOut);
-        KKUBUnwrapper(kkubUnwrapper).unwrapKKUB(amountOut, to);
+        IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut);
+        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
     }
 
     /// @notice Internal swap function for fee-on-transfer tokens
@@ -641,7 +644,7 @@ contract PonderRouter {
         for (uint256 i; i < path.length - 1; i++) {
             (address input, address output) = (path[i], path[i + 1]);
             (address token0,) = sortTokens(input, output);
-            IPonderPair pair = IPonderPair(factory.getPair(input, output));
+            IPonderPair pair = IPonderPair(FACTORY.getPair(input, output));
             uint256 amountInput;
             uint256 amountOutput;
             {
@@ -655,7 +658,7 @@ contract PonderRouter {
             (uint256 amount0Out, uint256 amount1Out) = input == token0
                 ? (uint256(0), amountOutput)
                 : (amountOutput, uint256(0));
-            address to = i < path.length - 2 ? factory.getPair(output, path[i + 2]) : _to;
+            address to = i < path.length - 2 ? FACTORY.getPair(output, path[i + 2]) : _to;
             pair.swap(amount0Out, amount1Out, to, new bytes(0));
         }
     }
@@ -684,7 +687,7 @@ contract PonderRouter {
     function getReserves(address tokenA, address tokenB) public view returns (uint256 reserveA, uint256 reserveB) {
         (address token0, address token1) = sortTokens(tokenA, tokenB);
         // Use sorted tokens to get pair
-        (uint256 reserve0, uint256 reserve1,) = IPonderPair(factory.getPair(token0, token1)).getReserves();
+        (uint256 reserve0, uint256 reserve1,) = IPonderPair(FACTORY.getPair(token0, token1)).getReserves();
         (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
 

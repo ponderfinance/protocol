@@ -77,8 +77,8 @@ contract PonderMasterChefTest is Test {
     }
 
     function testInitialState() public {
-        assertEq(address(masterChef.ponder()), address(ponder));
-        assertEq(address(masterChef.factory()), address(factory));
+        assertEq(address(masterChef.PONDER()), address(ponder));
+        assertEq(address(masterChef.FACTORY()), address(factory));
         assertEq(masterChef.teamReserve(), teamReserve);
         assertEq(masterChef.ponderPerSecond(), PONDER_PER_SECOND);
         assertEq(masterChef.totalAllocPoint(), 0);

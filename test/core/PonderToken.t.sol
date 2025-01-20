@@ -393,7 +393,7 @@ contract PonderTokenTest is Test {
         address unauthorized = address(0x123);
 
         vm.prank(unauthorized);
-        vm.expectRevert(PonderToken.Forbidden.selector);
+        vm.expectRevert(PonderToken.OnlyLauncherOrOwner.selector);
         token.burn(burnAmount);
     }
 
@@ -401,7 +401,7 @@ contract PonderTokenTest is Test {
         // Set launcher for access control
         token.setLauncher(address(this));
 
-        vm.expectRevert("Amount too small");
+        vm.expectRevert(abi.encodeWithSignature("BurnAmountTooSmall()"));
         token.burn(999);
     }
 
@@ -411,7 +411,7 @@ contract PonderTokenTest is Test {
         token.setLauncher(address(this));
 
         uint256 tooLarge = token.totalSupply() / 50; // 2% of supply
-        vm.expectRevert("Exceeds max burn amount");
+        vm.expectRevert(abi.encodeWithSignature("BurnAmountTooLarge()"));
         token.burn(tooLarge);
     }
 
@@ -423,7 +423,7 @@ contract PonderTokenTest is Test {
         token.setLauncher(poorUser);
 
         vm.prank(poorUser);
-        vm.expectRevert("ERC20: burn amount exceeds balance");
+        vm.expectRevert(abi.encodeWithSignature("InsufficientBalance()"));
 
         token.burn(burnAmount);
     }
@@ -438,7 +438,7 @@ contract PonderTokenTest is Test {
     }
 
     function testDomainSeparatorInitial() public {
-        bytes32 separator = token.DOMAIN_SEPARATOR();
+        bytes32 separator = token.domainSeparator();
         assertTrue(separator != bytes32(0), "Domain separator should not be zero");
 
         // Calculate expected separator
@@ -455,12 +455,12 @@ contract PonderTokenTest is Test {
     }
 
     function testDomainSeparatorAfterChainIdChange() public {
-        bytes32 initialSeparator = token.DOMAIN_SEPARATOR();
+        bytes32 initialSeparator = token.domainSeparator();
 
         // Change chain ID
         vm.chainId(999);
 
-        bytes32 newSeparator = token.DOMAIN_SEPARATOR();
+        bytes32 newSeparator = token.domainSeparator();
         assertTrue(newSeparator != initialSeparator, "Domain separator should change with chain ID");
 
         // Verify new separator matches expected value
@@ -501,7 +501,7 @@ contract PonderTokenTest is Test {
         // Create EIP-712 hash
         bytes32 digest = keccak256(abi.encodePacked(
             "\x19\x01",
-            token.DOMAIN_SEPARATOR(),
+            token.domainSeparator(),
             permitHash
         ));
 
@@ -540,7 +540,7 @@ contract PonderTokenTest is Test {
         // Create EIP-712 hash
         bytes32 digest = keccak256(abi.encodePacked(
             "\x19\x01",
-            token.DOMAIN_SEPARATOR(),
+            token.domainSeparator(),
             permitHash
         ));
 
@@ -550,8 +550,8 @@ contract PonderTokenTest is Test {
         // Change chain ID
         vm.chainId(999);
 
-        // Permit should fail because DOMAIN_SEPARATOR is different on new chain
-        vm.expectRevert("INVALID_SIGNATURE");
+        // Permit should fail because domainSeparator is different on new chain
+        vm.expectRevert(abi.encodeWithSignature("InvalidSignature()"));
         token.permit(owner, spender, value, deadline, v, r, s);
     }
 
@@ -579,14 +579,14 @@ contract PonderTokenTest is Test {
         // Create EIP-712 hash
         bytes32 digest = keccak256(abi.encodePacked(
             "\x19\x01",
-            token.DOMAIN_SEPARATOR(),
+            token.domainSeparator(),
             permitHash
         ));
 
         // Sign the digest
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
 
-        vm.expectRevert("EXPIRED");
+        vm.expectRevert(abi.encodeWithSignature("PermitExpired()"));
         token.permit(owner, spender, value, deadline, v, r, s);
     }
 
@@ -603,7 +603,7 @@ contract PonderTokenTest is Test {
         bytes32 digest = keccak256(
             abi.encodePacked(
                 '\x19\x01',
-                token.DOMAIN_SEPARATOR(),
+                token.domainSeparator(),
                 keccak256(abi.encode(
                     token.PERMIT_TYPEHASH(),
                     owner,
@@ -617,7 +617,7 @@ contract PonderTokenTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongPrivateKey, digest);
 
-        vm.expectRevert('INVALID_SIGNATURE');
+        vm.expectRevert(abi.encodeWithSignature("InvalidSignature()"));
         token.permit(owner, spender, value, deadline, v, r, s);
         vm.stopPrank();
     }

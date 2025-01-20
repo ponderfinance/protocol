@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./IPonderFactory.sol";
-import "./storage/PonderFactoryStorage.sol";
-import "./types/PonderFactoryTypes.sol";
-import "../pair/PonderPair.sol";
+import { IPonderFactory } from "./IPonderFactory.sol";
+import { PonderFactoryStorage } from "./storage/PonderFactoryStorage.sol";
+import { PonderFactoryTypes } from "./types/PonderFactoryTypes.sol";
+import { PonderPair } from "../pair/PonderPair.sol";
 
 /**
  * @title PonderFactory
@@ -89,6 +89,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
 
         bytes memory bytecode = type(PonderPair).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
+
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }

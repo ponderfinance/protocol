@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract PonderERC20 is ERC20 {
     // EIP-2612 permit functionality
@@ -14,6 +14,10 @@ contract PonderERC20 is ERC20 {
     0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
 
     mapping(address => uint256) private _nonces;
+
+    // Custom errors
+    error PermitExpired();
+    error InvalidSignature();
 
     constructor(string memory tokenName, string memory tokenSymbol)
     ERC20(tokenName, tokenSymbol)
@@ -35,7 +39,7 @@ contract PonderERC20 is ERC20 {
         );
     }
 
-    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+    function domainSeparator() public view returns (bytes32) {
         if (block.chainid == _CACHED_CHAIN_ID && address(this) == _CACHED_THIS) {
             return _CACHED_DOMAIN_SEPARATOR;
         }
@@ -55,23 +59,22 @@ contract PonderERC20 is ERC20 {
         bytes32 r,
         bytes32 s
     ) external {
-        require(deadline >= block.timestamp, "EXPIRED");
+        if (deadline < block.timestamp) revert PermitExpired();
 
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                DOMAIN_SEPARATOR(),
+                domainSeparator(),
                 keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, _nonces[owner]++, deadline))
             )
         );
 
         address recoveredAddress = ECDSA.recover(digest, v, r, s);
-        require(recoveredAddress != address(0) && recoveredAddress == owner, "INVALID_SIGNATURE");
+        if (recoveredAddress == address(0) || recoveredAddress != owner) revert InvalidSignature();
 
         _approve(owner, spender, value);
     }
 
-    // Override _update instead of _beforeTokenTransfer since OpenZeppelin 5.0 uses _update
     function _update(
         address from,
         address to,
