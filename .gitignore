@@ -10,6 +10,9 @@ out/
 # Docs
 docs/
 
+# Coverage
+coverage-report/
+
 # Dotenv file
 .env
 
