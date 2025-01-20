@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../../src/core/PonderStaking.sol";
-import "../../src/core/PonderToken.sol";
+import "../../src/core/staking/PonderStaking.sol";
+import "../../src/core/token/PonderToken.sol";
 import "../../src/core/factory/PonderFactory.sol";
-import "../../src/periphery/PonderRouter.sol";
+import "../../src/periphery/router/PonderRouter.sol";
 
 contract PonderStakingTest is Test {
     PonderStaking public staking;

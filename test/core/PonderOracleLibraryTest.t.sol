@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../../src/libraries/PonderOracleLibrary.sol";
+import "../../src/core/oracle/PonderOracleLibrary.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
 import "../mocks/ERC20Mint.sol";

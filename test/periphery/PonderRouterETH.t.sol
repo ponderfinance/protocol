@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/periphery/PonderRouter.sol";
+import "../../src/periphery/router/PonderRouter.sol";
 import "../mocks/ERC20Mint.sol";
 import "../mocks/WETH9.sol";
 import "../mocks/MockKKUBUnwrapper.sol";

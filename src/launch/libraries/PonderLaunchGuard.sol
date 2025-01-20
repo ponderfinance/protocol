@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../core/pair/IPonderPair.sol";
-import "../core/factory/IPonderFactory.sol";
-import "../interfaces/IPonderPriceOracle.sol";
+import "../../core/pair/IPonderPair.sol";
+import "../../core/factory/IPonderFactory.sol";
+import "../../core/oracle/IPonderPriceOracle.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 library PonderLaunchGuard {

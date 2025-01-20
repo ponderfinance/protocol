@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./PonderERC20.sol";
+import "../token/PonderERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../interfaces/IPonderRouter.sol";
-import "./factory/IPonderFactory.sol";
+import "../../periphery/router/IPonderRouter.sol";
+import "../factory/IPonderFactory.sol";
 
 /**
  * @title PonderStaking

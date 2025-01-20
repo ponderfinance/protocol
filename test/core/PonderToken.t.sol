@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../../src/core/PonderToken.sol";
+import "../../src/core/token/PonderToken.sol";
 
 contract PonderTokenTest is Test {
     PonderToken token;

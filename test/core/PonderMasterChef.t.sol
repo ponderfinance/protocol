@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../../src/core/PonderMasterChef.sol";
-import "../../src/core/PonderToken.sol";
+import "../../src/core/masterchef/PonderMasterChef.sol";
+import "../../src/core/token/PonderToken.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/interfaces/IPonderMasterChef.sol";
+import "../../src/core/masterchef/IPonderMasterChef.sol";
 import "../mocks/ERC20Mint.sol";
 
 contract PonderMasterChefTest is Test {

@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../../src/core/FeeDistributor.sol";
-import "../../src/core/PonderStaking.sol";
-import "../../src/core/PonderToken.sol";
+import "../../src/core/distributor/FeeDistributor.sol";
+import "../../src/core/staking/PonderStaking.sol";
+import "../../src/core/token/PonderToken.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/periphery/PonderRouter.sol";
+import "../../src/periphery/router/PonderRouter.sol";
 
 /**
  * @title Mock ERC20 Token for Testing

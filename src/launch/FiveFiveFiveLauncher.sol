@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../core/factory/PonderFactory.sol";
 import "../core/factory/IPonderFactory.sol";
-import "../libraries/PonderLaunchGuard.sol";
+import "./libraries/PonderLaunchGuard.sol";
 import "./LaunchToken.sol";
-import "../core/PonderToken.sol";
-import "../core/PonderPriceOracle.sol";
+import "../core/token/PonderToken.sol";
+import "../core/oracle/PonderPriceOracle.sol";
 import {IFiveFiveFiveLauncher} from "./IFiveFiveFiveLauncher.sol";
 import {FiveFiveFiveLauncherStorage} from "./storage/FiveFiveFiveStorage.sol";
 

@@ -2,14 +2,14 @@
 pragma solidity ^0.8.19;
 
 import "../../src/core/factory/PonderFactory.sol";
-import "../../src/core/PonderMasterChef.sol";
-import "../../src/core/PonderPriceOracle.sol";
-import "../../src/core/PonderToken.sol";
-import "../../src/core/PonderStaking.sol";
-import "../../src/core/FeeDistributor.sol";
+import "../../src/core/masterchef/PonderMasterChef.sol";
+import "../../src/core/oracle/PonderPriceOracle.sol";
+import "../../src/core/token/PonderToken.sol";
+import "../../src/core/staking/PonderStaking.sol";
+import "../../src/core/distributor/FeeDistributor.sol";
 import "../../src/launch/FiveFiveFiveLauncher.sol";
-import "../../src/periphery/KKUBUnwrapper.sol";
-import "../../src/periphery/PonderRouter.sol";
+import "../../src/periphery/unwrapper/KKUBUnwrapper.sol";
+import "../../src/periphery/router/PonderRouter.sol";
 import "forge-std/Script.sol";
 import "./IDeployBitkub.sol";
 

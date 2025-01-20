@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../interfaces/IPonderMasterChef.sol";
-import "./factory/IPonderFactory.sol";
-import "./pair/IPonderPair.sol";
+import "./IPonderMasterChef.sol";
+import "../factory/IPonderFactory.sol";
+import "../pair/IPonderPair.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./PonderToken.sol";
-import "forge-std/Test.sol";
-
+import "../token/PonderToken.sol";
 
 /**
 * @title PonderMasterChef
@@ -240,7 +238,6 @@ contract PonderMasterChef is IPonderMasterChef {
     * @param _pid Pool ID to update
     */
     function updatePool(uint256 _pid) public {
-        console.log("Updating pool for pid:", _pid);
         if (_pid >= poolInfo.length) revert InvalidPool();
         PoolInfo storage pool = poolInfo[_pid];
 
@@ -262,9 +259,7 @@ contract PonderMasterChef is IPonderMasterChef {
 
         uint256 ponderReward = (timeElapsed * ponderPerSecond * pool.allocPoint) / totalAllocPoint;
 
-        console.log("Before accPonderPerShare update: ponderReward =", ponderReward, "totalWeightedShares =", pool.totalWeightedShares);
         pool.accPonderPerShare += (ponderReward * 1e12) / pool.totalWeightedShares;
-        console.log("After accPonderPerShare update: accPonderPerShare =", pool.accPonderPerShare);
         pool.lastRewardTime = block.timestamp;
 
         // Mint rewards after updating accPonderPerShare

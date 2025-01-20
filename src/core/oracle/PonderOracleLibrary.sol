@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../core/pair/IPonderPair.sol";
-import "./UQ112x112.sol";
+import "../../core/pair/IPonderPair.sol";
+import "../../libraries/UQ112x112.sol";
 
 library PonderOracleLibrary {
     using UQ112x112 for uint224;

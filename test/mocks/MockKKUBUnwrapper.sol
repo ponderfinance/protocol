@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../src/interfaces/IWETH.sol";
+import "../../src/periphery/unwrapper/IWETH.sol";
 
 contract MockKKUBUnwrapper {
     error TransferFailed();

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../src/core/PonderERC20.sol";
+import "../../src/core/token/PonderERC20.sol";
 
 contract TestPonderERC20 is PonderERC20 {
     constructor() PonderERC20("Ponder LP Token", "PONDER-LP") {}

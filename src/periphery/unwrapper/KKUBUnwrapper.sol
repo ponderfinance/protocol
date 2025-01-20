@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "../interfaces/IWETH.sol";
+import "./IWETH.sol";
 
 interface IKKUB is IWETH {
     function blacklist(address addr) external view returns (bool);

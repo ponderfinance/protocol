@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "../mocks/ERC20Mock.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/core/PonderPriceOracle.sol";
+import "../../src/core/oracle/PonderPriceOracle.sol";
 
 contract PonderPriceOracleTest is Test {
     PonderFactory public factory;

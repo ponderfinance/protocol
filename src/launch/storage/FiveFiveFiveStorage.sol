@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../core/PonderPriceOracle.sol";
-import "../../core/PonderToken.sol";
-import "../../interfaces/IPonderRouter.sol";
+import "../../core/oracle/PonderPriceOracle.sol";
+import "../../core/token/PonderToken.sol";
+import "../../periphery/router/IPonderRouter.sol";
 import "../../core/factory/IPonderFactory.sol";
 import {FiveFiveFiveLauncherTypes} from "../types/FiveFiveFiveLauncherTypes.sol";
 

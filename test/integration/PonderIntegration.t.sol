@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import "../../src/core/factory/PonderFactory.sol";
-import "../../src/core/PonderMasterChef.sol";
+import "../../src/core/masterchef/PonderMasterChef.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/core/PonderToken.sol";
-import "../../src/periphery/PonderRouter.sol";
+import "../../src/core/token/PonderToken.sol";
+import "../../src/periphery/router/PonderRouter.sol";
 import "../mocks/ERC20Mint.sol";
 import "../mocks/MockKKUBUnwrapper.sol";
 import "../mocks/WETH9.sol";
