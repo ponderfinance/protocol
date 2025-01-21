@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 /// @title Ponder Router Interface
 /// @notice Interface for the PonderRouter contract that handles swaps and liquidity

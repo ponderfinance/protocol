@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import { IPonderPair } from "../../core/pair/IPonderPair.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";

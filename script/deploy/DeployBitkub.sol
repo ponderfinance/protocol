@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import { IPonderFactory } from "../../src/core/factory/IPonderFactory.sol";
 import { IPonderRouter } from "../../src/periphery/router/IPonderRouter.sol";

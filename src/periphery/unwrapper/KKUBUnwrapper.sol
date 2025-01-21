@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
+
 
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -8,14 +9,10 @@ import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { IWETH } from "./IWETH.sol";
 import { IKKUB } from "./IKKUB.sol";
-
 import { KKUBUnwrapperTypes } from "./types/KKUBUnwrapperTypes.sol";
 import { KKUBUnwrapperStorage } from "./storage/KKUBUnwrapperStorage.sol";
 import { IKKUBUnwrapper } from "./IKKUBUnwrapper.sol";
 
-/// @title KKUBUnwrapper Implementation
-/// @notice Handles unwrapping of KKUB tokens to ETH
-/// @dev Implements unwrapping logic with safety checks and emergency functions
 contract KKUBUnwrapper is
     IKKUBUnwrapper,
     KKUBUnwrapperStorage,
@@ -25,15 +22,14 @@ contract KKUBUnwrapper is
 {
     using SafeERC20 for IERC20;
     using Address for address payable;
-    using KKUBUnwrapperTypes for *;
 
-    /// @notice The KKUB token contract
     address public immutable KKUB;
 
     constructor(address _kkub) Ownable(msg.sender) {
         if (_kkub == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
         KKUB = _kkub;
     }
+
 
     /// @notice Get the KKUB token address
     /// @return Address of the KKUB token contract
@@ -53,17 +49,15 @@ contract KKUBUnwrapper is
     }
 
     /// @inheritdoc IKKUBUnwrapper
-    function unwrapKKUB(uint256 amount, address recipient)
-    external
-    override
-    nonReentrant
-    whenNotPaused
-    returns (bool)
-    {
+    function unwrapKKUB(
+        uint256 amount,
+        address recipient
+    ) external override nonReentrant whenNotPaused returns (bool) {
+        // Checks
         if (amount == 0) revert KKUBUnwrapperTypes.ZeroAmount();
-        if (recipient == address(0)) revert KKUBUnwrapperTypes.ZeroAmount();
+        if (recipient == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
 
-        // Check KYC level and blacklist before proceeding
+        // Validate KYC and blacklist status
         if (IKKUB(KKUB).kycsLevel(address(this)) <= KKUBUnwrapperTypes.REQUIRED_KYC_LEVEL) {
             revert KKUBUnwrapperTypes.InsufficientKYCLevel();
         }
@@ -71,38 +65,34 @@ contract KKUBUnwrapper is
             revert KKUBUnwrapperTypes.BlacklistedAddress();
         }
 
-        // Lock the balance
+        // Effects
         _lockedBalance += amount;
 
-        // Store initial balance
+        // Interactions
         uint256 initialBalance = address(this).balance;
 
-        // Transfer KKUB tokens to this contract
+        // 1. Transfer KKUB tokens
         IERC20(KKUB).safeTransferFrom(msg.sender, address(this), amount);
 
-        // Attempt to withdraw ETH
+        // 2. Withdraw from KKUB contract
         IWETH(KKUB).withdraw(amount);
 
-        // Verify received amount
+        // Verify withdrawal success
         uint256 ethReceived = address(this).balance - initialBalance;
         if (ethReceived < amount) {
             _lockedBalance -= amount;
             revert KKUBUnwrapperTypes.WithdrawFailed();
         }
 
-        // Send ETH to recipient
-        (bool sent,) = payable(recipient).call{value: amount}("");
-        if (!sent) {
-            _lockedBalance -= amount;
-            revert KKUBUnwrapperTypes.WithdrawFailed();
-        }
+        // 3. Transfer ETH to recipient
+        // sendValue will revert on failure, no need for additional error handling
+        payable(recipient).sendValue(amount);
 
-        // If successful, update state
         _lockedBalance -= amount;
-
         emit UnwrappedKKUB(recipient, amount);
         return true;
     }
+
 
     /// @inheritdoc IKKUBUnwrapper
     function emergencyWithdraw()

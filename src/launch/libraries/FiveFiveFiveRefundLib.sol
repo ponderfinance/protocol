@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
 import { LaunchToken } from "../LaunchToken.sol";
@@ -13,6 +14,8 @@ import { PonderERC20 } from "../../core/token/PonderERC20.sol";
 /// @dev Contains logic for processing refunds and LP withdrawals
 library FiveFiveFiveRefundLib {
     using FiveFiveFiveConstants for uint256;
+    using Address for address payable;
+
 
     /*//////////////////////////////////////////////////////////////
                             EVENTS
@@ -43,17 +46,17 @@ library FiveFiveFiveRefundLib {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Processes refund for a failed or cancelled launch
+
     function processRefund(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address claimer,
         PonderToken ponder
     ) external {
-        // First check if launch is active
+        // Checks
         if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
             revert FiveFiveFiveLauncherTypes.LaunchStillActive();
         }
 
-        // Check if launch was successful
         if (launch.base.launched ||
             launch.contributions.kubCollected + launch.contributions.ponderValueCollected >=
             FiveFiveFiveConstants.TARGET_RAISE) {
@@ -71,13 +74,14 @@ library FiveFiveFiveRefundLib {
         uint256 ponderToRefund = contributor.ponderContributed;
         uint256 tokensToReturn = contributor.tokensReceived;
 
-        // Clear state before transfers (CEI pattern)
+        // Effects - clear state before transfers (CEI pattern)
         contributor.kubContributed = 0;
         contributor.ponderContributed = 0;
         contributor.tokensReceived = 0;
         contributor.ponderValue = 0;
 
-        // Handle token return if any
+        // Interactions
+        // 1. Handle token return if any
         if (tokensToReturn > 0) {
             LaunchToken token = LaunchToken(launch.base.tokenAddress);
             if (token.allowance(claimer, address(this)) < tokensToReturn) {
@@ -86,20 +90,18 @@ library FiveFiveFiveRefundLib {
             token.transferFrom(claimer, address(this), tokensToReturn);
         }
 
-        // Process PONDER refund
+        // 2. Process PONDER refund
         if (ponderToRefund > 0) {
             ponder.transfer(claimer, ponderToRefund);
         }
 
-        // Process KUB refund
+        // 3. Process KUB refund using OpenZeppelin's Address.sendValue
         if (kubToRefund > 0) {
-            (bool success, ) = claimer.call{value: kubToRefund}("");
-            if (!success) revert FiveFiveFiveLauncherTypes.KubTransferFailed();
+            payable(claimer).sendValue(kubToRefund);
         }
 
         emit RefundProcessed(claimer, kubToRefund, ponderToRefund, tokensToReturn);
     }
-
     /*//////////////////////////////////////////////////////////////
                         LAUNCH CANCELLATION
     //////////////////////////////////////////////////////////////*/

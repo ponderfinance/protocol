@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import { IPonderStaking } from "./IPonderStaking.sol";
 import { PonderStakingStorage } from "./storage/PonderStakingStorage.sol";

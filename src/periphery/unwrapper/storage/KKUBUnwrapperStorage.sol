@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 /// @title KKUBUnwrapper Storage Contract
 /// @notice Abstract contract containing storage layout for the KKUBUnwrapper
