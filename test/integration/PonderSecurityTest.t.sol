@@ -50,7 +50,7 @@ contract PonderSecurityTest is Test {
         MaliciousToken malToken = new MaliciousToken();
 
         // Try to add liquidity with malicious token
-        vm.expectRevert(abi.encodeWithSignature("TransferFromFailed()"));
+        vm.expectRevert(abi.encodeWithSignature("SafeERC20FailedOperation(address)", address(malToken)));
         router.addLiquidity(
             address(malToken),
             address(tokenB),

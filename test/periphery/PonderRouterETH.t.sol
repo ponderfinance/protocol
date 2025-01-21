@@ -211,7 +211,7 @@ contract PonderRouterETHTest is Test {
         maliciousToken.approve(address(router), type(uint256).max);
 
         // Update expectRevert to match the actual error from TransferHelper
-        vm.expectRevert(abi.encodeWithSignature("TransferFromFailed()"));
+        vm.expectRevert(abi.encodeWithSignature("FailedInnerCall()"));
         router.addLiquidityETH{value: INITIAL_LIQUIDITY}(
             address(maliciousToken),
             INITIAL_LIQUIDITY,
