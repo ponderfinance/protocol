@@ -2,103 +2,25 @@
 pragma solidity ^0.8.20;
 
 import { IFeeDistributor } from "./IFeeDistributor.sol";
-import { IPonderFactory } from "../factory/IPonderFactory.sol";
-import { IPonderPair } from "../pair/IPonderPair.sol";
-import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
-import { IPonderStaking } from "../staking/IPonderStaking.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { FeeDistributorStorage } from "./storage/FeeDistributorStorage.sol";
+import { FeeDistributorTypes } from "./types/FeeDistributorTypes.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IPonderPair } from "../pair/IPonderPair.sol";
 
-/**
- * @title FeeDistributor
- * @notice Handles collection and distribution of protocol fees from trading
- * @dev Collects fees from pairs, converts to PONDER, and distributes to xPONDER stakers and team
- */
-contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
-    mapping(address => uint256) public lastPairDistribution;
-    mapping(address => bool) private processedPairs;
+/// @title FeeDistributor
+/// @notice Implementation of fee collection and distribution
+contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGuard {
+    using FeeDistributorTypes for *;
 
-    /// @notice Factory contract reference for pair creation and fee collection
-    IPonderFactory public immutable FACTORY;
-
-    /// @notice Router contract used for token conversions
-    IPonderRouter public immutable ROUTER;
-
-    /// @notice PONDER token address
-    address public immutable PONDER;
-
-    /// @notice xPONDER staking contract that receives 80% of fees
-    IPonderStaking public immutable STAKING;
-
-    /// @notice Team address that receives 20% of protocol fees
-    address public team;
-
-    /// @notice Contract owner address
-    address public owner;
-
-    /// @notice Pending owner for 2-step ownership transfer
-    address public pendingOwner;
-
-    /// @notice Distribution ratio for xKOI stakers (80%)
-    uint256 public stakingRatio = 8000;
-
-    /// @notice Distribution ratio for team (20%)
-    uint256 public teamRatio = 2000;
-
-    /// @notice Minimum amount for conversion to prevent dust
-    uint256 public constant MINIMUM_AMOUNT = 1000;
-
-    /// @notice Basis points denominator
-    uint256 public constant BASIS_POINTS = 10000;
-
-    uint256 public constant DISTRIBUTION_COOLDOWN = 1 hours;
-    uint256 public constant MAX_PAIRS_PER_DISTRIBUTION = 10;
-    uint256 public lastDistributionTimestamp; // Rename for clarity
-
-    /// @notice Custom errors
-    error InvalidRatio();
-    error RatioSumIncorrect();
-    error NotOwner();
-    error NotPendingOwner();
-    error ZeroAddress();
-    error InvalidAmount();
-    error SwapFailed();
-    error TransferFailed();
-    error InsufficientOutputAmount();
-    error PairNotFound();
-    error InvalidPairCount();
-    error InvalidPair();
-    error DistributionTooFrequent();
-    error InsufficientAccumulation();
-    error InvalidPairAddress();
-    error InvalidRecipient();
-    error InvalidRecoveryAmount();
-    error InvalidReserves();
-
-    /**
-     * @notice Contract constructor
-     * @param _factory Factory contract address
-     * @param _router Router contract address for swaps
-     * @param _ponder KOI token address
-     * @param _staking xKOI staking contract address
-     * @param _team Team address that receives 20% of fees
-     */
     constructor(
         address _factory,
         address _router,
         address _ponder,
         address _staking,
         address _team
-    ) {
-        if (_factory == address(0) || _router == address(0) || _ponder == address(0) ||
-        _staking == address(0) || _team == address(0)) {
-            revert ZeroAddress();
-        }
-
-        FACTORY = IPonderFactory(_factory);
-        ROUTER = IPonderRouter(_router);
-        PONDER = _ponder;
-        STAKING = IPonderStaking(_staking);
+    ) FeeDistributorStorage(_factory, _router, _ponder, _staking) {
+        if (_team == address(0)) revert FeeDistributorTypes.ZeroAddress();
         team = _team;
         owner = msg.sender;
 
@@ -107,13 +29,12 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
     }
 
     /**
-        * @notice Safely collects fees from a specific pair using CEI pattern
+     * @notice Collects fees from a specific pair using CEI pattern
      * @param pair Address of the pair to collect fees from
-     * @dev Implements Checks-Effects-Interactions pattern with reentrancy guard
      */
     function collectFeesFromPair(address pair) public nonReentrant {
         // CHECKS
-        if (pair == address(0)) revert InvalidPairAddress();
+        if (pair == address(0)) revert FeeDistributorTypes.InvalidPairAddress();
 
         IPonderPair pairContract = IPonderPair(pair);
         address token0 = pairContract.token0();
@@ -123,13 +44,8 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
         uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
 
-        // EFFECTS - None for this function
-
         // INTERACTIONS - Performed last
-        // Single sync call instead of multiple
         pairContract.sync();
-
-        // Collect fees
         pairContract.skim(address(this));
 
         // CHECKS - Verify collection success
@@ -156,9 +72,9 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         if (token == PONDER) return;
 
         uint256 amount = IERC20(token).balanceOf(address(this));
-        if (amount < MINIMUM_AMOUNT) revert InvalidAmount();
+        if (amount < FeeDistributorTypes.MINIMUM_AMOUNT) revert FeeDistributorTypes.InvalidAmount();
 
-        // Reuse same protection as distributePairFees
+        // Calculate minimum output with slippage protection
         uint256 minOutAmount = _calculateMinimumPonderOut(token, amount);
 
         // Approve router
@@ -179,64 +95,60 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         ) returns (uint256[] memory amounts) {
             emit FeesConverted(token, amount, amounts[1]);
         } catch {
-            revert SwapFailed();
+            revert FeeDistributorTypes.SwapFailed();
         }
     }
 
-    event DistributionAttempt(uint256 currentTime, uint256 lastDistribution, uint256 timeSinceLastDistribution);
-
     /**
-     * @notice Distributes converted fees to stakers and team
-     * @dev Splits fees 80/20 between xPONDER stakers and team
+     * @notice Distributes converted fees to stakeholders
      */
+// External distribute function that users call
+    function distribute() external nonReentrant {
+        _distribute();
+    }
+
     function _distribute() internal {
-        // Check cooldown first
         if (lastDistributionTimestamp != 0) {
             uint256 timeElapsed = block.timestamp - lastDistributionTimestamp;
-            if (timeElapsed < DISTRIBUTION_COOLDOWN) {
-                revert DistributionTooFrequent();
+            if (timeElapsed < FeeDistributorTypes.DISTRIBUTION_COOLDOWN) {
+                revert FeeDistributorTypes.DistributionTooFrequent();
             }
         }
 
         uint256 totalAmount = IERC20(PONDER).balanceOf(address(this));
-        if (totalAmount < MINIMUM_AMOUNT) revert InvalidAmount();
+        if (totalAmount < FeeDistributorTypes.MINIMUM_AMOUNT) revert FeeDistributorTypes.InvalidAmount();
 
         // Update timestamp BEFORE transfers
         lastDistributionTimestamp = block.timestamp;
 
         // Calculate splits
-        uint256 stakingAmount = (totalAmount * stakingRatio) / BASIS_POINTS;
-        uint256 teamAmount = (totalAmount * teamRatio) / BASIS_POINTS;
+        uint256 stakingAmount = (totalAmount * stakingRatio) / FeeDistributorTypes.BASIS_POINTS;
+        uint256 teamAmount = (totalAmount * teamRatio) / FeeDistributorTypes.BASIS_POINTS;
 
         // Transfer to staking
         if (stakingAmount > 0) {
             if (!IERC20(PONDER).transfer(address(STAKING), stakingAmount)) {
-                revert TransferFailed();
+                revert FeeDistributorTypes.TransferFailed();
             }
         }
 
         // Transfer to team
         if (teamAmount > 0) {
             if (!IERC20(PONDER).transfer(team, teamAmount)) {
-                revert TransferFailed();
+                revert FeeDistributorTypes.TransferFailed();
             }
         }
 
         emit FeesDistributed(totalAmount, stakingAmount, teamAmount);
     }
-
-    function distribute() external nonReentrant {
-        _distribute();
-    }
-
     /**
      * @notice Distributes fees from specific pairs
      * @param pairs Array of pair addresses to collect and distribute fees from
      */
     function distributePairFees(address[] calldata pairs) external nonReentrant {
         // Check array bounds
-        if (pairs.length == 0 || pairs.length > MAX_PAIRS_PER_DISTRIBUTION)
-            revert InvalidPairCount();
+        if (pairs.length == 0 || pairs.length > FeeDistributorTypes.MAX_PAIRS_PER_DISTRIBUTION)
+            revert FeeDistributorTypes.InvalidPairCount();
 
         // First collect from all pairs with safety checks
         for (uint256 i = 0; i < pairs.length; i++) {
@@ -244,11 +156,11 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
 
             // Validate pair
             if (currentPair == address(0) || processedPairs[currentPair])
-                revert InvalidPair();
+                revert FeeDistributorTypes.InvalidPair();
 
             // Check if enough time has passed since last distribution
-            if (block.timestamp - lastPairDistribution[currentPair] < DISTRIBUTION_COOLDOWN)
-                revert DistributionTooFrequent();
+            if (block.timestamp - lastPairDistribution[currentPair] < FeeDistributorTypes.DISTRIBUTION_COOLDOWN)
+                revert FeeDistributorTypes.DistributionTooFrequent();
 
             // Mark as processed
             processedPairs[currentPair] = true;
@@ -275,7 +187,7 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
             address token = uniqueTokens[i];
             uint256 tokenBalance = IERC20(token).balanceOf(address(this));
 
-            if (tokenBalance >= MINIMUM_AMOUNT) {
+            if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
                 // Add slippage check for conversion
                 uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
                 _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
@@ -284,26 +196,25 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
 
         // Verify minimum accumulated PONDER
         uint256 postBalance = IERC20(PONDER).balanceOf(address(this));
-        if (postBalance - preBalance < MINIMUM_AMOUNT) revert InsufficientAccumulation();
+        if (postBalance - preBalance < FeeDistributorTypes.MINIMUM_AMOUNT) {
+            revert FeeDistributorTypes.InsufficientAccumulation();
+        }
 
         // Distribute converted PONDER
-        if (IERC20(PONDER).balanceOf(address(this)) >= MINIMUM_AMOUNT) {
+        if (IERC20(PONDER).balanceOf(address(this)) >= FeeDistributorTypes.MINIMUM_AMOUNT) {
             _distribute();
         }
     }
 
     /**
- * @notice Calculates minimum PONDER output for a given token input with 1% max slippage
- * @param token Input token address
- * @param amountIn Amount of input tokens
- * @return minOut Minimum amount of PONDER to receive
- */
+     * @notice Calculates minimum PONDER output for a given token input with 0.5% max slippage
+     */
     function _calculateMinimumPonderOut(
         address token,
         uint256 amountIn
     ) internal view returns (uint256 minOut) {
         address pair = FACTORY.getPair(token, PONDER);
-        if (pair == address(0)) revert PairNotFound();
+        if (pair == address(0)) revert FeeDistributorTypes.PairNotFound();
 
         (uint112 reserve0, uint112 reserve1, ) = IPonderPair(pair).getReserves();
 
@@ -313,10 +224,10 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
                 (reserve1, reserve0);
 
         // Add check for extreme reserve imbalance
-        if (tokenReserve == 0 || ponderReserve == 0) revert InvalidReserves();
+        if (tokenReserve == 0 || ponderReserve == 0) revert FeeDistributorTypes.InvalidReserves();
 
         uint256 reserveRatio = (uint256(tokenReserve) * 1e18) / uint256(ponderReserve);
-        if (reserveRatio > 100e18 || reserveRatio < 1e16) revert SwapFailed();
+        if (reserveRatio > 100e18 || reserveRatio < 1e16) revert FeeDistributorTypes.SwapFailed();
 
         uint256 amountOut = ROUTER.getAmountsOut(
             amountIn,
@@ -327,9 +238,9 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         return (amountOut * 995) / 1000;
     }
 
-/**
- * @notice Helper to create path array for swaps
- */
+    /**
+     * @notice Helper to create path array for swaps
+     */
     function _getPath(address tokenIn, address tokenOut)
     internal
     pure
@@ -340,12 +251,8 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         path[1] = tokenOut;
     }
 
-
     /**
      * @notice Helper function to convert fees with slippage protection
-     * @param token Input token to convert
-     * @param amountIn Amount of input tokens
-     * @param minOutAmount Minimum amount of PONDER to receive
      */
     function _convertFeesWithSlippage(
         address token,
@@ -371,73 +278,29 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
         ) returns (uint256[] memory amounts) {
             emit FeesConverted(token, amountIn, amounts[1]);
         } catch {
-            revert SwapFailed();
+            revert FeeDistributorTypes.SwapFailed();
         }
     }
 
-
     /**
      * @notice Updates fee distribution ratios
-     * @param _stakingRatio New staking ratio (in basis points)
-     * @param _teamRatio New team ratio (in basis points)
      */
     function updateDistributionRatios(
         uint256 _stakingRatio,
         uint256 _teamRatio
     ) external onlyOwner {
-        if (_stakingRatio + _teamRatio != BASIS_POINTS) {
-            revert RatioSumIncorrect();
+        if (_stakingRatio + _teamRatio != FeeDistributorTypes.BASIS_POINTS) {
+            revert FeeDistributorTypes.RatioSumIncorrect();
         }
 
         stakingRatio = _stakingRatio;
         teamRatio = _teamRatio;
 
-        emit DistributionRatiosUpdated(_stakingRatio,  _teamRatio);
-    }
-
-    /**
-     * @notice Updates team address
-     * @param _team New team address
-     */
-    function setTeam(address _team) external onlyOwner {
-        if (_team == address(0)) revert ZeroAddress();
-        team = _team;
-    }
-
-    /**
-     * @notice Returns current distribution ratios
-     * @return _stakingRatio Current staking ratio
-     * @return _teamRatio Current team ratio
-     */
-    function getDistributionRatios() external view returns (
-        uint256 _stakingRatio,
-        uint256 _teamRatio
-    ) {
-        return (stakingRatio, teamRatio);
-    }
-
-    /**
-     * @notice Initiates ownership transfer
-     * @param newOwner Address of new owner
-     */
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
-        pendingOwner = newOwner;
-    }
-
-    /**
-     * @notice Completes ownership transfer
-     */
-    function acceptOwnership() external {
-        if (msg.sender != pendingOwner) revert NotPendingOwner();
-        owner = pendingOwner;
-        pendingOwner = address(0);
+        emit DistributionRatiosUpdated(_stakingRatio, _teamRatio);
     }
 
     /**
      * @notice Gets unique tokens from pairs for conversion
-     * @param pairs Array of pair addresses
-     * @return tokens Array of unique token addresses
      */
     function _getUniqueTokens(address[] calldata pairs) internal view returns (address[] memory tokens) {
         address[] memory tempTokens = new address[](pairs.length * 2);
@@ -470,25 +333,62 @@ contract FeeDistributor is IFeeDistributor, ReentrancyGuard {
     }
 
     /**
-   * @notice Emergency function to rescue tokens in case of failed collection
-     * @dev Only callable by owner with timelock
+     * @notice Emergency function to rescue tokens
      */
     function emergencyTokenRecover(
         address token,
         address to,
         uint256 amount
     ) external onlyOwner {
-        if (to == address(0)) revert InvalidRecipient();
-        if (amount == 0) revert InvalidRecoveryAmount();
+        if (to == address(0)) revert FeeDistributorTypes.InvalidRecipient();
+        if (amount == 0) revert FeeDistributorTypes.InvalidRecoveryAmount();
 
         IERC20(token).transfer(to, amount);
         emit EmergencyTokenRecovered(token, to, amount);
     }
 
+    /**
+     * @notice Returns current distribution ratios
+     */
+    function getDistributionRatios() external view returns (
+        uint256 _stakingRatio,
+        uint256 _teamRatio
+    ) {
+        return (stakingRatio, teamRatio);
+    }
+
+    /**
+     * @notice Updates team address
+     */
+    function setTeam(address _team) external onlyOwner {
+        if (_team == address(0)) revert FeeDistributorTypes.ZeroAddress();
+        team = _team;
+    }
+
+    /**
+     * @notice Initiates ownership transfer
+     */
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert FeeDistributorTypes.ZeroAddress();
+        pendingOwner = newOwner;
+    }
+
+    /**
+     * @notice Completes ownership transfer
+     */
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert FeeDistributorTypes.NotPendingOwner();
+        owner = pendingOwner;
+        pendingOwner = address(0);
+    }
+
+    function minimumAmount() external pure returns (uint256) {
+        return FeeDistributorTypes.MINIMUM_AMOUNT;
+    }
 
     /// @notice Modifier for owner-only functions
     modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
+        if (msg.sender != owner) revert FeeDistributorTypes.NotOwner();
         _;
     }
 }

@@ -55,4 +55,6 @@ interface IFeeDistributor {
         uint256 stakingRatio,
         uint256 teamRatio
     );
+
+    function minimumAmount() external pure returns (uint256);
 }

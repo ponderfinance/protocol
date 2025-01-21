@@ -207,7 +207,7 @@ contract KKUBUnwrapperTest is Test {
         kkub.approve(address(unwrapper), AMOUNT);
 
         // Should revert with InsufficientKYCLevel error
-        vm.expectRevert(KKUBUnwrapper.InsufficientKYCLevel.selector);
+        vm.expectRevert(KKUBUnwrapperTypes.InsufficientKYCLevel.selector);
         unwrapper.unwrapKKUB(AMOUNT, alice);
         vm.stopPrank();
     }
@@ -219,7 +219,7 @@ contract KKUBUnwrapperTest is Test {
         kkub.deposit{value: AMOUNT}();
         kkub.approve(address(unwrapper), AMOUNT);
 
-        vm.expectRevert(KKUBUnwrapper.BlacklistedAddress.selector);
+        vm.expectRevert(KKUBUnwrapperTypes.BlacklistedAddress.selector);
         unwrapper.unwrapKKUB(AMOUNT, alice);
         vm.stopPrank();
     }
@@ -344,7 +344,7 @@ contract KKUBUnwrapperTest is Test {
     function testUnwrapZeroAmount() public {
         vm.startPrank(alice);
         kkub.approve(address(unwrapper), 0);
-        vm.expectRevert(KKUBUnwrapper.ZeroAmount.selector);
+        vm.expectRevert(KKUBUnwrapperTypes.ZeroAmount.selector);
         unwrapper.unwrapKKUB(0, alice);
         vm.stopPrank();
     }
@@ -363,7 +363,7 @@ contract KKUBUnwrapperTest is Test {
         assertEq(firstWithdrawal, 1000 ether, "Should be limited to MAX_WITHDRAWAL_AMOUNT");
 
         // Immediate second withdrawal should fail
-        vm.expectRevert(KKUBUnwrapper.WithdrawalTooFrequent.selector);
+        vm.expectRevert(KKUBUnwrapperTypes.WithdrawalTooFrequent.selector);
         unwrapper.emergencyWithdraw();
 
         // After delay, should work again
@@ -407,7 +407,7 @@ contract KKUBUnwrapperTest is Test {
 
         // Try reset before delay (should not reset)
         unwrapper.resetWithdrawalLimit();
-        vm.expectRevert(KKUBUnwrapper.WithdrawalTooFrequent.selector);
+        vm.expectRevert(KKUBUnwrapperTypes.WithdrawalTooFrequent.selector);
         unwrapper.emergencyWithdraw();
 
         // Move past delay and reset

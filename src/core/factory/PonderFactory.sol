@@ -12,12 +12,8 @@ import { PonderPair } from "../pair/PonderPair.sol";
  * @dev Handles pair creation, fee settings, and protocol admin functions
  */
 contract PonderFactory is IPonderFactory, PonderFactoryStorage {
-    /**
-     * @notice Initializes the factory with required addresses
-     * @param feeToSetter_ Address authorized to set fee collection address
-     * @param launcher_ Address of the launcher contract
-     * @param ponder_ Address of the PONDER token
-     */
+    using PonderFactoryTypes for *;
+
     constructor(
         address feeToSetter_,
         address launcher_,
@@ -28,57 +24,48 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         _ponder = ponder_;
     }
 
-    /// @inheritdoc IPonderFactory
+    // View Functions
     function feeTo() external view returns (address) {
         return _feeTo;
     }
 
-    /// @inheritdoc IPonderFactory
     function feeToSetter() external view returns (address) {
         return _feeToSetter;
     }
 
-    /// @inheritdoc IPonderFactory
     function launcher() external view returns (address) {
         return _launcher;
     }
 
-    /// @inheritdoc IPonderFactory
     function ponder() external view returns (address) {
         return _ponder;
     }
 
-    /// @inheritdoc IPonderFactory
     function migrator() external view returns (address) {
         return _migrator;
     }
 
-    /// @inheritdoc IPonderFactory
     function pendingLauncher() external view returns (address) {
         return _pendingLauncher;
     }
 
-    /// @inheritdoc IPonderFactory
     function launcherDelay() external view returns (uint256) {
         return _launcherDelay;
     }
 
-    /// @inheritdoc IPonderFactory
     function getPair(address tokenA, address tokenB) external view returns (address) {
         return _getPair[tokenA][tokenB];
     }
 
-    /// @inheritdoc IPonderFactory
     function allPairs(uint256 index) external view returns (address) {
         return _allPairs[index];
     }
 
-    /// @inheritdoc IPonderFactory
     function allPairsLength() external view returns (uint256) {
         return _allPairs.length;
     }
 
-    /// @inheritdoc IPonderFactory
+    // External Functions
     function createPair(address tokenA, address tokenB) external returns (address pair) {
         if (tokenA == tokenB) revert PonderFactoryTypes.IdenticalAddresses();
 
@@ -87,13 +74,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         if (token0 == address(0)) revert PonderFactoryTypes.ZeroAddress();
         if (_getPair[token0][token1] != address(0)) revert PonderFactoryTypes.PairExists();
 
-        bytes memory bytecode = type(PonderPair).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
-        }
+        pair = address(new PonderPair{salt: salt}());
 
         PonderPair(pair).initialize(token0, token1);
 
@@ -104,7 +86,6 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit PairCreated(token0, token1, pair, _allPairs.length);
     }
 
-    /// @inheritdoc IPonderFactory
     function setFeeTo(address newFeeTo) external {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         if (newFeeTo == address(0)) revert PonderFactoryTypes.InvalidFeeReceiver();
@@ -114,19 +95,16 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit FeeToUpdated(oldFeeTo, newFeeTo);
     }
 
-    /// @inheritdoc IPonderFactory
     function setFeeToSetter(address newFeeToSetter) external {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         _feeToSetter = newFeeToSetter;
     }
 
-    /// @inheritdoc IPonderFactory
     function setMigrator(address newMigrator) external {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         _migrator = newMigrator;
     }
 
-    /// @inheritdoc IPonderFactory
     function setLauncher(address newLauncher) external {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         if (newLauncher == address(0)) revert PonderFactoryTypes.InvalidLauncher();
@@ -137,7 +115,6 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit LauncherUpdated(_launcher, newLauncher);
     }
 
-    /// @inheritdoc IPonderFactory
     function applyLauncher() external {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         if (block.timestamp < _launcherDelay) revert PonderFactoryTypes.TimelockNotFinished();
@@ -146,14 +123,12 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         address oldLauncher = _launcher;
         _launcher = _pendingLauncher;
 
-        // Reset pending state
         _pendingLauncher = address(0);
         _launcherDelay = 0;
 
         emit LauncherUpdated(oldLauncher, _launcher);
     }
 
-    /// @inheritdoc IPonderFactory
     function setPonder(address newPonder) external {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         address oldPonder = _ponder;

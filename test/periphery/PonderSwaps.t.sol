@@ -387,7 +387,7 @@ contract PonderRouterTest is Test {
         );
 
         // Step 3: Try the original swap - should revert with InsufficientOutputAmount
-        vm.expectRevert(abi.encodeWithSelector(PonderRouter.InsufficientOutputAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(PonderRouterTypes.InsufficientOutputAmount.selector));
         router.swapExactTokensForTokens(
             SWAP_AMOUNT,
             expectedOut,  // Using price from before manipulation
@@ -454,7 +454,7 @@ contract PonderRouterTest is Test {
         );
 
         // Try multi-hop swap with original amounts - should revert with InsufficientOutputAmount
-        vm.expectRevert(abi.encodeWithSelector(PonderRouter.InsufficientOutputAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(PonderRouterTypes.InsufficientOutputAmount.selector));
         router.swapExactTokensForTokens(
             SWAP_AMOUNT,
             initialAmounts[2],  // Expected output from initial calculation

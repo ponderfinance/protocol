@@ -719,7 +719,7 @@ contract PonderRouterTest is Test {
         // Move time past deadline
         vm.warp(deadline + 1);
 
-        vm.expectRevert(PonderRouter.ExpiredDeadline.selector);
+        vm.expectRevert(PonderRouterTypes.ExpiredDeadline.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             outputAmount,
             path,
@@ -736,7 +736,7 @@ contract PonderRouterTest is Test {
         path[1] = address(weth);
         uint256 deadline = block.timestamp + 1;
 
-        vm.expectRevert(PonderRouter.InvalidPath.selector);
+        vm.expectRevert(PonderRouterTypes.InvalidPath.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             outputAmount,
             path,
@@ -776,7 +776,7 @@ contract PonderRouterTest is Test {
         // Try to swap with insufficient ETH
         uint256 insufficientETH = requiredETH - 0.1 ether;
 
-        vm.expectRevert(PonderRouter.ExcessiveInputAmount.selector);
+        vm.expectRevert(PonderRouterTypes.ExcessiveInputAmount.selector);
         router.swapETHForExactTokens{value: insufficientETH}(
             outputAmount,
             path,
@@ -854,7 +854,7 @@ contract PonderRouterTest is Test {
         path[1] = address(tokenA);
 
         // Use the router's error selector
-        vm.expectRevert(PonderRouter.ZeroOutput.selector);
+        vm.expectRevert(PonderRouterTypes.ZeroOutput.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             0,
             path,

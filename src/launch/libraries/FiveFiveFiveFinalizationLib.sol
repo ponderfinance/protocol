@@ -239,7 +239,7 @@ library FiveFiveFiveFinalizationLib {
         PonderToken ponder,
         PonderPriceOracle priceOracle
     ) private view returns (uint256) {
-        address ponderKubPair = factory.getPair(address(ponder), router.WETH());
+        address ponderKubPair = factory.getPair(address(ponder), router.weth());
         return FiveFiveFiveValidation.validatePonderPrice(
             ponderKubPair,
             priceOracle,

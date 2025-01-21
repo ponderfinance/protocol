@@ -20,6 +20,11 @@ contract MockRouter {
         unwrapper = _unwrapper;
     }
 
+    // Add this function
+    function weth() external view returns (address) {
+        return WETH;
+    }
+
     function addLiquidityETH(
         address token,
         uint amountTokenDesired,
@@ -286,7 +291,7 @@ contract PonderPairTest is Test {
 
         // Verify results
         assertEq(standardPair.balanceOf(alice), 0, "Should have no LP tokens");
-        uint256 minLiquidity = standardPair.MINIMUM_LIQUIDITY();
+        uint256 minLiquidity = standardPair.minimumLiquidity();
 
         // Compare final balance with initial balance
         assertEq(

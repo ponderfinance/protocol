@@ -174,7 +174,7 @@ contract PonderMasterChefTest is Test {
         masterChef.deposit(0, depositAmount);
         vm.stopPrank();
 
-        uint256 expectedFee = (depositAmount * depositFeeBP) / masterChef.BASIS_POINTS();
+        uint256 expectedFee = (depositAmount * depositFeeBP) / masterChef.basisPoints();
         assertEq(pair.balanceOf(teamReserve), expectedFee);
     }
 
@@ -569,7 +569,7 @@ contract PonderMasterChefTest is Test {
         // Verify shares didn't exceed max boost
         (uint256 amount, , , uint256 weightedShares) = masterChef.userInfo(0, alice);
         uint256 maxBoostMultiplier = 30000; // 3x
-        uint256 maxExpectedShares = (amount * maxBoostMultiplier) / masterChef.BASE_MULTIPLIER();
+        uint256 maxExpectedShares = (amount * maxBoostMultiplier) / masterChef.baseMultiplier();
         assertLe(weightedShares, maxExpectedShares, "Weighted shares exceeded max boost");
 
         // Try to game shares by repeated boost/unboost
@@ -637,7 +637,7 @@ contract PonderMasterChefTest is Test {
         );
 
         // Should revert with ZeroAmount since no actual tokens were transferred
-        vm.expectRevert(PonderMasterChef.ZeroAmount.selector);
+        vm.expectRevert(PonderMasterChefTypes.ZeroAmount.selector);
         masterChef.boostStake(0, boostAmount);
         vm.stopPrank();
     }
@@ -735,7 +735,7 @@ contract PonderMasterChefTest is Test {
         masterChef.deposit(0, INITIAL_LP_SUPPLY);
 
         // Move time to just before minting end
-        uint256 mintingEnd = block.timestamp + ponder.MINTING_END();
+        uint256 mintingEnd = block.timestamp + ponder.mintingEnd();
         vm.warp(mintingEnd - 1 days);
 
         // Should still have pending rewards
@@ -755,7 +755,7 @@ contract PonderMasterChefTest is Test {
         masterChef.add(1000, address(pair), 0, 20000);
 
         // Get current supply and max supply
-        uint256 maxSupply = ponder.MAXIMUM_SUPPLY();
+        uint256 maxSupply = ponder.maximumSupply();
         uint256 currentSupply = ponder.totalSupply();
 
         // Instead of trying to mint up to max supply, let's test with a smaller amount
@@ -867,7 +867,7 @@ contract PonderMasterChefTest is Test {
         console.log("User2 rewards:", user2Rewards);
 
         // Verify attacker didn't get excessive shares
-        uint256 maxAllowableShares = lpAmount * 30000 / masterChef.BASE_MULTIPLIER(); // 3x max
+        uint256 maxAllowableShares = lpAmount * 30000 / masterChef.baseMultiplier(); // 3x max
         assertLe(attackerShares, maxAllowableShares, "Attacker got excessive shares");
 
         // Verify attacker's rewards aren't disproportionate

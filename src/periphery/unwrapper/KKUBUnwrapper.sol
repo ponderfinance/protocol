@@ -7,76 +7,61 @@ import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2St
 import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { IWETH } from "./IWETH.sol";
+import { IKKUB } from "./IKKUB.sol";
 
-interface IKKUB is IWETH {
-    function blacklist(address addr) external view returns (bool);
-    function kycsLevel(address addr) external view returns (uint256);
-}
+import { KKUBUnwrapperTypes } from "./types/KKUBUnwrapperTypes.sol";
+import { KKUBUnwrapperStorage } from "./storage/KKUBUnwrapperStorage.sol";
+import { IKKUBUnwrapper } from "./IKKUBUnwrapper.sol";
 
-contract KKUBUnwrapper is ReentrancyGuard, Pausable, Ownable2Step {
+/// @title KKUBUnwrapper Implementation
+/// @notice Handles unwrapping of KKUB tokens to ETH
+/// @dev Implements unwrapping logic with safety checks and emergency functions
+contract KKUBUnwrapper is
+    IKKUBUnwrapper,
+    KKUBUnwrapperStorage,
+    ReentrancyGuard,
+    Pausable,
+    Ownable2Step
+{
     using SafeERC20 for IERC20;
     using Address for address payable;
+    using KKUBUnwrapperTypes for *;
 
     /// @notice The KKUB token contract
-    address public immutable KKUB;
-
-    /// @notice Last successful withdrawal timestamp
-    uint256 private lastWithdrawalTime;
-
-    /// @notice Amount of ETH currently in active unwrapping operations
-    uint256 private _lockedBalance;
-
-    /// @notice Withdrawal cooldown period
-    uint256 public constant WITHDRAWAL_DELAY = 6 hours;
-
-    /// @notice Maximum withdrawal amount per period
-    uint256 public constant MAX_WITHDRAWAL_AMOUNT = 1000 ether;
-
-    /// @notice Required KYC level for KKUB contract
-    uint256 public constant REQUIRED_KYC_LEVEL = 1;
-
-    error WithdrawalTooFrequent();
-    error InsufficientBalance();
-    error WithdrawFailed();
-    error BlacklistedAddress();
-    error ZeroAmount();
-    error InsufficientKYCLevel();
-    error ZeroAddressNotAllowed();
-    error InvalidNewOwner();
-
-    event UnwrappedKKUB(address indexed recipient, uint256 amount);
-    event EmergencyWithdraw(uint256 amount, uint256 timestamp);
-    event WithdrawalLimitReset();
+    address public immutable override KKUB;
 
     constructor(address _kkub) Ownable(msg.sender) {
-        if (_kkub == address(0)) revert ZeroAddressNotAllowed();
+        if (_kkub == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
         KKUB = _kkub;
     }
 
-    function transferOwnership(address newOwner) public virtual override {
-        if (newOwner == address(0)) revert InvalidNewOwner();
+    function transferOwnership(address newOwner) public virtual override(Ownable2Step) {
+        if (newOwner == address(0)) revert KKUBUnwrapperTypes.InvalidNewOwner();
         super.transferOwnership(newOwner);
     }
 
-    function getLockedBalance() external view returns (uint256) {
+    /// @inheritdoc IKKUBUnwrapper
+    function getLockedBalance() external view override returns (uint256) {
         return _lockedBalance;
     }
 
+    /// @inheritdoc IKKUBUnwrapper
     function unwrapKKUB(uint256 amount, address recipient)
     external
+    override
     nonReentrant
     whenNotPaused
     returns (bool)
     {
-        if (amount == 0) revert ZeroAmount();
-        if (recipient == address(0)) revert ZeroAmount();
+        if (amount == 0) revert KKUBUnwrapperTypes.ZeroAmount();
+        if (recipient == address(0)) revert KKUBUnwrapperTypes.ZeroAmount();
 
         // Check KYC level and blacklist before proceeding
-        if (IKKUB(KKUB).kycsLevel(address(this)) <= REQUIRED_KYC_LEVEL) {
-            revert InsufficientKYCLevel();
+        if (IKKUB(KKUB).kycsLevel(address(this)) <= KKUBUnwrapperTypes.REQUIRED_KYC_LEVEL) {
+            revert KKUBUnwrapperTypes.InsufficientKYCLevel();
         }
         if (IKKUB(KKUB).blacklist(recipient)) {
-            revert BlacklistedAddress();
+            revert KKUBUnwrapperTypes.BlacklistedAddress();
         }
 
         // Lock the balance
@@ -95,14 +80,14 @@ contract KKUBUnwrapper is ReentrancyGuard, Pausable, Ownable2Step {
         uint256 ethReceived = address(this).balance - initialBalance;
         if (ethReceived < amount) {
             _lockedBalance -= amount;
-            revert WithdrawFailed();
+            revert KKUBUnwrapperTypes.WithdrawFailed();
         }
 
         // Send ETH to recipient
         (bool sent,) = payable(recipient).call{value: amount}("");
         if (!sent) {
             _lockedBalance -= amount;
-            revert WithdrawFailed();
+            revert KKUBUnwrapperTypes.WithdrawFailed();
         }
 
         // If successful, update state
@@ -112,20 +97,22 @@ contract KKUBUnwrapper is ReentrancyGuard, Pausable, Ownable2Step {
         return true;
     }
 
+    /// @inheritdoc IKKUBUnwrapper
     function emergencyWithdraw()
     external
+    override
     onlyOwner
     nonReentrant
     {
-        if (block.timestamp < lastWithdrawalTime + WITHDRAWAL_DELAY) {
-            revert WithdrawalTooFrequent();
+        if (block.timestamp < lastWithdrawalTime + KKUBUnwrapperTypes.WITHDRAWAL_DELAY) {
+            revert KKUBUnwrapperTypes.WithdrawalTooFrequent();
         }
 
         uint256 withdrawableAmount = address(this).balance - _lockedBalance;
-        if (withdrawableAmount == 0) revert InsufficientBalance();
+        if (withdrawableAmount == 0) revert KKUBUnwrapperTypes.InsufficientBalance();
 
-        if (withdrawableAmount > MAX_WITHDRAWAL_AMOUNT) {
-            withdrawableAmount = MAX_WITHDRAWAL_AMOUNT;
+        if (withdrawableAmount > KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT) {
+            withdrawableAmount = KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT;
         }
 
         // Update state before transfer
@@ -140,18 +127,21 @@ contract KKUBUnwrapper is ReentrancyGuard, Pausable, Ownable2Step {
         emit EmergencyWithdraw(withdrawableAmount, block.timestamp);
     }
 
-    function resetWithdrawalLimit() external {
-        if (block.timestamp >= lastWithdrawalTime + WITHDRAWAL_DELAY) {
+    /// @inheritdoc IKKUBUnwrapper
+    function resetWithdrawalLimit() external override {
+        if (block.timestamp >= lastWithdrawalTime + KKUBUnwrapperTypes.WITHDRAWAL_DELAY) {
             lastWithdrawalTime = 0;
             emit WithdrawalLimitReset();
         }
     }
 
-    function pause() external onlyOwner {
+    /// @inheritdoc IKKUBUnwrapper
+    function pause() external override onlyOwner {
         _pause();
     }
 
-    function unpause() external onlyOwner {
+    /// @inheritdoc IKKUBUnwrapper
+    function unpause() external override onlyOwner {
         _unpause();
     }
 

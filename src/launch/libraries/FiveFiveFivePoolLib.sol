@@ -65,7 +65,7 @@ library FiveFiveFivePoolLib {
         address tokenAddress,
         IPonderRouter router
     ) external returns (address pair) {
-        address weth = router.WETH();
+        address weth = router.weth();
         pair = factory.getPair(tokenAddress, weth);
 
         if (pair == address(0)) {

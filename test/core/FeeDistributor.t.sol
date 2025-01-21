@@ -456,7 +456,7 @@ contract FeeDistributorTest is Test {
         distributor.convertFees(address(testToken));
 
         uint256 totalAmount = ponder.balanceOf(address(distributor));
-        require(totalAmount >= distributor.MINIMUM_AMOUNT(), "Insufficient PONDER for distribution");
+        require(totalAmount >= distributor.minimumAmount(), "Insufficient PONDER for distribution");
 
         uint256 expectedStaking = (totalAmount * 8000) / BASIS_POINTS; // 80%
         uint256 expectedTeam = (totalAmount * 2000) / BASIS_POINTS;    // 20%
@@ -635,7 +635,7 @@ contract FeeDistributorTest is Test {
         IPonderPair(reentrantPairAddr).swap(0, 1e18, address(this), empty);
 
         // Attempt reentrancy attack - should fail
-        vm.expectRevert(abi.encodeWithSignature("TransferFailed()"));
+        vm.expectRevert(abi.encodeWithSignature("ReentrancyGuardReentrantCall()"));
         distributor.collectFeesFromPair(reentrantPairAddr);
     }
 
@@ -956,7 +956,7 @@ contract FeeDistributorTest is Test {
         uint256 initialTokenBalance = testToken.balanceOf(address(distributor));
 
         // Ensure we have enough fees to convert
-        require(initialTokenBalance >= distributor.MINIMUM_AMOUNT(), "Insufficient fees");
+        require(initialTokenBalance >= distributor.minimumAmount(), "Insufficient fees");
 
         // Convert fees
         distributor.convertFees(address(testToken));
@@ -974,7 +974,7 @@ contract FeeDistributorTest is Test {
         ERC20Mock invalidToken = new ERC20Mock("Invalid", "INV");
 
         // Mint some tokens to the distributor
-        invalidToken.mint(address(distributor), distributor.MINIMUM_AMOUNT());
+        invalidToken.mint(address(distributor), distributor.minimumAmount());
 
         // Should revert with PairNotFound since no pair exists
         vm.expectRevert(abi.encodeWithSignature("PairNotFound()"));
@@ -1006,7 +1006,7 @@ contract FeeDistributorTest is Test {
         );
 
         // Mint directly to distributor
-        maliciousToken.mint(address(distributor), distributor.MINIMUM_AMOUNT());
+        maliciousToken.mint(address(distributor), distributor.minimumAmount());
 
         // Change this line to expect SwapFailed instead
         vm.expectRevert(abi.encodeWithSignature("SwapFailed()"));
@@ -1029,7 +1029,7 @@ contract FeeDistributorTest is Test {
 
         // Ensure sufficient balance
         uint256 distributorBalance = ponder.balanceOf(address(distributor));
-        require(distributorBalance >= distributor.MINIMUM_AMOUNT(), "Insufficient balance for test");
+        require(distributorBalance >= distributor.minimumAmount(), "Insufficient balance for test");
 
         // Try after 30 minutes
         vm.warp(1000 + 30 minutes);

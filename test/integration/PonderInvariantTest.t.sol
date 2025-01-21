@@ -94,10 +94,10 @@ contract PonderInvariantTest is StdInvariant, Test {
 
         // Minimum liquidity should always be locked
         if (totalSupply > 0) {
-            assertGe(totalSupply, pair.MINIMUM_LIQUIDITY(), "Total supply should be >= MINIMUM_LIQUIDITY");
+            assertGe(totalSupply, pair.minimumLiquidity(), "Total supply should be >= MINIMUM_LIQUIDITY");
             assertEq(
                 pair.balanceOf(address(1)),
-                pair.MINIMUM_LIQUIDITY(),
+                pair.minimumLiquidity(),
                 "MINIMUM_LIQUIDITY balance mismatch"
             );
         }

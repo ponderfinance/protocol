@@ -30,7 +30,7 @@ contract PonderTokenTest is Test {
         assertEq(token.totalSupply(), 350_000_000e18);
         assertEq(token.owner(), address(this));
         assertEq(token.minter(), address(0));
-        assertEq(token.MAXIMUM_SUPPLY(), 1_000_000_000e18);
+        assertEq(token.maximumSupply(), 1_000_000_000e18);
     }
 
     function testInitialAllocations() public {
@@ -60,7 +60,7 @@ contract PonderTokenTest is Test {
 
     function testFailMintOverMaxSupply() public {
         token.setMinter(address(this));
-        token.mint(address(0x1), token.MAXIMUM_SUPPLY() + 1);
+        token.mint(address(0x1), token.maximumSupply() + 1);
     }
 
     function testFailMintUnauthorized() public {
@@ -80,7 +80,7 @@ contract PonderTokenTest is Test {
 
         // Warp past deadline
         vm.warp(block.timestamp + 2);
-        vm.expectRevert(PonderToken.MintingDisabled.selector);
+        vm.expectRevert(PonderTokenTypes.MintingDisabled.selector);
         token.mint(address(0x1), 1000e18);
     }
 
@@ -126,7 +126,7 @@ contract PonderTokenTest is Test {
 
         // Halfway through vesting
         vm.warp(block.timestamp + 365 days / 2);
-        uint256 halfVested = token.TEAM_ALLOCATION() / 2;
+        uint256 halfVested = token.teamAllocation() / 2;
 
         // Claim halfway vested tokens
         vm.prank(teamReserve); // Simulate call from teamReserve
@@ -135,7 +135,7 @@ contract PonderTokenTest is Test {
 
         // Full vesting duration
         vm.warp(block.timestamp + 365 days / 2);
-        uint256 totalVested = token.TEAM_ALLOCATION();
+        uint256 totalVested = token.teamAllocation();
 
         // Claim fully vested tokens
         vm.prank(teamReserve); // Simulate call from teamReserve
@@ -144,7 +144,7 @@ contract PonderTokenTest is Test {
 
         // No tokens should remain
         vm.prank(teamReserve); // Simulate call from teamReserve
-        vm.expectRevert(PonderToken.NoTokensAvailable.selector);
+        vm.expectRevert(PonderTokenTypes.NoTokensAvailable.selector);
         token.claimTeamTokens();
     }
 
@@ -155,7 +155,7 @@ contract PonderTokenTest is Test {
 
         vm.prank(teamReserve);
         // Should revert with VestingNotStarted
-        vm.expectRevert(PonderToken.VestingNotStarted.selector);
+        vm.expectRevert(PonderTokenTypes.VestingNotStarted.selector);
         token.claimTeamTokens();
     }
 
@@ -164,7 +164,7 @@ contract PonderTokenTest is Test {
         assertEq(token.balanceOf(token.teamReserve()), 0);
 
         // Warp to beyond the vesting duration
-        vm.warp(block.timestamp + token.VESTING_DURATION() + 1);
+        vm.warp(block.timestamp + token.vestingDuration() + 1);
 
         // Claim all remaining vested tokens
         vm.prank(teamReserve); // Simulate call from teamReserve
@@ -177,14 +177,14 @@ contract PonderTokenTest is Test {
 
     function testFailMintingBeyondMaxSupply() public {
         token.setMinter(address(this));
-        uint256 remainingSupply = token.MAXIMUM_SUPPLY() - token.totalSupply();
+        uint256 remainingSupply = token.maximumSupply() - token.totalSupply();
         token.mint(address(0x1), remainingSupply);
         token.mint(address(0x1), 1); // Should fail
     }
 
     function testFailMintingAfterDeadline() public {
         token.setMinter(address(this));
-        vm.warp(block.timestamp + token.MINTING_END() + 1);
+        vm.warp(block.timestamp + token.mintingEnd() + 1);
         token.mint(address(0x1), 1000e18);
     }
 
@@ -224,13 +224,13 @@ contract PonderTokenTest is Test {
 
     // Change from testRevertlSetLauncherUnauthorized to:
     function testRevertSetLauncherUnauthorized() public {
-        vm.expectRevert(PonderToken.Forbidden.selector);
+        vm.expectRevert(PonderTokenTypes.Forbidden.selector);
         vm.prank(address(0x456));
         token.setLauncher(address(0x123));
     }
 
     function testRevertSetLauncherToZero() public {
-        vm.expectRevert(PonderToken.ZeroAddress.selector);
+        vm.expectRevert(PonderTokenTypes.ZeroAddress.selector);
         token.setLauncher(address(0));
     }
 
@@ -241,13 +241,13 @@ contract PonderTokenTest is Test {
         // Team has 250M reserved
         // So max mintable should be 400M (1B - 350M - 250M reserved)
         uint256 initialSupply = token.totalSupply();
-        uint256 maxMintable = token.MAXIMUM_SUPPLY() - initialSupply - token.TEAM_ALLOCATION();
+        uint256 maxMintable = token.maximumSupply() - initialSupply - token.teamAllocation();
 
         // Should succeed: Minting up to available supply (excluding reserved)
         token.mint(address(0x1), maxMintable);
 
         // Should fail: Trying to mint more when considering reserved tokens
-        vm.expectRevert(PonderToken.SupplyExceeded.selector);
+        vm.expectRevert(PonderTokenTypes.SupplyExceeded.selector);
         token.mint(address(0x1), 1e18);
     }
 
@@ -269,15 +269,15 @@ contract PonderTokenTest is Test {
         token.claimTeamTokens();
 
         // Calculate remaining mintable considering claimed and unclaimed team tokens
-        uint256 unclaimedTeam = token.TEAM_ALLOCATION() - token.teamTokensClaimed();
+        uint256 unclaimedTeam = token.teamAllocation() - token.teamTokensClaimed();
         uint256 currentSupply = token.totalSupply();
-        uint256 remainingMintable = token.MAXIMUM_SUPPLY() - currentSupply - unclaimedTeam;
+        uint256 remainingMintable = token.maximumSupply() - currentSupply - unclaimedTeam;
 
         // Should succeed: Minting remaining available amount
         token.mint(address(0x1), remainingMintable);
 
         // Should fail: Trying to mint more
-        vm.expectRevert(PonderToken.SupplyExceeded.selector);
+        vm.expectRevert(PonderTokenTypes.SupplyExceeded.selector);
         token.mint(address(0x1), 1e18);
     }
 
@@ -293,16 +293,16 @@ contract PonderTokenTest is Test {
 
         // Calculate remaining mintable after team claim
         uint256 currentSupply = token.totalSupply();
-        uint256 remainingMintable = token.MAXIMUM_SUPPLY() - currentSupply;
+        uint256 remainingMintable = token.maximumSupply() - currentSupply;
 
         // Should succeed: Mint remaining supply
         token.mint(address(0x1), remainingMintable);
 
         // Verify exact total supply
-        assertEq(token.totalSupply(), token.MAXIMUM_SUPPLY(), "Total supply should equal max supply");
+        assertEq(token.totalSupply(), token.maximumSupply(), "Total supply should equal max supply");
 
         // Should fail: Mint any more tokens
-        vm.expectRevert(PonderToken.SupplyExceeded.selector);
+        vm.expectRevert(PonderTokenTypes.SupplyExceeded.selector);
         token.mint(address(0x1), 1e18);
     }
 
@@ -319,22 +319,22 @@ contract PonderTokenTest is Test {
             token.claimTeamTokens();
 
             // Calculate safe mintable amount
-            uint256 unclaimedTeam = token.TEAM_ALLOCATION() - token.teamTokensClaimed();
+            uint256 unclaimedTeam = token.teamAllocation() - token.teamTokensClaimed();
             uint256 currentSupply = token.totalSupply();
-            uint256 safeMintAmount = token.MAXIMUM_SUPPLY() - currentSupply - unclaimedTeam;
+            uint256 safeMintAmount = token.maximumSupply() - currentSupply - unclaimedTeam;
 
             if (safeMintAmount > 0) {
                 // Should succeed: Mint safe amount
                 token.mint(address(0x1), safeMintAmount);
 
                 // Should fail: Mint any more
-                vm.expectRevert(PonderToken.SupplyExceeded.selector);
+                vm.expectRevert(PonderTokenTypes.SupplyExceeded.selector);
                 token.mint(address(0x1), 1e18);
             }
         }
 
         // Verify final supply respects maximum
-        assertLe(token.totalSupply(), token.MAXIMUM_SUPPLY(), "Total supply should not exceed maximum");
+        assertLe(token.totalSupply(), token.maximumSupply(), "Total supply should not exceed maximum");
     }
 
     function testNoTokensAvailableRevert() public {
@@ -343,7 +343,7 @@ contract PonderTokenTest is Test {
 
         vm.prank(teamReserve);
         // Now should revert with NoTokensAvailable
-        vm.expectRevert(PonderToken.NoTokensAvailable.selector);
+        vm.expectRevert(PonderTokenTypes.NoTokensAvailable.selector);
         token.claimTeamTokens();
     }
 
@@ -356,14 +356,14 @@ contract PonderTokenTest is Test {
 
         vm.prank(teamReserve);
         // Should revert with NoTokensAvailable
-        vm.expectRevert(PonderToken.NoTokensAvailable.selector);
+        vm.expectRevert(PonderTokenTypes.NoTokensAvailable.selector);
         token.claimTeamTokens();
 
         // Move forward to have some tokens available
         vm.warp(block.timestamp + 1 days);
 
         // Should now succeed
-        uint256 expectedVested = (token.TEAM_ALLOCATION() * 1 days) / token.VESTING_DURATION();
+        uint256 expectedVested = (token.teamAllocation() * 1 days) / token.vestingDuration();
         vm.prank(teamReserve);
         token.claimTeamTokens();
         assertEq(token.teamTokensClaimed(), expectedVested);
@@ -393,7 +393,7 @@ contract PonderTokenTest is Test {
         address unauthorized = address(0x123);
 
         vm.prank(unauthorized);
-        vm.expectRevert(PonderToken.OnlyLauncherOrOwner.selector);
+        vm.expectRevert(PonderTokenTypes.OnlyLauncherOrOwner.selector);
         token.burn(burnAmount);
     }
 

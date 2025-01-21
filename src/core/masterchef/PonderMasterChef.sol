@@ -2,213 +2,248 @@
 pragma solidity ^0.8.20;
 
 import { IPonderMasterChef } from "./IPonderMasterChef.sol";
-import { IPonderFactory } from "../factory/IPonderFactory.sol";
+import { PonderMasterChefStorage } from "./storage/PonderMasterChefStorage.sol";
+import { PonderMasterChefTypes } from "./types/PonderMasterChefTypes.sol";
 import { IPonderPair } from "../pair/IPonderPair.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { PonderToken } from "../token/PonderToken.sol";
 
 /**
-* @title PonderMasterChef
-* @notice Manages token farming rewards and boost mechanics for Ponder Protocol
-* @dev Distributes PONDER tokens to liquidity providers based on weighted shares
-*      Total emissions remain fixed regardless of boosts applied
-*/
-contract PonderMasterChef is IPonderMasterChef {
+ * @title PonderMasterChef
+ * @notice Implementation of the PonderMasterChef staking and farming system
+ * @dev Manages LP staking, PONDER emissions, and boost mechanics
+ */
+contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
+    using PonderMasterChefTypes for *;
+
+    // Immutable state variables
     /// @notice The PONDER token contract
     PonderToken public immutable PONDER;
 
-    /// @notice DEX factory for validating LP tokens
+    /// @notice Factory contract for validating LP tokens
     IPonderFactory public immutable FACTORY;
 
-    /// @notice PONDER tokens created per second (fixed rate)
-    uint256 public ponderPerSecond;
-
-    /// @notice Info of each pool
-    PoolInfo[] public poolInfo;
-
-    /// @notice Info of each user that stakes LP tokens, by pid
-    mapping(uint256 => mapping(address => UserInfo)) public userInfo;
-
-    /// @notice Total allocation points across all pools
-    uint256 public totalAllocPoint;
-
-    /// @notice Treasury address for deposit fees
-    address public teamReserve;
-
-    /// @notice Contract owner address
-    address public owner;
-
-    /// @notice Pending owner for 2-step transfer
-    address public pendingOwner;
-
-    /// @notice Basis points for percentage calculations (100% = 10000)
-    uint256 public constant BASIS_POINTS = 10000;
-
-    /// @notice Base multiplier (1x = 10000)
-    uint256 public constant BASE_MULTIPLIER = 10000;
-
-    /// @notice Minimum boost multiplier (2x = 20000)
-    uint256 public constant MIN_BOOST_MULTIPLIER = 20000;
-
-    /// @notice Required PONDER stake relative to LP value (10%)
-    uint256 public constant BOOST_THRESHOLD_PERCENT = 1000;
-
-    /// @notice Maximum additional boost percentage (100%)
-    uint256 public constant MAX_EXTRA_BOOST_PERCENT = 10000;
-
-    /// @notice Start time of rewards distribution
-    uint256 public startTime;
-
-    /// @notice Flag to track if farming has started
-    bool public farmingStarted;
-
-    /// @notice Maximum allocation points per pool to prevent manipulation
-    uint256 public constant MAX_ALLOC_POINT = 10000;
-
-    /// @notice Custom errors
-    error InvalidBoostMultiplier();
-    error ExcessiveDepositFee();
-    error Forbidden();
-    error InvalidPool();
-    error InvalidPair();
-    error InvalidAmount();
-    error ZeroAmount();
-    error ZeroAddress();
-    error InsufficientAmount();
-    error BoostTooHigh();
-    error TransferFailed();
-    error ExcessiveAllocation();
-    error DuplicatePool();
-    error NoTokensTransferred();
-
-    /// @notice Events for weighted shares tracking
-    event WeightedSharesUpdated(uint256 indexed pid, address indexed user, uint256 newShares, uint256 totalShares);
-    event PoolWeightedSharesUpdated(uint256 indexed pid, uint256 totalWeightedShares);
-
-    modifier onlyOwner {
-        if (msg.sender != owner) revert Forbidden();
-        _;
-    }
-
     /**
-     * @notice Constructor initializes PonderMasterChef contract
-    * @param _ponder PONDER token contract address
-    * @param _factory Factory contract address
-    * @param _teamReserve TeamReserve address to receive deposit fees
-    * @param _ponderPerSecond PONDER tokens minted per second
-    */
+     * @notice Initializes the MasterChef contract
+     * @param _ponder PONDER token contract address
+     * @param _factory Factory contract for LP token validation
+     * @param _teamReserve_ Address to receive deposit fees
+     * @param _ponderPerSecond_ Initial PONDER tokens per second
+     */
     constructor(
         PonderToken _ponder,
         IPonderFactory _factory,
-        address _teamReserve,
-        uint256 _ponderPerSecond
+        address _teamReserve_,
+        uint256 _ponderPerSecond_
     ) {
-        if (_teamReserve == address(0)) revert ZeroAddress();
+        if (_teamReserve_ == address(0)) revert PonderMasterChefTypes.ZeroAddress();
         PONDER = _ponder;
         FACTORY = _factory;
-        teamReserve = _teamReserve;
-        ponderPerSecond = _ponderPerSecond;
-        owner = msg.sender;
+        _teamReserve = _teamReserve_;
+        _ponderPerSecond = _ponderPerSecond_;
+        _owner = msg.sender;
     }
 
     /**
-     * @notice Returns the number of pools
-    * @return The total number of pools
-    */
+     * @notice Restricts function to the contract owner
+     */
+    modifier onlyOwner {
+        if (msg.sender != _owner) revert PonderMasterChefTypes.Forbidden();
+        _;
+    }
+
+    // State Variable Getters
+
+    /// @inheritdoc IPonderMasterChef
+    function basisPoints() external pure returns (uint256) {
+        return PonderMasterChefTypes.BASIS_POINTS;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function baseMultiplier() external pure returns (uint256) {
+        return PonderMasterChefTypes.BASE_MULTIPLIER;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function minBoostMultiplier() external pure returns (uint256) {
+        return PonderMasterChefTypes.MIN_BOOST_MULTIPLIER;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function boostThresholdPercent() external pure returns (uint256) {
+        return PonderMasterChefTypes.BOOST_THRESHOLD_PERCENT;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function maxExtraBoostPercent() external pure returns (uint256) {
+        return PonderMasterChefTypes.MAX_EXTRA_BOOST_PERCENT;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function maxAllocPoint() external pure returns (uint256) {
+        return PonderMasterChefTypes.MAX_ALLOC_POINT;
+    }
+
+
+    /// @inheritdoc IPonderMasterChef
+    function userInfo(uint256 _pid, address _user) external view returns (
+        uint256 amount,
+        uint256 rewardDebt,
+        uint256 ponderStaked,
+        uint256 weightedShares
+    ) {
+        PonderMasterChefTypes.UserInfo storage info = _userInfo[_pid][_user];
+        return (info.amount, info.rewardDebt, info.ponderStaked, info.weightedShares);
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function teamReserve() external view returns (address) {
+        return _teamReserve;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function ponderPerSecond() external view returns (uint256) {
+        return _ponderPerSecond;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function totalAllocPoint() external view returns (uint256) {
+        return _totalAllocPoint;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function owner() external view returns (address) {
+        return _owner;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function startTime() external view returns (uint256) {
+        return _startTime;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function farmingStarted() external view returns (bool) {
+        return _farmingStarted;
+    }
+
+    // View Functions
+
+    /// @inheritdoc IPonderMasterChef
     function poolLength() external view returns (uint256) {
-        return poolInfo.length;
+        return _poolInfo.length;
     }
 
-    /**
-     * @notice View function to see pending PONDER rewards for an address
-    * @param _pid Pool ID
-    * @param _user Address of the user
-    * @return pending Amount of PONDER rewards pending
-    */
-    function pendingPonder(uint256 _pid, address _user)
-    external
-    view
-    returns (uint256 pending)
-    {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_user];
+    /// @inheritdoc IPonderMasterChef
+    function pendingPonder(uint256 _pid, address _user) external view returns (uint256) {
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
 
-        // Get current state
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][_user];
+
         uint256 accPonderPerShare = pool.accPonderPerShare;
         uint256 lpSupply = pool.totalWeightedShares;
 
-        if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && farmingStarted) {
-            // Calculate elapsed time since last update
+        if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && _farmingStarted) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
+            uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint) / _totalAllocPoint;
 
-            // Calculate rewards with safe math
-            uint256 ponderReward = (timeElapsed * ponderPerSecond * pool.allocPoint) / totalAllocPoint;
-
-            // Check if reward would exceed remaining supply
-            uint256 remainingMintableForAccrual = PONDER.MAXIMUM_SUPPLY() - PONDER.totalSupply();
+            uint256 remainingMintableForAccrual = PONDER.maximumSupply() - PONDER.totalSupply();
             if (ponderReward > remainingMintableForAccrual) {
                 ponderReward = remainingMintableForAccrual;
             }
 
-            // Calculate rewards based on boosted shares
             accPonderPerShare = accPonderPerShare + ((ponderReward * 1e12) / lpSupply);
         }
 
-        // Calculate pending rewards based on weighted (boosted) shares
-        pending = user.weightedShares > 0 ?
+        uint256 pending = user.weightedShares > 0 ?
             ((user.weightedShares * accPonderPerShare) / 1e12) - user.rewardDebt :
             0;
 
-        // Additional safety check for max supply
-        uint256 remainingMintableForPending = PONDER.MAXIMUM_SUPPLY() - PONDER.totalSupply();
+        uint256 remainingMintableForPending = PONDER.maximumSupply() - PONDER.totalSupply();
         if (pending > remainingMintableForPending) {
             pending = remainingMintableForPending;
         }
 
-        // No rewards after minting end
-        if (block.timestamp > PONDER.DEPLOYMENT_TIME() + PONDER.MINTING_END()) {
+        if (block.timestamp > PONDER.deploymentTime() + PONDER.mintingEnd()) {
             pending = 0;
         }
+
+        return pending;
     }
 
+    /// @inheritdoc IPonderMasterChef
+    function getRequiredPonderForBoost(
+        uint256 lpAmount,
+        uint256 targetMultiplier
+    ) public pure returns (uint256) {
+        if (targetMultiplier <= PonderMasterChefTypes.BASE_MULTIPLIER) {
+            return 0;
+        }
+        if (targetMultiplier < PonderMasterChefTypes.MIN_BOOST_MULTIPLIER) {
+            return (lpAmount * PonderMasterChefTypes.BOOST_THRESHOLD_PERCENT) / PonderMasterChefTypes.BASIS_POINTS;
+        }
 
-    /// @notice Add a new LP pool
-    /// @param _allocPoint Allocation points for the new pool (max 10000)
-    /// @param _lpToken Address of the LP token contract
-    /// @param _depositFeeBP Deposit fee in basis points (max 1000)
-    /// @param _boostMultiplier Maximum boost multiplier (between 20000 and 50000)
+        uint256 extraBoost = targetMultiplier - PonderMasterChefTypes.MIN_BOOST_MULTIPLIER;
+        uint256 baseRequired = (
+            lpAmount * PonderMasterChefTypes.BOOST_THRESHOLD_PERCENT
+        ) / PonderMasterChefTypes.BASIS_POINTS;
+        uint256 additionalRequired = (baseRequired * extraBoost) / PonderMasterChefTypes.MAX_EXTRA_BOOST_PERCENT;
+
+        return baseRequired + additionalRequired;
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function previewBoostMultiplier(
+        uint256 _pid,
+        uint256 ponderStaked,
+        uint256 lpAmount
+    ) external view returns (uint256) {
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        return _calculateBoostMultiplier(
+            ponderStaked,
+            lpAmount,
+            _poolInfo[_pid].boostMultiplier
+        );
+    }
+
+    // Pool Management Functions
+
+    /// @inheritdoc IPonderMasterChef
     function add(
         uint256 _allocPoint,
         address _lpToken,
         uint16 _depositFeeBP,
         uint16 _boostMultiplier
     ) external onlyOwner {
-        // Input validation
-        if (_lpToken == address(0)) revert ZeroAddress();
-        if (_allocPoint > MAX_ALLOC_POINT) revert ExcessiveAllocation();
-        if (_depositFeeBP > 1000) revert ExcessiveDepositFee();
-        if (_boostMultiplier < MIN_BOOST_MULTIPLIER) revert InvalidBoostMultiplier();
-        if (_boostMultiplier > 50000) revert InvalidBoostMultiplier();
-
-        // Check for duplicate pools
-        uint256 length = poolInfo.length;
-        for (uint256 pid; pid < length; ++pid) {
-            if (poolInfo[pid].lpToken == _lpToken) revert DuplicatePool();
+        if (_lpToken == address(0)) revert PonderMasterChefTypes.ZeroAddress();
+        if (_allocPoint > PonderMasterChefTypes.MAX_ALLOC_POINT)  {
+            revert PonderMasterChefTypes.ExcessiveAllocation();
+        }
+        if (_depositFeeBP > 1000) revert PonderMasterChefTypes.ExcessiveDepositFee();
+        if (_boostMultiplier < PonderMasterChefTypes.MIN_BOOST_MULTIPLIER) {
+            revert PonderMasterChefTypes.InvalidBoostMultiplier();
         }
 
-        // Always update pools to prevent reward dilution
-        massUpdatePools();
+        if (_boostMultiplier > 50000) revert PonderMasterChefTypes.InvalidBoostMultiplier();
+
+        // Check for duplicate pools
+        uint256 length = _poolInfo.length;
+        for (uint256 pid; pid < length; ++pid) {
+            if (_poolInfo[pid].lpToken == _lpToken) revert PonderMasterChefTypes.DuplicatePool();
+        }
+
+        _massUpdatePools();
 
         // Validate LP token is from our factory
         address token0 = IPonderPair(_lpToken).token0();
         address token1 = IPonderPair(_lpToken).token1();
-        if (FACTORY.getPair(token0, token1) != _lpToken) revert InvalidPair();
+        if (FACTORY.getPair(token0, token1) != _lpToken) revert PonderMasterChefTypes.InvalidPair();
 
-        uint256 lastRewardTime = farmingStarted ? block.timestamp : 0;
-        totalAllocPoint += _allocPoint;
+        uint256 lastRewardTime = _farmingStarted ? block.timestamp : 0;
+        _totalAllocPoint += _allocPoint;
 
-        poolInfo.push(PoolInfo({
+        _poolInfo.push(PonderMasterChefTypes.PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
             lastRewardTime: lastRewardTime,
@@ -219,30 +254,55 @@ contract PonderMasterChef is IPonderMasterChef {
             boostMultiplier: _boostMultiplier
         }));
 
-        emit PoolAdded(poolInfo.length - 1, _lpToken, _allocPoint);
+        emit PoolAdded(_poolInfo.length - 1, _lpToken, _allocPoint);
     }
 
+    /// @inheritdoc IPonderMasterChef
+    function set(
+        uint256 _pid,
+        uint256 _allocPoint,
+        bool _withUpdate
+    ) external onlyOwner {
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+
+        if (_withUpdate) {
+            _massUpdatePools();
+        }
+
+        _totalAllocPoint = _totalAllocPoint - _poolInfo[_pid].allocPoint + _allocPoint;
+        _poolInfo[_pid].allocPoint = _allocPoint;
+
+        emit PoolUpdated(_pid, _allocPoint);
+    }
+
+    // Pool Update Functions
 
     /**
      * @notice Update reward variables for all pools
-    * @dev Be careful of gas spending
-    */
-    function massUpdatePools() public {
-        uint256 length = poolInfo.length;
+     * @dev Be careful of gas spending
+     */
+    function _massUpdatePools() internal {
+        uint256 length = _poolInfo.length;
         for (uint256 pid; pid < length; ++pid) {
-            updatePool(pid);
+            _updatePool(pid);
         }
+    }
+
+
+    /// @inheritdoc IPonderMasterChef
+    function updatePool(uint256 _pid) external {
+        _updatePool(_pid);
     }
 
     /**
      * @notice Update reward variables of the given pool
-    * @param _pid Pool ID to update
-    */
-    function updatePool(uint256 _pid) public {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        PoolInfo storage pool = poolInfo[_pid];
+     * @param _pid Pool ID to update
+     */
+    function _updatePool(uint256 _pid) internal {
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
 
-        if (!farmingStarted) {
+        if (!_farmingStarted) {
             return;
         }
 
@@ -252,123 +312,52 @@ contract PonderMasterChef is IPonderMasterChef {
 
         uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
 
-        // Skip reward minting if there are no weighted shares (no active deposits)
         if (pool.totalWeightedShares == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
         }
 
-        uint256 ponderReward = (timeElapsed * ponderPerSecond * pool.allocPoint) / totalAllocPoint;
+        uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint) / _totalAllocPoint;
 
         pool.accPonderPerShare += (ponderReward * 1e12) / pool.totalWeightedShares;
         pool.lastRewardTime = block.timestamp;
 
-        // Mint rewards after updating accPonderPerShare
         PONDER.mint(address(this), ponderReward);
     }
 
+    // User Interaction Functions
 
-    /**
-     * @notice Update pool allocation points
-    * @param _pid Pool ID to update
-    * @param _allocPoint New allocation points
-    * @param _withUpdate Whether to update all pools
-    */
-    function set(
-        uint256 _pid,
-        uint256 _allocPoint,
-        bool _withUpdate
-    ) external onlyOwner {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-
-        if (_withUpdate) {
-            massUpdatePools();
-        }
-
-        totalAllocPoint = totalAllocPoint - poolInfo[_pid].allocPoint + _allocPoint;
-        poolInfo[_pid].allocPoint = _allocPoint;
-
-        emit PoolUpdated(_pid, _allocPoint);
-    }
-
-    /**
-     * @notice Update user's weighted shares in pool
-    * @param _pid Pool ID
-    * @param _user User address
-    */
-    function _updateUserWeightedShares(uint256 _pid, address _user) internal {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_user];
-
-        uint256 oldWeightedShares = user.weightedShares;
-        uint256 newWeightedShares = user.amount;  // Base amount
-
-        if (user.ponderStaked > 0) {
-            uint256 boost = calculateBoostMultiplier(
-                user.ponderStaked,
-                user.amount,
-                pool.boostMultiplier
-            );
-            // Verify boost doesn't exceed max
-            if (boost > pool.boostMultiplier) {
-                boost = pool.boostMultiplier;
-            }
-            newWeightedShares = (user.amount * boost) / BASE_MULTIPLIER;
-        }
-
-        if (oldWeightedShares != newWeightedShares) {
-            pool.totalWeightedShares = pool.totalWeightedShares - oldWeightedShares + newWeightedShares;
-            user.weightedShares = newWeightedShares;
-            emit WeightedSharesUpdated(_pid, _user, newWeightedShares, pool.totalWeightedShares);
-            emit PoolWeightedSharesUpdated(_pid, pool.totalWeightedShares);
-        }
-    }
-
-    /**
-     * @notice Deposit LP tokens to earn PONDER rewards
-    * @param _pid Pool ID
-    * @param _amount Amount of LP tokens to deposit
-    */
-
+    /// @inheritdoc IPonderMasterChef
     function deposit(uint256 _pid, uint256 _amount) external {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        // Set start time on first deposit
-        if (!farmingStarted && _amount > 0) {
-            startTime = block.timestamp;
-            farmingStarted = true;
+        if (!_farmingStarted && _amount > 0) {
+            _startTime = block.timestamp;
+            _farmingStarted = true;
         }
 
-        updatePool(_pid);  // This updates the reward state
+        _updatePool(_pid);
 
-        // Handle pending rewards
         if (user.amount > 0) {
             uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
             if (pending > 0) {
-                safePonderTransfer(msg.sender, pending);
+                _safePonderTransfer(msg.sender, pending);
             }
         }
 
-        // Handle deposit
         if (_amount > 0) {
-            // Get initial balance
             uint256 beforeBalance = IERC20(pool.lpToken).balanceOf(address(this));
-
-            // Transfer tokens - will revert if insufficient balance
             IERC20(pool.lpToken).transferFrom(msg.sender, address(this), _amount);
-
-            // Calculate actual transferred amount
             uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
             uint256 actualAmount = afterBalance - beforeBalance;
 
-            if (actualAmount == 0) revert NoTokensTransferred();
+            if (actualAmount == 0) revert PonderMasterChefTypes.NoTokensTransferred();
 
-            // Handle deposit fee if any
             if (pool.depositFeeBP > 0) {
-                uint256 depositFee = (actualAmount * pool.depositFeeBP) / BASIS_POINTS;
-                IERC20(pool.lpToken).transfer(teamReserve, depositFee);
+                uint256 depositFee = (actualAmount * pool.depositFeeBP) / PonderMasterChefTypes.BASIS_POINTS;
+                IERC20(pool.lpToken).transfer(_teamReserve, depositFee);
                 actualAmount = actualAmount - depositFee;
             }
 
@@ -376,32 +365,25 @@ contract PonderMasterChef is IPonderMasterChef {
             pool.totalStaked += actualAmount;
         }
 
-        // Update user's weighted shares
         _updateUserWeightedShares(_pid, msg.sender);
-
-        // Update reward debt based on new shares
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
         emit Deposit(msg.sender, _pid, _amount);
     }
 
-    /**
-     * @notice Withdraw LP tokens
-    * @param _pid Pool ID
-    * @param _amount Amount of LP tokens to withdraw
-    */
+    /// @inheritdoc IPonderMasterChef
     function withdraw(uint256 _pid, uint256 _amount) external {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        if (user.amount < _amount) revert InsufficientAmount();
+        if (user.amount < _amount) revert PonderMasterChefTypes.InsufficientAmount();
 
-        updatePool(_pid);
+        _updatePool(_pid);
 
         uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
         if (pending > 0) {
-            safePonderTransfer(msg.sender, pending);
+            _safePonderTransfer(msg.sender, pending);
         }
 
         if (_amount > 0) {
@@ -416,14 +398,11 @@ contract PonderMasterChef is IPonderMasterChef {
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
-    /**
-     * @notice Emergency withdraw LP tokens without caring about rewards
-    * @param _pid Pool ID
-    */
+    /// @inheritdoc IPonderMasterChef
     function emergencyWithdraw(uint256 _pid) external {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
         uint256 amount = user.amount;
         pool.totalWeightedShares -= user.weightedShares;
@@ -437,79 +416,39 @@ contract PonderMasterChef is IPonderMasterChef {
         emit EmergencyWithdraw(msg.sender, _pid, amount);
     }
 
-    /**
- * @notice Calculate required PONDER stake for desired boost multiplier
-     * @param lpAmount Amount of LP tokens staked
-     * @param targetMultiplier Desired boost multiplier
-     * @return Required PONDER stake amount
-     */
-    function getRequiredPonderForBoost(
-        uint256 lpAmount,
-        uint256 targetMultiplier
-    ) public pure returns (uint256) {
-        if (targetMultiplier <= BASE_MULTIPLIER) {
-            return 0;
-        }
-        if (targetMultiplier < MIN_BOOST_MULTIPLIER) {
-            return (lpAmount * BOOST_THRESHOLD_PERCENT) / BASIS_POINTS;
-        }
-
-        uint256 extraBoost = targetMultiplier - MIN_BOOST_MULTIPLIER;
-        uint256 baseRequired = (lpAmount * BOOST_THRESHOLD_PERCENT) / BASIS_POINTS;
-        uint256 additionalRequired = (baseRequired * extraBoost) / MAX_EXTRA_BOOST_PERCENT;
-
-        return baseRequired + additionalRequired;
-    }
-
-
-    /**
-     * @notice Stake PONDER tokens to boost rewards
-    * @param _pid Pool ID
-    * @param _amount Amount of PONDER to stake
-    */
+    /// @inheritdoc IPonderMasterChef
     function boostStake(uint256 _pid, uint256 _amount) external {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        if (_amount == 0) revert ZeroAmount();
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_amount == 0) revert PonderMasterChefTypes.ZeroAmount();
 
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        // Require user has staked LP tokens first
-        if (user.amount == 0) revert InsufficientAmount();
+        if (user.amount == 0) revert PonderMasterChefTypes.InsufficientAmount();
 
-        // Get max allowed PONDER stake
         uint256 maxPonderStake = getRequiredPonderForBoost(user.amount, pool.boostMultiplier);
+        if (user.ponderStaked + _amount > maxPonderStake) revert PonderMasterChefTypes.BoostTooHigh();
 
-        // Validate new total wouldn't exceed max - do this check first
-        if (user.ponderStaked + _amount > maxPonderStake) revert BoostTooHigh();
-
-        // Handle transfer and balance check
         uint256 beforeBalance = PONDER.balanceOf(address(this));
-
-        // First check if transfer succeeded
         if (!PONDER.transferFrom(msg.sender, address(this), _amount)) {
-            revert TransferFailed();
+            revert PonderMasterChefTypes.TransferFailed();
         }
 
-        // Then verify we actually received tokens
         uint256 actualAmount = PONDER.balanceOf(address(this)) - beforeBalance;
-        if (actualAmount == 0) revert ZeroAmount();
-        if (actualAmount != _amount) revert InvalidAmount();
+        if (actualAmount == 0) revert PonderMasterChefTypes.ZeroAmount();
+        if (actualAmount != _amount) revert PonderMasterChefTypes.InvalidAmount();
 
-        // Update pool and handle pending rewards
-        updatePool(_pid);
+        _updatePool(_pid);
         uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
         if (pending > 0) {
-            safePonderTransfer(msg.sender, pending);
+            _safePonderTransfer(msg.sender, pending);
         }
 
-        // Update state
         user.ponderStaked += actualAmount;
         _updateUserWeightedShares(_pid, msg.sender);
 
-        // Verify shares didn't increase beyond allowed multiplier
-        if (user.weightedShares > user.amount * pool.boostMultiplier / BASE_MULTIPLIER) {
-            revert BoostTooHigh();
+        if (user.weightedShares > user.amount * pool.boostMultiplier / PonderMasterChefTypes.BASE_MULTIPLIER) {
+            revert PonderMasterChefTypes.BoostTooHigh();
         }
 
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
@@ -517,57 +456,62 @@ contract PonderMasterChef is IPonderMasterChef {
         emit BoostStake(msg.sender, _pid, actualAmount);
     }
 
-    /**
-     * @notice Unstake PONDER tokens used for boost
-     * @param _pid Pool ID
-     * @param _amount Amount of PONDER to unstake
-     */
+    /// @inheritdoc IPonderMasterChef
     function boostUnstake(uint256 _pid, uint256 _amount) external {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        if (_amount == 0) revert ZeroAmount();
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_amount == 0) revert PonderMasterChefTypes.ZeroAmount();
 
-        if (user.ponderStaked < _amount) revert InsufficientAmount();
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
+        if (user.ponderStaked < _amount) revert PonderMasterChefTypes.InsufficientAmount();
 
-        updatePool(_pid);
+        _updatePool(_pid);
 
-        uint256 pending = (user.weightedShares * poolInfo[_pid].accPonderPerShare / 1e12) - user.rewardDebt;
+        uint256 pending = (user.weightedShares * _poolInfo[_pid].accPonderPerShare / 1e12) - user.rewardDebt;
         if (pending > 0) {
-            safePonderTransfer(msg.sender, pending);
+            _safePonderTransfer(msg.sender, pending);
         }
 
         user.ponderStaked -= _amount;
         PONDER.transfer(msg.sender, _amount);
 
         _updateUserWeightedShares(_pid, msg.sender);
-        user.rewardDebt = (user.weightedShares * poolInfo[_pid].accPonderPerShare) / 1e12;
+        user.rewardDebt = (user.weightedShares * _poolInfo[_pid].accPonderPerShare) / 1e12;
 
         emit BoostUnstake(msg.sender, _pid, _amount);
     }
 
-    /**
-     * @notice Safe PONDER transfer function, just in case if rounding error causes pool to not have enough PONDER
-     * @param _to Address to receive PONDER
-     * @param _amount Amount of PONDER to transfer
-     */
-    function safePonderTransfer(address _to, uint256 _amount) internal {
-        uint256 ponderBalance = PONDER.balanceOf(address(this));
-        if (_amount > ponderBalance) {
-            PONDER.transfer(_to, ponderBalance);
-        } else {
-            PONDER.transfer(_to, _amount);
-        }
-    }
+    // Internal Helper Functions
 
     /**
-     * @notice Update teamReserve address
-     * @param _teamReserve New teamReserve address
+     * @notice Update user's weighted shares in pool
+     * @param _pid Pool ID
+     * @param _user User address
      */
-    function setTeamReserve(address _teamReserve) external onlyOwner {
-        if (_teamReserve == address(0)) revert ZeroAddress();
-        address oldTeamReserve = teamReserve;
-        teamReserve = _teamReserve;
-        emit TeamReserveUpdated(oldTeamReserve, _teamReserve);
+    function _updateUserWeightedShares(uint256 _pid, address _user) internal {
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][_user];
+
+        uint256 oldWeightedShares = user.weightedShares;
+        uint256 newWeightedShares = user.amount;
+
+        if (user.ponderStaked > 0) {
+            uint256 boost = _calculateBoostMultiplier(
+                user.ponderStaked,
+                user.amount,
+                pool.boostMultiplier
+            );
+            if (boost > pool.boostMultiplier) {
+                boost = pool.boostMultiplier;
+            }
+            newWeightedShares = (user.amount * boost) / PonderMasterChefTypes.BASE_MULTIPLIER;
+        }
+
+        if (oldWeightedShares != newWeightedShares) {
+            pool.totalWeightedShares = pool.totalWeightedShares - oldWeightedShares + newWeightedShares;
+            user.weightedShares = newWeightedShares;
+            emit WeightedSharesUpdated(_pid, _user, newWeightedShares, pool.totalWeightedShares);
+            emit PoolWeightedSharesUpdated(_pid, pool.totalWeightedShares);
+        }
     }
 
     /**
@@ -577,56 +521,58 @@ contract PonderMasterChef is IPonderMasterChef {
      * @param maxBoost Maximum boost multiplier allowed for the pool
      * @return Boost multiplier (10000 = 1x)
      */
-    function calculateBoostMultiplier(
+    function _calculateBoostMultiplier(
         uint256 ponderStaked,
         uint256 lpAmount,
         uint256 maxBoost
-    ) public pure returns (uint256) {
+    ) internal pure returns (uint256) {
         if (ponderStaked == 0 || lpAmount == 0) {
-            return BASE_MULTIPLIER;
+            return PonderMasterChefTypes.BASE_MULTIPLIER;
         }
 
-        uint256 requiredPonder = (lpAmount * BOOST_THRESHOLD_PERCENT) / BASIS_POINTS;
+        uint256 requiredPonder = (
+            lpAmount * PonderMasterChefTypes.BOOST_THRESHOLD_PERCENT
+        ) / PonderMasterChefTypes.BASIS_POINTS;
 
         if (ponderStaked < requiredPonder) {
-            return BASE_MULTIPLIER;
+            return PonderMasterChefTypes.BASE_MULTIPLIER;
         }
 
         uint256 excessPonder = ponderStaked - requiredPonder;
-        uint256 extraBoost = (excessPonder * MAX_EXTRA_BOOST_PERCENT) / requiredPonder;
-        uint256 totalBoost = MIN_BOOST_MULTIPLIER + extraBoost;
+        uint256 extraBoost = (excessPonder * PonderMasterChefTypes.MAX_EXTRA_BOOST_PERCENT) / requiredPonder;
+        uint256 totalBoost = PonderMasterChefTypes.MIN_BOOST_MULTIPLIER + extraBoost;
 
         return totalBoost > maxBoost ? maxBoost : totalBoost;
     }
 
-
     /**
-     * @notice Preview boost multiplier for given stake amounts
-     * @param _pid Pool ID
-     * @param ponderStaked Amount of PONDER to stake
-     * @param lpAmount Amount of LP tokens staked
-     * @return Predicted boost multiplier
+     * @notice Safe PONDER transfer function that gracefully handles insufficient balances
+     * @param _to Address to receive PONDER
+     * @param _amount Amount of PONDER to transfer
      */
-    function previewBoostMultiplier(
-        uint256 _pid,
-        uint256 ponderStaked,
-        uint256 lpAmount
-    ) external view returns (uint256) {
-        if (_pid >= poolInfo.length) revert InvalidPool();
-        return calculateBoostMultiplier(
-            ponderStaked,
-            lpAmount,
-            poolInfo[_pid].boostMultiplier
-        );
+    function _safePonderTransfer(address _to, uint256 _amount) internal {
+        uint256 ponderBalance = PONDER.balanceOf(address(this));
+        if (_amount > ponderBalance) {
+            PONDER.transfer(_to, ponderBalance);
+        } else {
+            PONDER.transfer(_to, _amount);
+        }
     }
 
-    /**
-     * @notice Update PONDER emission rate
-     * @param _ponderPerSecond New PONDER tokens created per second
-     */
-    function setPonderPerSecond(uint256 _ponderPerSecond) external onlyOwner {
-        massUpdatePools();
-        ponderPerSecond = _ponderPerSecond;
-        emit PonderPerSecondUpdated(ponderPerSecond);
+    // Admin Functions
+
+    /// @inheritdoc IPonderMasterChef
+    function setTeamReserve(address _newTeamReserve) external onlyOwner {
+        if (_newTeamReserve == address(0)) revert PonderMasterChefTypes.ZeroAddress();
+        address oldTeamReserve = _teamReserve;
+        _teamReserve = _newTeamReserve;
+        emit TeamReserveUpdated(oldTeamReserve, _newTeamReserve);
+    }
+
+    /// @inheritdoc IPonderMasterChef
+    function setPonderPerSecond(uint256 _newPonderPerSecond) external onlyOwner {
+        _massUpdatePools();
+        _ponderPerSecond = _newPonderPerSecond;
+        emit PonderPerSecondUpdated(_ponderPerSecond);
     }
 }

@@ -4,8 +4,13 @@ pragma solidity ^0.8.20;
 /**
  * @title IPonderStaking
  * @notice Interface for the PonderStaking contract
+ * @dev Defines the events and functions for staking PONDER tokens
  */
 interface IPonderStaking {
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Emitted when tokens are staked
     event Staked(address indexed user, uint256 ponderAmount, uint256 xPonderAmount);
 
@@ -14,6 +19,16 @@ interface IPonderStaking {
 
     /// @notice Emitted when a rebase occurs
     event RebasePerformed(uint256 totalSupply, uint256 totalPonderBalance);
+
+    /// @notice Emitted when ownership transfer is initiated
+    event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
+
+    /// @notice Emitted when ownership is transferred
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /*//////////////////////////////////////////////////////////////
+                              FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Stakes PONDER tokens and mints xPONDER
     /// @param amount Amount of PONDER to stake
@@ -37,4 +52,15 @@ interface IPonderStaking {
     /// @param amount Amount of PONDER to calculate for
     /// @return Amount of xPONDER that would be minted
     function getSharesAmount(uint256 amount) external view returns (uint256);
+
+    /// @notice Initiates transfer of ownership
+    /// @param newOwner Address of the new owner
+    function transferOwnership(address newOwner) external;
+
+    /// @notice Completes transfer of ownership
+    function acceptOwnership() external;
+
+    /// @notice Returns the minimum amount required for first stake
+    /// @return Minimum first stake amount
+    function minimumFirstStake() external view returns (uint256);
 }

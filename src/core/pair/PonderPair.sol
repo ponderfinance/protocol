@@ -3,144 +3,159 @@ pragma solidity ^0.8.20;
 
 import { PonderERC20 } from "../token/PonderERC20.sol";
 import { IPonderPair } from "./IPonderPair.sol";
+import { PonderPairStorage } from "./storage/PonderPairStorage.sol";
+import { PonderPairTypes } from "./types/PonderPairTypes.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
 import { IPonderCallee } from "./IPonderCallee.sol";
-import { ILaunchToken } from "../token/ILaunchToken.sol";
+import { ILaunchToken } from "./ILaunchToken.sol";
 import { Math } from "../../libraries/Math.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-
-contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
+/**
+ * @title PonderPair
+ * @notice Implementation of Ponder's AMM pair contract
+ * @dev Handles swaps, liquidity provision, and fee collection for token pairs
+ */
+contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", "PONDER-LP") {
     using UQ112x112 for uint224;
+    using PonderPairTypes for PonderPairTypes.SwapData;
+    using SafeERC20 for IERC20;
 
-    uint256 public constant override MINIMUM_LIQUIDITY = 1000;
-    bytes4 private constant SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
-
-    address public override factory;
-    address public override token0;
-    address public override token1;
-
-    // Updated fee constants
-    uint256 private constant FEE_DENOMINATOR = 10000;
-    uint256 private constant LP_FEE = 25;            // 0.25% for LPs
-
-    // Launch token PONDER pair fees
-    uint256 private constant PONDER_CREATOR_FEE = 4;  // 0.04% for creator
-    uint256 private constant PONDER_PROTOCOL_FEE = 1; // 0.01% for protocol
-
-    // Launch token KUB/other pair fees
-    uint256 private constant KUB_CREATOR_FEE = 1;     // 0.01% for creator
-    uint256 private constant KUB_PROTOCOL_FEE = 4;    // 0.04% for protocol
-
-    // Standard pair fees
-    uint256 private constant STANDARD_PROTOCOL_FEE = 5; // 0.05% for protocol
-
-    uint112 private reserve0;
-    uint112 private reserve1;
-    uint32 private blockTimestampLast;
-
-    uint256 public override price0CumulativeLast;
-    uint256 public override price1CumulativeLast;
-    uint256 public override kLast;
-
-    uint256 private unlocked = 1;
-
-    // Accumulated protocol fees that need to be skimmed
-    uint256 private accumulatedFee0;
-    uint256 private accumulatedFee1;
-
-    error Locked();
-    error Forbidden();
-    error TransferFailed();
-    error InsufficientOutputAmount();
-    error InvalidToAddress();
-    error InsufficientLiquidity();
-    error InsufficientLiquidityBurned();
-    error InsufficientInitialLiquidity();
-    error InsufficientLiquidityMinted();
-    error InsufficientOutput();
-    error InvalidRecipient();
-    error InsufficientLiquiditySwap();
-    error InsufficientInputAmount();
-    error KValueCheckFailed();
-    error InvariantViolation();
-    error Overflow();
-
-
-    modifier lock() {
-        if (unlocked != 1) revert Locked();
-        unlocked = 0;
-        _;
-        unlocked = 1;
-    }
-
+    /**
+     * @dev Sets the factory address
+     */
     constructor() {
-        factory = msg.sender;
+        _factory = msg.sender;
     }
 
+    /**
+     * @notice Prevents reentrancy during swap operations
+     */
+    modifier lock() {
+        if (_unlocked != 1) revert PonderPairTypes.Locked();
+        _unlocked = 0;
+        _;
+        _unlocked = 1;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function minimumLiquidity() external pure override returns (uint256) {
+        return PonderPairTypes.MINIMUM_LIQUIDITY;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function factory() external view override returns (address) {
+        return _factory;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function token0() external view override returns (address) {
+        return _token0;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function token1() external view override returns (address) {
+        return _token1;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function price0CumulativeLast() external view override returns (uint256) {
+        return _price0CumulativeLast;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function price1CumulativeLast() external view override returns (uint256) {
+        return _price1CumulativeLast;
+    }
+
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function kLast() external view override returns (uint256) {
+        return _kLast;
+    }
+
+    /**
+     * @notice Returns the launcher contract address
+     * @return Address of the launcher contract
+     */
     function launcher() public view returns (address) {
-        return IPonderFactory(factory).launcher();
+        return IPonderFactory(_factory).launcher();
     }
 
+    /**
+     * @notice Returns the PONDER token address
+     * @return Address of the PONDER token
+     */
     function ponder() public view returns (address) {
-        return IPonderFactory(factory).ponder();
-    }
-    function initialize(address _token0, address _token1) external override {
-        if (msg.sender != factory) revert Forbidden();
-        token0 = _token0;
-        token1 = _token1;
+        return IPonderFactory(_factory).ponder();
     }
 
-    function getReserves()
-        public
-        view
-        override
-        returns (
-            uint112 _reserve0,
-            uint112 _reserve1,
-            uint32 _blockTimestampLast
-        )
-    {
-        _reserve0 = reserve0;
-        _reserve1 = reserve1;
-        _blockTimestampLast = blockTimestampLast;
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function initialize(address token0_, address token1_) external override {
+        if (msg.sender != _factory) revert PonderPairTypes.Forbidden();
+        _token0 = token0_;
+        _token1 = token1_;
     }
 
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function getReserves() public view override returns (
+        uint112 reserve0_,
+        uint112 reserve1_,
+        uint32 blockTimestampLast_
+    ) {
+        reserve0_ = _reserve0;
+        reserve1_ = _reserve1;
+        blockTimestampLast_ = _blockTimestampLast;
+    }
+
+    /**
+     * @dev Safely transfers tokens using low-level call
+     * @param token Token address to transfer
+     * @param to Recipient address
+     * @param value Amount to transfer
+     */
     function _safeTransfer(address token, address to, uint256 value) private {
-        // Note: Low-level call is necessary for compatibility with non-standard ERC20 tokens
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
-        if (!success || (data.length != 0 && !abi.decode(data, (bool)))) {
-            revert TransferFailed();
-        }
+        IERC20(token).safeTransfer(to, value);
     }
 
-    function _executeTransfers(address to, uint256 amount0Out, uint256 amount1Out, bytes calldata data) private {
-        if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
-        if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
+    /**
+     * @dev Executes token transfers and flash loan callback if applicable
+     */
+    function _executeTransfers(
+        address to,
+        uint256 amount0Out,
+        uint256 amount1Out,
+        bytes calldata data
+    ) private {
+        if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out);
+        if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out);
         if (data.length > 0) {
-            IPonderCallee(to).ponderCall(
-                msg.sender,
-                amount0Out,
-                amount1Out,
-                data
-            );
+            IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
         }
     }
 
-    // Update the SwapData struct to include output flags
-    struct SwapData {
-        uint256 amount0Out;
-        uint256 amount1Out;
-        uint256 amount0In;
-        uint256 amount1In;
-        uint256 balance0;
-        uint256 balance1;
-        uint112 reserve0;
-        uint112 reserve1;
-    }
-
+    /**
+     * @dev Handles fee collection for token swaps
+     */
     function _handleTokenFees(
         address token,
         uint256 amountIn,
@@ -152,78 +167,79 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
     ) private {
         if (amountIn == 0) return;
 
-        address feeTo = IPonderFactory(factory).feeTo();
-
-        // Early return if no fee collector
+        address feeTo = IPonderFactory(_factory).feeTo();
         if (feeTo == address(0)) return;
 
-        // Determine if token is being sold (input) vs bought (output)
         bool isTokenOutput = (token == token0Address && amount0Out > 0) ||
             (token == token1Address && amount1Out > 0);
-
-        // If token is being bought (output), don't apply fees
         if (isTokenOutput) return;
 
         uint256 protocolFeeAmount = 0;
         uint256 creatorFeeAmount = 0;
 
         try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
-            // Special fees for launch tokens being sold
             if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
                 address creator = ILaunchToken(token).creator();
 
                 if (isPonderPair) {
-                    // Launch token -> PONDER pair fees
-                    protocolFeeAmount = (amountIn * 1) / FEE_DENOMINATOR;  // 0.01%
-                    creatorFeeAmount = (amountIn * 4) / FEE_DENOMINATOR;   // 0.04%
+                    protocolFeeAmount = (amountIn * PonderPairTypes.PONDER_PROTOCOL_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                    creatorFeeAmount = (amountIn * PonderPairTypes.PONDER_CREATOR_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
                 } else {
-                    // Launch token -> KUB/other pair fees
-                    protocolFeeAmount = (amountIn * 4) / FEE_DENOMINATOR;  // 0.04%
-                    creatorFeeAmount = (amountIn * 1) / FEE_DENOMINATOR;   // 0.01%
+                    protocolFeeAmount = (amountIn * PonderPairTypes.KUB_PROTOCOL_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                    creatorFeeAmount = (amountIn * PonderPairTypes.KUB_CREATOR_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
                 }
 
-                // Transfer creator fee directly
                 if (creatorFeeAmount > 0) {
                     _safeTransfer(token, creator, creatorFeeAmount);
                 }
             } else {
-                // Standard protocol fee for non-launch tokens
-                protocolFeeAmount = (amountIn * 5) / FEE_DENOMINATOR;  // 0.05%
+                protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                                PonderPairTypes.FEE_DENOMINATOR;
             }
         } catch {
-            // Standard protocol fee for non-launch tokens
-            protocolFeeAmount = (amountIn * 5) / FEE_DENOMINATOR;  // 0.05%
+            protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                            PonderPairTypes.FEE_DENOMINATOR;
         }
 
-        // Accumulate protocol fees for later collection via skim
-        if (token == token0) {
-            accumulatedFee0 += protocolFeeAmount;
+        if (token == _token0) {
+            _accumulatedFee0 += protocolFeeAmount;
         } else {
-            accumulatedFee1 += protocolFeeAmount;
+            _accumulatedFee1 += protocolFeeAmount;
         }
     }
 
-    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override lock {
-        if (amount0Out == 0 && amount1Out == 0) revert InsufficientOutputAmount();
-        if (to == token0 || to == token1) revert InvalidToAddress();
+    /**
+     * @inheritdoc IPonderPair
+     */
+    function swap(
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address to,
+        bytes calldata data
+    ) external override lock {
+        if (amount0Out == 0 && amount1Out == 0) revert PonderPairTypes.InsufficientOutputAmount();
+        if (to == _token0 || to == _token1) revert PonderPairTypes.InvalidToAddress();
 
-        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
-        if (amount0Out >= _reserve0 || amount1Out >= _reserve1) revert InsufficientLiquidity();
+        (uint112 reserve0_, uint112 reserve1_,) = getReserves();
+        if (amount0Out >= reserve0_ || amount1Out >= reserve1_) {
+            revert PonderPairTypes.InsufficientLiquidity();
+        }
 
-        // New: Store the initial product of reserves (K invariant)
-        uint256 initialK = uint256(_reserve0) * uint256(_reserve1);
+        uint256 initialK = uint256(reserve0_) * uint256(reserve1_);
 
-        // Execute initial transfers first
         _executeTransfers(to, amount0Out, amount1Out, data);
 
-        // Store all our data in the struct to avoid stack too deep
-        SwapData memory swapData;
+        PonderPairTypes.SwapData memory swapData;
         swapData.amount0Out = amount0Out;
         swapData.amount1Out = amount1Out;
-        swapData.reserve0 = _reserve0;
-        swapData.reserve1 = _reserve1;
-        swapData.balance0 = IERC20(token0).balanceOf(address(this));
-        swapData.balance1 = IERC20(token1).balanceOf(address(this));
+        swapData.reserve0 = reserve0_;
+        swapData.reserve1 = reserve1_;
+        swapData.balance0 = IERC20(_token0).balanceOf(address(this));
+        swapData.balance1 = IERC20(_token1).balanceOf(address(this));
 
         swapData.amount0In = swapData.balance0 > swapData.reserve0 - amount0Out ?
             swapData.balance0 - (swapData.reserve0 - amount0Out) : 0;
@@ -231,48 +247,35 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
             swapData.balance1 - (swapData.reserve1 - amount1Out) : 0;
 
         if (swapData.amount0In == 0 && swapData.amount1In == 0) {
-            revert InsufficientInputAmount();
-        }
-        // Validate K value
-        if (!_validateKValue(swapData)) {
-            revert KValueCheckFailed();
-        }
-        if (swapData.balance0 * swapData.balance1 < initialK) {
-            revert InvariantViolation();
-        }
-        // Handle fees after K check
-        bool isPonderPair = token0 == ponder() || token1 == ponder();
-        if (swapData.amount0In > 0) {
-            _handleTokenFees(token0, swapData.amount0In, isPonderPair, token0, token1, amount0Out, amount1Out);
-        }
-        if (swapData.amount1In > 0) {
-            _handleTokenFees(token1, swapData.amount1In, isPonderPair, token0, token1, amount0Out, amount1Out);
+            revert PonderPairTypes.InsufficientInputAmount();
         }
 
-        _update(
-            IERC20(token0).balanceOf(address(this)),
-            IERC20(token1).balanceOf(address(this)),
-            _reserve0,
-            _reserve1
-        );
+        if (!_validateKValue(swapData)) {
+            revert PonderPairTypes.KValueCheckFailed();
+        }
+        if (swapData.balance0 * swapData.balance1 < initialK) {
+            revert PonderPairTypes.InvariantViolation();
+        }
+
+        bool isPonderPair = _token0 == ponder() || _token1 == ponder();
+
+        if (swapData.amount0In > 0) {
+            _handleTokenFees(_token0, swapData.amount0In, isPonderPair, _token0, _token1, amount0Out, amount1Out);
+        }
+        if (swapData.amount1In > 0) {
+            _handleTokenFees(_token1, swapData.amount1In, isPonderPair, _token0, _token1, amount0Out, amount1Out);
+        }
+
+        _update(swapData.balance0, swapData.balance1, reserve0_, reserve1_);
         emit Swap(msg.sender, swapData.amount0In, swapData.amount1In, amount0Out, amount1Out, to);
     }
 
-    function _calculateInputAmounts(SwapData memory data) private view returns (uint256, uint256) {
-        uint256 amount0In = data.balance0 > data.reserve0 - data.amount0Out ?
-            data.balance0 - (data.reserve0 - data.amount0Out) : 0;
-        uint256 amount1In = data.balance1 > data.reserve1 - data.amount1Out ?
-            data.balance1 - (data.reserve1 - data.amount1Out) : 0;
-
-        // Validate the calculated amounts
-        if (amount0In == 0 && amount1In == 0) {
-            revert InsufficientInputCalculated(amount0In, amount1In, data.balance0, data.balance1);
-        }
-
-        return (amount0In, amount1In);
-    }
-
-    function _validateKValue(SwapData memory data) private pure returns (bool) {
+    /**
+     * @dev Validates K value hasn't decreased after fees
+     * @param data Swap data for validation
+     * @return bool indicating if K value is valid
+     */
+    function _validateKValue(PonderPairTypes.SwapData memory data) private pure returns (bool) {
         uint256 balance0Adjusted = data.balance0 * 1000 - (data.amount0In * 3);
         uint256 balance1Adjusted = data.balance1 * 1000 - (data.amount1In * 3);
 
@@ -280,92 +283,110 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
             uint256(data.reserve0) * uint256(data.reserve1) * (1000 * 1000);
     }
 
+    /**
+     * @inheritdoc IPonderPair
+     */
     function burn(address to) external override lock returns (uint256 amount0, uint256 amount1) {
-        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
-        address _token0 = token0;
-        address _token1 = token1;
+        (uint112 reserve0_, uint112 reserve1_,) = getReserves();
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));
         uint256 liquidity = balanceOf(address(this));
 
-        bool feeOn = _mintFee(_reserve0, _reserve1);
+        bool feeOn = _mintFee(reserve0_, reserve1_);
         uint256 _totalSupply = totalSupply();
 
         amount0 = (liquidity * balance0) / _totalSupply;
         amount1 = (liquidity * balance1) / _totalSupply;
-        if (amount0 == 0 || amount1 == 0) revert InsufficientLiquidityBurned();
+        if (amount0 == 0 || amount1 == 0) revert PonderPairTypes.InsufficientLiquidityBurned();
 
         _burn(address(this), liquidity);
 
-        // Single transfer for each token
         _safeTransfer(_token0, to, amount0);
         _safeTransfer(_token1, to, amount1);
 
-        // Update balances after transfer
         balance0 = IERC20(_token0).balanceOf(address(this));
         balance1 = IERC20(_token1).balanceOf(address(this));
 
-        _update(balance0, balance1, _reserve0, _reserve1);
-        if (feeOn) kLast = uint256(reserve0) * reserve1;
+        _update(balance0, balance1, reserve0_, reserve1_);
+        if (feeOn) _kLast = uint256(_reserve0) * _reserve1;
 
         emit Burn(msg.sender, amount0, amount1, to);
     }
 
+    /**
+     * @inheritdoc IPonderPair
+     */
     function mint(address to) external override lock returns (uint256 liquidity) {
-        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
-        uint256 balance0 = IERC20(token0).balanceOf(address(this));
-        uint256 balance1 = IERC20(token1).balanceOf(address(this));
-        uint256 amount0 = balance0 - _reserve0;
-        uint256 amount1 = balance1 - _reserve1;
+        (uint112 reserve0_, uint112 reserve1_,) = getReserves();
+        uint256 balance0 = IERC20(_token0).balanceOf(address(this));
+        uint256 balance1 = IERC20(_token1).balanceOf(address(this));
+        uint256 amount0 = balance0 - reserve0_;
+        uint256 amount1 = balance1 - reserve1_;
 
-        bool feeOn = _mintFee(_reserve0, _reserve1);
+        bool feeOn = _mintFee(reserve0_, reserve1_);
         uint256 _totalSupply = totalSupply();
 
         if (_totalSupply == 0) {
-            if (amount0 < 1000 || amount1 < 1000) revert InsufficientInitialLiquidity();
-            liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
-            _mint(address(1), MINIMUM_LIQUIDITY);
+            if (amount0 < PonderPairTypes.MINIMUM_LIQUIDITY ||
+                amount1 < PonderPairTypes.MINIMUM_LIQUIDITY) {
+                revert PonderPairTypes.InsufficientInitialLiquidity();
+            }
+            liquidity = Math.sqrt(amount0 * amount1) - PonderPairTypes.MINIMUM_LIQUIDITY;
+            _mint(address(1), PonderPairTypes.MINIMUM_LIQUIDITY);
         } else {
             liquidity = Math.min(
-                (amount0 * _totalSupply) / _reserve0,
-                (amount1 * _totalSupply) / _reserve1
+                (amount0 * _totalSupply) / reserve0_,
+                (amount1 * _totalSupply) / reserve1_
             );
         }
 
-        if (liquidity == 0) revert InsufficientLiquidityMinted();
+        if (liquidity == 0) revert PonderPairTypes.InsufficientLiquidityMinted();
         _mint(to, liquidity);
 
-        _update(balance0, balance1, _reserve0, _reserve1);
-        if (feeOn) kLast = uint256(reserve0) * reserve1;
+        _update(balance0, balance1, reserve0_, reserve1_);
+        if (feeOn) _kLast = uint256(_reserve0) * _reserve1;
 
         emit Mint(msg.sender, amount0, amount1);
     }
 
-    function _update(uint256 balance0, uint256 balance1, uint112 _reserve0, uint112 _reserve1) private {
-        if (balance0 > type(uint112).max || balance1 > type(uint112).max) revert Overflow();
+    /**
+     * @dev Updates reserves and price accumulators
+     */
+    function _update(
+        uint256 balance0,
+        uint256 balance1,
+        uint112 _reserve0Old,
+        uint112 _reserve1Old
+    ) private {
+        if (balance0 > type(uint112).max || balance1 > type(uint112).max) {
+            revert PonderPairTypes.Overflow();
+        }
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
-        uint32 timeElapsed = blockTimestamp > blockTimestampLast
-            ? blockTimestamp - blockTimestampLast
+        uint32 timeElapsed = blockTimestamp > _blockTimestampLast
+            ? blockTimestamp - _blockTimestampLast
             : 0;
 
-        if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
-            price0CumulativeLast += uint256(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) * timeElapsed;
-            price1CumulativeLast += uint256(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) * timeElapsed;
+        if (timeElapsed > 0 && _reserve0Old != 0 && _reserve1Old != 0) {
+            _price0CumulativeLast += uint256(UQ112x112.encode(_reserve1Old).uqdiv(_reserve0Old)) * timeElapsed;
+            _price1CumulativeLast += uint256(UQ112x112.encode(_reserve0Old).uqdiv(_reserve1Old)) * timeElapsed;
         }
-        reserve0 = uint112(balance0);
-        reserve1 = uint112(balance1);
-        blockTimestampLast = blockTimestamp;
-        emit Sync(reserve0, reserve1);
+        _reserve0 = uint112(balance0);
+        _reserve1 = uint112(balance1);
+        _blockTimestampLast = blockTimestamp;
+        emit Sync(_reserve0, _reserve1);
     }
 
-    function _mintFee(uint112 _reserve0, uint112 _reserve1) private returns (bool feeOn) {
-        address feeTo = IPonderFactory(factory).feeTo();
+    /**
+     * @dev Mint LP fee to feeTo address if enabled
+     */
+    function _mintFee(uint112 reserve0_, uint112 reserve1_) private returns (bool feeOn) {
+        address feeTo = IPonderFactory(_factory).feeTo();
         feeOn = feeTo != address(0);
-        uint256 _kLast = kLast;
+        uint256 _kLastOld = _kLast;
         if (feeOn) {
-            if (_kLast != 0) {
-                uint256 rootK = Math.sqrt(uint256(_reserve0) * uint256(_reserve1));
-                uint256 rootKLast = Math.sqrt(_kLast);
+            if (_kLastOld != 0) {
+                uint256 rootK = Math.sqrt(uint256(reserve0_) * uint256(reserve1_));
+                uint256 rootKLast = Math.sqrt(_kLastOld);
                 if (rootK > rootKLast) {
                     uint256 numerator = totalSupply() * (rootK - rootKLast);
                     uint256 denominator = rootK * 5 + rootKLast;
@@ -373,47 +394,49 @@ contract PonderPair is PonderERC20("Ponder LP", "PONDER-LP"), IPonderPair {
                     if (liquidity > 0) _mint(feeTo, liquidity);
                 }
             }
-        } else if (_kLast != 0) {
-            kLast = 0;
+        } else if (_kLastOld != 0) {
+            _kLast = 0;
         }
     }
 
+    /**
+     * @inheritdoc IPonderPair
+     */
     function skim(address to) external override lock {
-        address _token0 = token0;
-        address _token1 = token1;
-        address feeTo = IPonderFactory(factory).feeTo();
+        address feeTo = IPonderFactory(_factory).feeTo();
 
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));
 
-        // First handle excess balance above reserves + accumulated fees
-        uint256 excess0 = balance0 > reserve0 + accumulatedFee0 ? balance0 - reserve0 - accumulatedFee0 : 0;
-        uint256 excess1 = balance1 > reserve1 + accumulatedFee1 ? balance1 - reserve1 - accumulatedFee1 : 0;
+        uint256 excess0 = balance0 > _reserve0 + _accumulatedFee0 ?
+            balance0 - _reserve0 - _accumulatedFee0 : 0;
+        uint256 excess1 = balance1 > _reserve1 + _accumulatedFee1 ?
+            balance1 - _reserve1 - _accumulatedFee1 : 0;
 
         if (excess0 > 0) _safeTransfer(_token0, to, excess0);
         if (excess1 > 0) _safeTransfer(_token1, to, excess1);
 
-        // Then transfer accumulated protocol fees to fee distributor if it exists
         if (feeTo != address(0)) {
-            // Key security change: fees can ONLY go to feeTo address
-            if (accumulatedFee0 > 0) {
-                _safeTransfer(_token0, feeTo, accumulatedFee0);
-                accumulatedFee0 = 0;
+            if (_accumulatedFee0 > 0) {
+                _safeTransfer(_token0, feeTo, _accumulatedFee0);
+                _accumulatedFee0 = 0;
             }
-            if (accumulatedFee1 > 0) {
-                _safeTransfer(_token1, feeTo, accumulatedFee1);
-                accumulatedFee1 = 0;
+            if (_accumulatedFee1 > 0) {
+                _safeTransfer(_token1, feeTo, _accumulatedFee1);
+                _accumulatedFee1 = 0;
             }
         }
     }
 
-
+    /**
+     * @inheritdoc IPonderPair
+     */
     function sync() external override lock {
         _update(
-            IERC20(token0).balanceOf(address(this)),
-            IERC20(token1).balanceOf(address(this)),
-            reserve0,
-            reserve1
+            IERC20(_token0).balanceOf(address(this)),
+            IERC20(_token1).balanceOf(address(this)),
+            _reserve0,
+            _reserve1
         );
     }
 }
