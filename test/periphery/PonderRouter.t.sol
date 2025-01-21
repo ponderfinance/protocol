@@ -854,7 +854,7 @@ contract PonderRouterTest is Test {
         path[1] = address(tokenA);
 
         // Use the router's error selector
-        vm.expectRevert(PonderRouterTypes.ZeroOutput.selector);
+        vm.expectRevert(PonderRouterTypes.InsufficientOutputAmount.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             0,
             path,

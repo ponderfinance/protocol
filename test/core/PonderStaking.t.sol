@@ -35,10 +35,10 @@ contract PonderStakingTest is Test {
         marketing = address(0x5);
 
         // Deploy contracts
-        factory = new PonderFactory(owner, address(0), address(0));
-        router = new PonderRouter(address(factory), WETH, address(0));
+        factory = new PonderFactory(owner, address(1), address(1));
+        router = new PonderRouter(address(factory), WETH, address(1));
 
-        ponder = new PonderToken(teamReserve, marketing, address(0));
+        ponder = new PonderToken(teamReserve, marketing, address(1));
         staking = new PonderStaking(address(ponder), address(router), address(factory));
 
         // Get tokens from marketing wallet

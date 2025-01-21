@@ -1,17 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
-import "../../src/core/factory/PonderFactory.sol";
-import "../../src/core/masterchef/PonderMasterChef.sol";
-import "../../src/core/oracle/PonderPriceOracle.sol";
-import "../../src/core/token/PonderToken.sol";
-import "../../src/core/staking/PonderStaking.sol";
-import "../../src/core/distributor/FeeDistributor.sol";
-import "../../src/launch/FiveFiveFiveLauncher.sol";
-import "../../src/periphery/unwrapper/KKUBUnwrapper.sol";
-import "../../src/periphery/router/PonderRouter.sol";
-
-interface IDeployBitkubScript {
+interface IDeployBitkub {
+    // Structs for deployment configuration and state
     struct DeployConfig {
         uint256 ponderPerSecond;
         uint256 initialKubAmount;
@@ -24,34 +15,37 @@ interface IDeployBitkubScript {
         address deployer;
         address teamReserve;
         address marketing;
-        PonderToken ponder;
-        PonderFactory factory;
-        KKUBUnwrapper kkubUnwrapper;
-        PonderRouter router;
-        PonderPriceOracle oracle;
+        address ponder;
+        address factory;
+        address kkubUnwrapper;
+        address router;
+        address oracle;
+        address staking;
+        address feeDistributor;
+        address launcher;
+        address masterChef;
         address ponderKubPair;
-        PonderMasterChef masterChef;
-        FiveFiveFiveLauncher launcher;
-        PonderStaking staking;
-        FeeDistributor feeDistributor;
+        uint256 deploymentStartTime;
+        bool initialized;
     }
 
+    // Functions that need to be exposed for testing
     function deployCore(
         address deployer,
         address teamReserve,
         address marketing,
-        DeployConfig memory config
+        DeployConfig calldata config
     ) external returns (DeploymentState memory);
 
     function setupInitialPrices(
         DeploymentState memory state,
-        DeployConfig memory config
+        DeployConfig calldata config
     ) external;
 
     function finalizeConfiguration(
         DeploymentState memory state,
         address deployer,
-        DeployConfig memory config
+        DeployConfig calldata config
     ) external;
 
     function validateAddresses(
@@ -60,5 +54,8 @@ interface IDeployBitkubScript {
         address deployer
     ) external pure;
 
-    function verifyContract(string memory name, address contractAddress) external view;
+    function verifyContract(
+        string memory name,
+        address contractAddress
+    ) external view;
 }

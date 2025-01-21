@@ -187,18 +187,18 @@ contract FeeDistributorTest is Test {
         teamReserve = address(0x3);
 
         // Deploy core contracts
-        factory = new PonderFactory(owner, address(0), address(0));
+        factory = new PonderFactory(owner, address(1), address(1));
 
         router = new PonderRouter(
             address(factory),
             WETH,
-            address(0) // No unwrapper needed for tests
+            address(2) //
         );
 
         ponder = new PonderToken(
             teamReserve,
             address(this), // marketing
-            address(0)
+            address(2)
         );
 
         staking = new PonderStaking(
