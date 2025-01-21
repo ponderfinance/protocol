@@ -70,5 +70,5 @@ jobs:
       - name: Run Solhint
         run: |
           npm install -g solhint
-          solhint 'contracts/**/*.sol'
+          solhint 'src/**/*.sol'
         id: lint
