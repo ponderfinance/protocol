@@ -55,12 +55,6 @@ jobs:
           forge coverage --report lcov
         id: coverage
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./lcov.info
-          fail_ci_if_error: true
-
       - name: Run Slither Analysis
         run: |
           pip install slither-analyzer
