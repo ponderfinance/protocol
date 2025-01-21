@@ -109,10 +109,15 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
         if (newLauncher == address(0)) revert PonderFactoryTypes.InvalidLauncher();
 
-        _pendingLauncher = newLauncher;
-        _launcherDelay = block.timestamp + PonderFactoryTypes.LAUNCHER_TIMELOCK;
-
-        emit LauncherUpdated(_launcher, newLauncher);
+        // Skip timelock for initial launcher setting
+        if (_launcher == address(0)) {
+            _launcher = newLauncher;
+            emit LauncherUpdated(address(0), newLauncher);
+        } else {
+            _pendingLauncher = newLauncher;
+            _launcherDelay = block.timestamp + PonderFactoryTypes.LAUNCHER_TIMELOCK;
+            emit LauncherUpdated(_launcher, newLauncher);
+        }
     }
 
     function applyLauncher() external {

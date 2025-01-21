@@ -1009,7 +1009,7 @@ contract FiveFiveFiveLauncherTest is Test {
     }
 
     // Test view function for minimum requirements
-    function testGetMinimumRequirements() public {
+    function testGetMinimumRequirements() public view {
         (uint256 minKub, uint256 minPonder, uint256 minPoolLiquidity) =
                             launcher.getMinimumRequirements();
 

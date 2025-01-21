@@ -12,6 +12,8 @@ env:
 jobs:
   check:
     strategy:
+      matrix:
+        solc_version: [0.8.10, 0.8.19]
       fail-fast: true
 
     name: Foundry project
@@ -21,29 +23,52 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache Foundry Build
+        uses: actions/cache@v3
+        with:
+          path: ~/.foundry
+          key: foundry-cache-${{ runner.os }}-${{ hashFiles('foundry.toml') }}
+          restore-keys: |
+            foundry-cache-${{ runner.os }}-
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
 
-      - name: Run Forge build
+      - name: Set Solidity Version
+        run: forge config set solc ${solc_version}
+
+      - name: Run Forge Build
         run: |
           forge --version
           forge build --sizes
         id: build
 
-      - name: Run Forge tests
+      - name: Run Forge Tests
         run: |
           forge test -vvv
         id: test
 
-      - name: Run Forge coverage
+      - name: Run Forge Coverage
         run: |
           forge coverage --report lcov
         id: coverage
 
-      - name: Upload coverage to Codecov
+      - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           files: ./lcov.info
           fail_ci_if_error: true
+
+      - name: Run Slither Analysis
+        run: |
+          pip install slither-analyzer
+          slither .
+        id: slither
+
+      - name: Run Solhint
+        run: |
+          npm install -g solhint
+          solhint 'contracts/**/*.sol'
+        id: lint

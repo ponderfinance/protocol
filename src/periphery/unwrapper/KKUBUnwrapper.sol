@@ -28,12 +28,19 @@ contract KKUBUnwrapper is
     using KKUBUnwrapperTypes for *;
 
     /// @notice The KKUB token contract
-    address public immutable override KKUB;
+    address public immutable KKUB;
 
     constructor(address _kkub) Ownable(msg.sender) {
         if (_kkub == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
         KKUB = _kkub;
     }
+
+    /// @notice Get the KKUB token address
+    /// @return Address of the KKUB token contract
+    function kkub() external view returns (address) {
+        return KKUB;
+    }
+
 
     function transferOwnership(address newOwner) public virtual override(Ownable2Step) {
         if (newOwner == address(0)) revert KKUBUnwrapperTypes.InvalidNewOwner();
