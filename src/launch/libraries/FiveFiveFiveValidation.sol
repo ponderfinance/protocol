@@ -22,7 +22,7 @@ library FiveFiveFiveValidation {
     /// @param launch The launch info struct to validate
     function validateLaunchState(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
-    ) internal view {
+    ) external view {
         if (launch.base.tokenAddress == address(0)) {
             revert FiveFiveFiveLauncherTypes.LaunchNotFound();
         }
@@ -54,7 +54,7 @@ library FiveFiveFiveValidation {
         string memory symbol,
         mapping(string => bool) storage usedNames,
         mapping(string => bool) storage usedSymbols
-    ) internal view {
+    ) external view {
         bytes memory nameBytes = bytes(name);
         bytes memory symbolBytes = bytes(symbol);
 
@@ -114,7 +114,7 @@ library FiveFiveFiveValidation {
     function validateKubContribution(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 amount
-    ) internal view returns (uint256 newTotal, bool shouldFinalize) {
+    ) external view returns (uint256 newTotal, bool shouldFinalize) {
         // First validate minimum contribution
         if(amount < FiveFiveFiveConstants.MIN_KUB_CONTRIBUTION) {
             revert FiveFiveFiveLauncherTypes.ContributionTooSmall();
@@ -145,7 +145,7 @@ library FiveFiveFiveValidation {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 amount,
         uint256 kubValue
-    ) internal view returns (bool shouldFinalize) {
+    ) external view returns (bool shouldFinalize) {
         // Check minimum contribution
         if(amount < FiveFiveFiveConstants.MIN_PONDER_CONTRIBUTION) {
             revert FiveFiveFiveLauncherTypes.ContributionTooSmall();
@@ -192,7 +192,7 @@ library FiveFiveFiveValidation {
         PonderPriceOracle priceOracle,
         address ponder,
         uint256 amount
-    ) internal view returns (uint256 spotPrice) {
+    ) external view returns (uint256 spotPrice) {
         (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
 
         // Check price staleness

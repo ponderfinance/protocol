@@ -51,7 +51,7 @@ library FiveFiveFiveRefundLib {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address claimer,
         PonderToken ponder
-    ) internal {
+    ) external {
         // Checks
         if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
             revert FiveFiveFiveLauncherTypes.LaunchStillActive();
@@ -113,7 +113,7 @@ library FiveFiveFiveRefundLib {
         address caller,
         mapping(string => bool) storage usedNames,
         mapping(string => bool) storage usedSymbols
-    ) internal {
+    ) external {
         // Validate launch exists
         if (launch.base.tokenAddress == address(0)) {
             revert FiveFiveFiveLauncherTypes.LaunchNotCancellable();
@@ -157,7 +157,7 @@ library FiveFiveFiveRefundLib {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
         address caller
-    ) internal {
+    ) external {
         // Verify withdrawal permissions and conditions
         if(caller != launch.base.creator) {
             revert FiveFiveFiveLauncherTypes.Unauthorized();

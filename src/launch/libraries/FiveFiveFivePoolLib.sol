@@ -36,7 +36,7 @@ library FiveFiveFivePoolLib {
     /// @return pools Pool configuration with token amounts
     function calculatePoolAmounts(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
-    ) internal view returns (FiveFiveFiveLauncherTypes.PoolConfig memory pools) {
+    ) external view returns (FiveFiveFiveLauncherTypes.PoolConfig memory pools) {
         // Calculate KUB amount for primary pool (60%)
         pools.kubAmount = (launch.contributions.kubCollected *
             FiveFiveFiveConstants.KUB_TO_MEME_KUB_LP) / FiveFiveFiveConstants.BASIS_POINTS;
@@ -64,7 +64,7 @@ library FiveFiveFivePoolLib {
         IPonderFactory factory,
         address tokenAddress,
         IPonderRouter router
-    ) internal returns (address pair) {
+    ) external returns (address pair) {
         address weth = router.weth();
         pair = factory.getPair(tokenAddress, weth);
 
@@ -90,7 +90,7 @@ library FiveFiveFivePoolLib {
         IPonderFactory factory,
         address tokenAddress,
         address ponder
-    ) internal returns (address pair) {
+    ) external returns (address pair) {
         pair = factory.getPair(tokenAddress, ponder);
 
         if (pair == address(0)) {
@@ -125,7 +125,7 @@ library FiveFiveFivePoolLib {
         uint256 kubAmount,
         uint256 tokenAmount,
         address recipient
-    ) internal returns (
+    ) external returns (
         uint256 amountToken,
         uint256 amountKUB,
         uint256 liquidity
@@ -165,7 +165,7 @@ library FiveFiveFivePoolLib {
         uint256 ponderAmount,
         uint256 tokenAmount,
         address recipient
-    ) internal returns (
+    ) external returns (
         uint256 amountToken,
         uint256 amountPonder,
         uint256 liquidity
@@ -201,7 +201,7 @@ library FiveFiveFivePoolLib {
     function validatePoolCreation(
         FiveFiveFiveLauncherTypes.PoolConfig memory pool,
         address pair
-    ) internal view {
+    ) external view {
         // Check minimum liquidity
         if (pool.kubAmount < FiveFiveFiveConstants.MIN_POOL_LIQUIDITY) {
             revert FiveFiveFiveLauncherTypes.InsufficientPoolLiquidity();
@@ -227,7 +227,7 @@ library FiveFiveFivePoolLib {
     function withdrawPairLP(
         address pair,
         address recipient
-    ) internal returns (uint256 amount) {
+    ) external returns (uint256 amount) {
         if (pair == address(0)) return 0;
 
         amount = PonderERC20(pair).balanceOf(address(this));

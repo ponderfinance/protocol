@@ -19,7 +19,7 @@ library FiveFiveFiveInitLib {
         IPonderRouter router,
         PonderToken ponder,
         address caller
-    ) internal returns (address token) {
+    ) external returns (address token) {
         validateLaunchParams(params);
 
         LaunchToken launchToken = new LaunchToken(
@@ -52,21 +52,21 @@ library FiveFiveFiveInitLib {
 
     function validateLaunchParams(
         FiveFiveFiveLauncherTypes.LaunchParams calldata params
-    ) internal pure {
+    ) external pure {
         if(bytes(params.imageURI).length == 0) revert FiveFiveFiveLauncherTypes.ImageRequired();
         if(!_isValidLength(params.name, params.symbol)) revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
         if(!_isValidString(params.name, true)) revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
         if(!_isValidString(params.symbol, false)) revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
     }
 
-    function _isValidLength(string memory name, string memory symbol) internal pure returns (bool) {
+    function _isValidLength(string memory name, string memory symbol) external pure returns (bool) {
         return bytes(name).length > 0 &&
         bytes(name).length <= 32 &&
         bytes(symbol).length > 0 &&
             bytes(symbol).length <= 8;
     }
 
-    function _isValidString(string memory str, bool allowSpaces) internal pure returns (bool) {
+    function _isValidString(string memory str, bool allowSpaces) external pure returns (bool) {
         bytes memory b = bytes(str);
         for(uint i; i < b.length; i++) {
             bytes1 char = b[i];
@@ -85,7 +85,7 @@ library FiveFiveFiveInitLib {
         LaunchToken launchToken,
         uint256 totalSupply,
         address creator
-    ) internal {
+    ) external {
         launch.allocation.tokensForContributors = (totalSupply *
             FiveFiveFiveConstants.CONTRIBUTOR_PERCENT) / FiveFiveFiveConstants.BASIS_POINTS;
         launch.allocation.tokensForLP = (totalSupply *
@@ -96,7 +96,7 @@ library FiveFiveFiveInitLib {
         launchToken.setupVesting(creator, creatorTokens);
     }
 
-    function _initializeContributions(FiveFiveFiveLauncherTypes.LaunchInfo storage launch) internal {
+    function _initializeContributions(FiveFiveFiveLauncherTypes.LaunchInfo storage launch) external {
         launch.base.launched = false;
         launch.base.cancelled = false;
         launch.base.isFinalizingLaunch = false;
@@ -116,7 +116,7 @@ library FiveFiveFiveInitLib {
         string memory symbol,
         mapping(string => bool) storage usedNames,
         mapping(string => bool) storage usedSymbols
-    ) internal view {
+    ) external view {
         if(usedNames[name]) revert FiveFiveFiveLauncherTypes.TokenNameExists();
         if(usedSymbols[symbol]) revert FiveFiveFiveLauncherTypes.TokenSymbolExists();
     }

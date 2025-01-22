@@ -25,7 +25,7 @@ library FiveFiveFiveViewLib {
     function getContributorInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address contributor
-    ) internal view returns (
+    ) external view returns (
         uint256 kubContributed,
         uint256 ponderContributed,
         uint256 ponderValue,
@@ -52,7 +52,7 @@ library FiveFiveFiveViewLib {
     /// @return totalValue Total value collected (KUB + PONDER value)
     function getContributionInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
-    ) internal view returns (
+    ) external view returns (
         uint256 kubCollected,
         uint256 ponderCollected,
         uint256 ponderValueCollected,
@@ -78,7 +78,7 @@ library FiveFiveFiveViewLib {
     /// @return hasSecondaryPool Whether PONDER pool exists
     function getPoolInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
-    ) internal view returns (
+    ) external view returns (
         address memeKubPair,
         address memePonderPair,
         bool hasSecondaryPool
@@ -106,7 +106,7 @@ library FiveFiveFiveViewLib {
     /// @return lpUnlockTime When LP tokens can be withdrawn
     function getLaunchInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
-    ) internal view returns (
+    ) external view returns (
         address tokenAddress,
         string memory name,
         string memory symbol,
@@ -134,7 +134,7 @@ library FiveFiveFiveViewLib {
     /// @return minKub Minimum KUB contribution
     /// @return minPonder Minimum PONDER contribution
     /// @return minPoolLiquidity Minimum pool liquidity required
-    function getMinimumRequirements() internal pure returns (
+    function getMinimumRequirements() external pure returns (
         uint256 minKub,
         uint256 minPonder,
         uint256 minPoolLiquidity
@@ -156,7 +156,7 @@ library FiveFiveFiveViewLib {
     /// @return remainingPonderValue Remaining amount that can be raised in PONDER
     function getRemainingToRaise(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
-    ) internal view returns (
+    ) external view returns (
         uint256 remainingTotal,
         uint256 remainingPonderValue
     ) {

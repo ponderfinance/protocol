@@ -53,7 +53,7 @@ library FiveFiveFiveContributionLib {
         uint256 launchId,
         uint256 amount,
         address contributor
-    ) internal returns (bool shouldFinalize) {
+    ) external returns (bool shouldFinalize) {
         // Validate contribution first
         (,bool shouldFin) = FiveFiveFiveValidation.validateKubContribution(
             launch,
@@ -102,7 +102,7 @@ library FiveFiveFiveContributionLib {
         uint256 kubValue,
         address contributor,
         PonderToken ponder
-    ) internal returns (bool shouldFinalize) {
+    ) external returns (bool shouldFinalize) {
         // Initial validation
         shouldFinalize = FiveFiveFiveValidation.validatePonderContribution(
             launch,
