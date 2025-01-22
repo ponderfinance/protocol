@@ -103,6 +103,10 @@ library FiveFiveFiveContributionLib {
         address contributor,
         PonderToken ponder
     ) internal returns (bool shouldFinalize) {
+        if (contributor != msg.sender) {
+            revert FiveFiveFiveLauncherTypes.Unauthorized();
+        }
+
         // Initial validation
         shouldFinalize = FiveFiveFiveValidation.validatePonderContribution(
             launch,
@@ -114,8 +118,17 @@ library FiveFiveFiveContributionLib {
         uint256 tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) /
                         FiveFiveFiveConstants.TARGET_RAISE;
 
-        // Transfer PONDER first
-        ponder.transferFrom(contributor, address(this), amount);
+        // Check PONDER allowance before transfer
+        uint256 allowance = ponder.allowance(contributor, address(this));
+        if (allowance < amount) {
+            revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
+        }
+
+        // Transfer PONDER after allowance check
+        bool success = ponder.transferFrom(contributor, address(this), amount);
+        if (!success) {
+            revert FiveFiveFiveLauncherTypes.KubTransferFailed();
+        }
 
         // Update launch state AFTER transfer
         launch.contributions.ponderCollected += amount;

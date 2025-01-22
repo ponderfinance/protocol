@@ -72,6 +72,8 @@ library FiveFiveFiveLauncherTypes {
     error LaunchSucceeded();                 /// Launch was successful
     error TokenApprovalRequired();           /// Token approval needed
     error KubTransferFailed();               /// KUB transfer failed
+    error InsufficientBalance();
+    error TokenTransferFailed();
 
     /*//////////////////////////////////////////////////////////////
                             STRUCTS

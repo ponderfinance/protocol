@@ -12,13 +12,14 @@ import { Math } from "../../libraries/Math.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title PonderPair
  * @notice Implementation of Ponder's AMM pair contract
  * @dev Handles swaps, liquidity provision, and fee collection for token pairs
  */
-contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", "PONDER-LP") {
+contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", "PONDER-LP"), ReentrancyGuard {
     using UQ112x112 for uint224;
     using PonderPairTypes for PonderPairTypes.SwapData;
     using SafeERC20 for IERC20;
@@ -30,15 +31,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         _factory = msg.sender;
     }
 
-    /**
-     * @notice Prevents reentrancy during swap operations
-     */
-    modifier lock() {
-        if (_unlocked != 1) revert PonderPairTypes.Locked();
-        _unlocked = 0;
-        _;
-        _unlocked = 1;
-    }
 
     /**
      * @inheritdoc IPonderPair
@@ -220,7 +212,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount1Out,
         address to,
         bytes calldata data
-    ) external override lock {
+    ) external override nonReentrant {
         if (amount0Out == 0 && amount1Out == 0) revert PonderPairTypes.InsufficientOutputAmount();
         if (to == _token0 || to == _token1) revert PonderPairTypes.InvalidToAddress();
 
@@ -286,7 +278,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /**
      * @inheritdoc IPonderPair
      */
-    function burn(address to) external override lock returns (uint256 amount0, uint256 amount1) {
+    function burn(address to) external override nonReentrant returns (uint256 amount0, uint256 amount1) {
+        // CHECKS
         (uint112 reserve0_, uint112 reserve1_,) = getReserves();
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));
@@ -299,16 +292,21 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         amount1 = (liquidity * balance1) / _totalSupply;
         if (amount0 == 0 || amount1 == 0) revert PonderPairTypes.InsufficientLiquidityBurned();
 
+        // EFFECTS - Update all state variables before external calls
         _burn(address(this), liquidity);
 
+        // Update reserves and accumulators before transfers
+        uint256 newBalance0 = balance0 - amount0;
+        uint256 newBalance1 = balance1 - amount1;
+        _update(newBalance0, newBalance1, reserve0_, reserve1_);
+
+        if (feeOn) {
+            _kLast = uint256(_reserve0) * _reserve1;
+        }
+
+        // INTERACTIONS - External calls last
         _safeTransfer(_token0, to, amount0);
         _safeTransfer(_token1, to, amount1);
-
-        balance0 = IERC20(_token0).balanceOf(address(this));
-        balance1 = IERC20(_token1).balanceOf(address(this));
-
-        _update(balance0, balance1, reserve0_, reserve1_);
-        if (feeOn) _kLast = uint256(_reserve0) * _reserve1;
 
         emit Burn(msg.sender, amount0, amount1, to);
     }
@@ -316,7 +314,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /**
      * @inheritdoc IPonderPair
      */
-    function mint(address to) external override lock returns (uint256 liquidity) {
+    function mint(address to) external override nonReentrant returns (uint256 liquidity) {
         (uint112 reserve0_, uint112 reserve1_,) = getReserves();
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));
@@ -402,7 +400,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /**
      * @inheritdoc IPonderPair
      */
-    function skim(address to) external override lock {
+    function skim(address to) external override nonReentrant {
         address feeTo = IPonderFactory(_factory).feeTo();
 
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
@@ -431,7 +429,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /**
      * @inheritdoc IPonderPair
      */
-    function sync() external override lock {
+    function sync() external override nonReentrant {
         _update(
             IERC20(_token0).balanceOf(address(this)),
             IERC20(_token1).balanceOf(address(this)),

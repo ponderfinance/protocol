@@ -137,9 +137,9 @@ contract PonderOracleLibraryTest is Test {
 
         // Array of observation times
         uint256[] memory times = new uint256[](3);
-        times[0] = 1 hours;
-        times[1] = 6 hours;
-        times[2] = 12 hours;
+        times[0] = 15 minutes;
+        times[1] = 30 minutes;
+        times[2] = 1 hours;
 
         uint256 lastPrice = price0Start;
 

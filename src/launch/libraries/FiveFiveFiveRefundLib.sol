@@ -82,14 +82,32 @@ library FiveFiveFiveRefundLib {
 
         // Interactions
         // 1. Handle token return if any
+        // 1. Handle token return if any
         if (tokensToReturn > 0) {
             LaunchToken token = LaunchToken(launch.base.tokenAddress);
-            if (token.allowance(claimer, address(this)) < tokensToReturn) {
+
+            // Verify token balance
+            if (token.balanceOf(claimer) < tokensToReturn) {
+                revert FiveFiveFiveLauncherTypes.InsufficientBalance();
+            }
+
+            // Verify allowance
+            uint256 currentAllowance = token.allowance(claimer, address(this));
+            if (currentAllowance < tokensToReturn) {
                 revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
             }
-            token.transferFrom(claimer, address(this), tokensToReturn);
-        }
 
+            // Use safe transfer and require success
+            bool success = token.transferFrom(claimer, address(this), tokensToReturn);
+            if (!success) {
+                revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+            }
+
+            // Verify the transfer was successful by checking balances
+            if (token.balanceOf(address(this)) < tokensToReturn) {
+                revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+            }
+        }
         // 2. Process PONDER refund
         if (ponderToRefund > 0) {
             ponder.transfer(claimer, ponderToRefund);
