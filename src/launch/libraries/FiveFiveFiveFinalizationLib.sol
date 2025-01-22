@@ -52,7 +52,7 @@ library FiveFiveFiveFinalizationLib {
         IPonderRouter router,
         PonderToken ponder,
         PonderPriceOracle priceOracle
-    ) external {
+    ) internal {
         // Initial safety checks
         if (launch.base.launched) {
             revert FiveFiveFiveLauncherTypes.AlreadyLaunched();

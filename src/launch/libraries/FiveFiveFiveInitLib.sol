@@ -19,7 +19,7 @@ library FiveFiveFiveInitLib {
         IPonderRouter router,
         PonderToken ponder,
         address caller
-    ) external returns (address token) {
+    ) internal returns (address token) {
         validateLaunchParams(params);
 
         LaunchToken launchToken = new LaunchToken(
@@ -116,7 +116,7 @@ library FiveFiveFiveInitLib {
         string memory symbol,
         mapping(string => bool) storage usedNames,
         mapping(string => bool) storage usedSymbols
-    ) external view {
+    ) internal view {
         if(usedNames[name]) revert FiveFiveFiveLauncherTypes.TokenNameExists();
         if(usedSymbols[symbol]) revert FiveFiveFiveLauncherTypes.TokenSymbolExists();
     }
