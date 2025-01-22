@@ -75,6 +75,18 @@ library PonderPairTypes {
         uint112 reserve1;
     }
 
+
+    struct SwapCallbackData {
+        uint256 amount0Out;
+        uint256 amount1Out;
+        uint256 amount0In;
+        uint256 amount1In;
+        address token0;
+        address token1;
+        address to;
+        bytes callbackData;
+    }
+
     /**
      * @notice Struct containing reserve data for the pair
      * @param reserve0 Reserve of token0

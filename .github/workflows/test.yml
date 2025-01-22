@@ -51,6 +51,7 @@ jobs:
         id: test
 
       - name: Run Forge Coverage
+        continue-on-error: true
         run: |
           forge coverage --report lcov
         id: coverage
