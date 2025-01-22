@@ -106,7 +106,7 @@ contract PonderSecurityTest is Test {
 
         vm.stopPrank();
 
-        vm.expectRevert(abi.encodeWithSignature("Locked()"));
+        vm.expectRevert(abi.encodeWithSignature("ReentrancyGuardReentrantCall()"));
         attacker.executeAttack();
     }
 
