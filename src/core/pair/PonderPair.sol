@@ -207,59 +207,133 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /**
      * @inheritdoc IPonderPair
      */
+    struct SwapState {
+        uint112 reserve0;
+        uint112 reserve1;
+        uint256 balance0;
+        uint256 balance1;
+        uint256 amount0In;
+        uint256 amount1In;
+        bool isPonderPair;
+    }
+
     function swap(
         uint256 amount0Out,
         uint256 amount1Out,
         address to,
         bytes calldata data
     ) external override nonReentrant {
+        // CHECKS
         if (amount0Out == 0 && amount1Out == 0) revert PonderPairTypes.InsufficientOutputAmount();
         if (to == _token0 || to == _token1) revert PonderPairTypes.InvalidToAddress();
 
-        (uint112 reserve0_, uint112 reserve1_,) = getReserves();
-        if (amount0Out >= reserve0_ || amount1Out >= reserve1_) {
+        SwapState memory state;
+        (state.reserve0, state.reserve1,) = getReserves();
+
+        if (amount0Out >= state.reserve0 || amount1Out >= state.reserve1) {
             revert PonderPairTypes.InsufficientLiquidity();
         }
 
-        uint256 initialK = uint256(reserve0_) * uint256(reserve1_);
+        _update(
+            uint256(state.reserve0) - amount0Out,
+            uint256(state.reserve1) - amount1Out,
+            state.reserve0,
+            state.reserve1
+        );
 
-        _executeTransfers(to, amount0Out, amount1Out, data);
+        // INTERACTIONS
+        _executeSwap(to, amount0Out, amount1Out, data);
 
-        PonderPairTypes.SwapData memory swapData;
-        swapData.amount0Out = amount0Out;
-        swapData.amount1Out = amount1Out;
-        swapData.reserve0 = reserve0_;
-        swapData.reserve1 = reserve1_;
-        swapData.balance0 = IERC20(_token0).balanceOf(address(this));
-        swapData.balance1 = IERC20(_token1).balanceOf(address(this));
+        // Post-interaction validations and fee handling
+        _validateAndProcessSwap(
+            state,
+            amount0Out,
+            amount1Out
+        );
 
-        swapData.amount0In = swapData.balance0 > swapData.reserve0 - amount0Out ?
-            swapData.balance0 - (swapData.reserve0 - amount0Out) : 0;
-        swapData.amount1In = swapData.balance1 > swapData.reserve1 - amount1Out ?
-            swapData.balance1 - (swapData.reserve1 - amount1Out) : 0;
+        emit Swap(msg.sender, state.amount0In, state.amount1In, amount0Out, amount1Out, to);
+    }
 
-        if (swapData.amount0In == 0 && swapData.amount1In == 0) {
+    function _executeSwap(
+        address to,
+        uint256 amount0Out,
+        uint256 amount1Out,
+        bytes calldata data
+    ) private {
+        if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out);
+        if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out);
+        if (data.length > 0) {
+            IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
+        }
+    }
+
+    function _validateAndProcessSwap(
+        SwapState memory state,
+        uint256 amount0Out,
+        uint256 amount1Out
+    ) private {
+        // Get post-transfer balances
+        state.balance0 = IERC20(_token0).balanceOf(address(this));
+        state.balance1 = IERC20(_token1).balanceOf(address(this));
+
+        state.amount0In = state.balance0 > state.reserve0 - amount0Out ?
+            state.balance0 - (state.reserve0 - amount0Out) : 0;
+        state.amount1In = state.balance1 > state.reserve1 - amount1Out ?
+            state.balance1 - (state.reserve1 - amount1Out) : 0;
+
+        if (state.amount0In == 0 && state.amount1In == 0) {
             revert PonderPairTypes.InsufficientInputAmount();
         }
 
-        if (!_validateKValue(swapData)) {
+        _validateKValue(state, amount0Out, amount1Out);
+
+        state.isPonderPair = _token0 == ponder() || _token1 == ponder();
+        _handleFees(state, amount0Out, amount1Out);
+
+        _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
+    }
+
+    function _validateKValue(
+        SwapState memory state,
+        uint256 amount0Out,
+        uint256 amount1Out
+    ) private pure {
+        uint256 balance0Adjusted = state.balance0 * 1000 - (state.amount0In * 3);
+        uint256 balance1Adjusted = state.balance1 * 1000 - (state.amount1In * 3);
+        uint256 initialK = uint256(state.reserve0) * uint256(state.reserve1);
+
+        if (!(balance0Adjusted * balance1Adjusted >= initialK * (1000 * 1000))) {
             revert PonderPairTypes.KValueCheckFailed();
         }
-        if (swapData.balance0 * swapData.balance1 < initialK) {
-            revert PonderPairTypes.InvariantViolation();
-        }
+    }
 
-        bool isPonderPair = _token0 == ponder() || _token1 == ponder();
-
-        if (swapData.amount0In > 0) {
-            _handleTokenFees(_token0, swapData.amount0In, isPonderPair, _token0, _token1, amount0Out, amount1Out);
+    function _handleFees(
+        SwapState memory state,
+        uint256 amount0Out,
+        uint256 amount1Out
+    ) private {
+        if (state.amount0In > 0) {
+            _handleTokenFees(
+                _token0,
+                state.amount0In,
+                state.isPonderPair,
+                _token0,
+                _token1,
+                amount0Out,
+                amount1Out
+            );
         }
-        if (swapData.amount1In > 0) {
-            _handleTokenFees(_token1, swapData.amount1In, isPonderPair, _token0, _token1, amount0Out, amount1Out);
+        if (state.amount1In > 0) {
+            _handleTokenFees(
+                _token1,
+                state.amount1In,
+                state.isPonderPair,
+                _token0,
+                _token1,
+                amount0Out,
+                amount1Out
+            );
         }
-
-        _update(swapData.balance0, swapData.balance1, reserve0_, reserve1_);
-        emit Swap(msg.sender, swapData.amount0In, swapData.amount1In, amount0Out, amount1Out, to);
     }
 
     /**
@@ -359,7 +433,14 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         if (balance0 > type(uint112).max || balance1 > type(uint112).max) {
             revert PonderPairTypes.Overflow();
         }
+
+        // slither-disable-next-line weak-prng
+        // The block.timestamp is used here for calculating elapsed
+        // time and is wrapped to a 32-bit integer to handle overflow.
+        // This is not used for randomness or unpredictability,
+        // and the deterministic nature of block.timestamp is acceptable in this context.
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
+
         uint32 timeElapsed = blockTimestamp > _blockTimestampLast
             ? blockTimestamp - _blockTimestampLast
             : 0;
