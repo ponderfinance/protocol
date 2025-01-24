@@ -98,12 +98,12 @@ library FiveFiveFiveRefundLib {
             }
 
             // Use safe transfer and require success
-            // slither-disable-next-line arbitrary-from
             // This transferFrom call is safe because:
             // 1. The allowance of the claimer is validated before the transfer is attempted.
             // 2. The success of the transferFrom call is explicitly checked, reverting on failure.
             // 3. The contract's balance is verified post-transfer to ensure correctness.
             // 4. The claimer address is tightly controlled by the protocol logic, preventing misuse.
+            // slither-disable-next-line arbitrary-from
             bool success = token.transferFrom(claimer, address(this), tokensToReturn);
 
             if (!success) {

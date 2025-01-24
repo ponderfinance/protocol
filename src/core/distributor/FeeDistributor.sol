@@ -343,7 +343,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (to == address(0)) revert FeeDistributorTypes.InvalidRecipient();
         if (amount == 0) revert FeeDistributorTypes.InvalidRecoveryAmount();
 
-        IERC20(token).transfer(to, amount);
+        if (!IERC20(token).transfer(to, amount)) {
+            revert FeeDistributorTypes.TransferFailed();
+        }
         emit EmergencyTokenRecovered(token, to, amount);
     }
 

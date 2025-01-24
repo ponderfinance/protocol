@@ -217,6 +217,12 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         bool isPonderPair;
     }
 
+    /// @custom:security Reentrancy is prevented by:
+    /// 1. ReentrancyGuard modifier
+    /// 2. Initial state update before external calls
+    /// 3. K-value invariant checks
+    /// 4. Final state synchronization after validations
+    // slither-disable-next-line reentrancy-vulnerabilities
     function swap(
         uint256 amount0Out,
         uint256 amount1Out,
@@ -434,11 +440,12 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             revert PonderPairTypes.Overflow();
         }
 
-        // slither-disable-next-line weak-prng
+
         // The block.timestamp is used here for calculating elapsed
         // time and is wrapped to a 32-bit integer to handle overflow.
         // This is not used for randomness or unpredictability,
         // and the deterministic nature of block.timestamp is acceptable in this context.
+        // slither-disable-next-line weak-prng
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
 
         uint32 timeElapsed = blockTimestamp > _blockTimestampLast

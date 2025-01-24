@@ -325,8 +325,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
         PONDER.mint(address(this), ponderReward);
     }
 
-    // User Interaction Functions
-
     /// @inheritdoc IPonderMasterChef
     function deposit(uint256 _pid, uint256 _amount) external {
         if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
@@ -349,7 +347,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
 
         if (_amount > 0) {
             uint256 beforeBalance = IERC20(pool.lpToken).balanceOf(address(this));
-            IERC20(pool.lpToken).transferFrom(msg.sender, address(this), _amount);
+            if (!IERC20(pool.lpToken).transferFrom(msg.sender, address(this), _amount)) {
+                revert PonderMasterChefTypes.TransferFailed();
+            }
             uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
             uint256 actualAmount = afterBalance - beforeBalance;
 
@@ -357,7 +357,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
 
             if (pool.depositFeeBP > 0) {
                 uint256 depositFee = (actualAmount * pool.depositFeeBP) / PonderMasterChefTypes.BASIS_POINTS;
-                IERC20(pool.lpToken).transfer(_teamReserve, depositFee);
+                if (!IERC20(pool.lpToken).transfer(_teamReserve, depositFee)) {
+                    revert PonderMasterChefTypes.TransferFailed();
+                }
                 actualAmount = actualAmount - depositFee;
             }
 
@@ -389,7 +391,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
         if (_amount > 0) {
             user.amount -= _amount;
             pool.totalStaked -= _amount;
-            IERC20(pool.lpToken).transfer(msg.sender, _amount);
+            if (!IERC20(pool.lpToken).transfer(msg.sender, _amount)) {
+                revert PonderMasterChefTypes.TransferFailed();
+            }
         }
 
         _updateUserWeightedShares(_pid, msg.sender);
@@ -412,7 +416,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
         user.ponderStaked = 0;
         user.weightedShares = 0;
 
-        IERC20(pool.lpToken).transfer(msg.sender, amount);
+        if (!IERC20(pool.lpToken).transfer(msg.sender, amount)) {
+            revert PonderMasterChefTypes.TransferFailed();
+        }
         emit EmergencyWithdraw(msg.sender, _pid, amount);
     }
 
@@ -472,7 +478,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
         }
 
         user.ponderStaked -= _amount;
-        PONDER.transfer(msg.sender, _amount);
+        if (!PONDER.transfer(msg.sender, _amount)) {
+            revert PonderMasterChefTypes.TransferFailed();
+        }
 
         _updateUserWeightedShares(_pid, msg.sender);
         user.rewardDebt = (user.weightedShares * _poolInfo[_pid].accPonderPerShare) / 1e12;
@@ -553,9 +561,13 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage {
     function _safePonderTransfer(address _to, uint256 _amount) internal {
         uint256 ponderBalance = PONDER.balanceOf(address(this));
         if (_amount > ponderBalance) {
-            PONDER.transfer(_to, ponderBalance);
+            if (!PONDER.transfer(_to, ponderBalance)) {
+                revert PonderMasterChefTypes.TransferFailed();
+            }
         } else {
-            PONDER.transfer(_to, _amount);
+            if (!PONDER.transfer(_to, _amount)) {
+                revert PonderMasterChefTypes.TransferFailed();
+            }
         }
     }
 

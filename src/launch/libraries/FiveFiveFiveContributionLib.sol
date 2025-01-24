@@ -73,8 +73,10 @@ library FiveFiveFiveContributionLib {
         contributorInfo.kubContributed += amount;
         contributorInfo.tokensReceived += tokensToDistribute;
 
-        // Transfer tokens
-        LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute);
+        // Transfer tokens with return value check
+        if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
+            revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+        }
 
         // Emit events
         emit TokensDistributed(launchId, contributor, tokensToDistribute);
@@ -82,6 +84,7 @@ library FiveFiveFiveContributionLib {
 
         return shouldFin;
     }
+
 
     /*//////////////////////////////////////////////////////////////
                         PONDER CONTRIBUTIONS
@@ -124,11 +127,7 @@ library FiveFiveFiveContributionLib {
             revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
         }
 
-        // slither-disable-next-line arbitrary-from
-        // This transferFrom call is safe because:
-        // 1. The allowance of the contributor is validated before attempting the transfer.
-        // 2. The success of the transferFrom call is explicitly checked, reverting on failure.
-        // 3. No state changes occur before the transfer is confirmed, ensuring consistency.
+        // Transfer PONDER tokens with return value check
         bool success = ponder.transferFrom(contributor, address(this), amount);
         if (!success) {
             revert FiveFiveFiveLauncherTypes.KubTransferFailed();
@@ -145,8 +144,10 @@ library FiveFiveFiveContributionLib {
         contributorInfo.ponderValue += kubValue;
         contributorInfo.tokensReceived += tokensToDistribute;
 
-        // Transfer tokens
-        LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute);
+        // Transfer launch tokens with return value check
+        if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
+            revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+        }
 
         // Emit events
         emit TokensDistributed(launchId, contributor, tokensToDistribute);
@@ -154,7 +155,6 @@ library FiveFiveFiveContributionLib {
 
         return shouldFinalize;
     }
-
     /*//////////////////////////////////////////////////////////////
                         CONTRIBUTION UTILITIES
     //////////////////////////////////////////////////////////////*/
