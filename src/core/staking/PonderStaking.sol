@@ -64,48 +64,51 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
      * @inheritdoc IPonderStaking
      */
     function enter(uint256 amount) external returns (uint256 shares) {
+        // Checks
         if (amount == 0) revert PonderStakingTypes.InvalidAmount();
-
-        // Get the total amount of PONDER in the contract
         uint256 totalPonder = PONDER.balanceOf(address(this));
-        // Get the total shares
         uint256 totalShares = totalSupply();
 
-        // Transfer PONDER tokens from user
-        PONDER.safeTransferFrom(msg.sender, address(this), amount);
-
-        // Calculate shares to mint
+        // Calculate shares
+        // Strict equality required: Special case for initial stake
+        // slither-disable-next-line dangerous-strict-equalities
         if (totalShares == 0) {
-            if (amount < PonderStakingTypes.MINIMUM_FIRST_STAKE) revert PonderStakingTypes.InsufficientFirstStake();
+            if (amount < PonderStakingTypes.MINIMUM_FIRST_STAKE)
+                revert PonderStakingTypes.InsufficientFirstStake();
             shares = amount;
         } else {
             shares = (amount * totalShares) / totalPonder;
         }
 
+        // Effects
         _mint(msg.sender, shares);
+
+        // Interactions
+        PONDER.safeTransferFrom(msg.sender, address(this), amount);
+
         emit Staked(msg.sender, amount, shares);
     }
+
 
     /**
      * @inheritdoc IPonderStaking
      */
     function leave(uint256 shares) external returns (uint256 amount) {
+        // Checks
         if (shares == 0) revert PonderStakingTypes.InvalidAmount();
         if (shares > balanceOf(msg.sender)) revert PonderStakingTypes.InvalidSharesAmount();
 
         uint256 totalShares = totalSupply();
         uint256 totalPonderBefore = PONDER.balanceOf(address(this));
-
-        // Calculate amount of PONDER to return based on share of total
         amount = (shares * totalPonderBefore) / totalShares;
 
-        // Prevent dust amounts that could be manipulated
-        if (amount < PonderStakingTypes.MINIMUM_WITHDRAW) revert PonderStakingTypes.MinimumSharesRequired();
+        if (amount < PonderStakingTypes.MINIMUM_WITHDRAW)
+            revert PonderStakingTypes.MinimumSharesRequired();
 
-        // Burn shares before transfer to prevent reentrancy
+        // Effects
         _burn(msg.sender, shares);
 
-        // Transfer PONDER to user
+        // Interactions
         PONDER.safeTransfer(msg.sender, amount);
 
         emit Withdrawn(msg.sender, amount, shares);
@@ -129,7 +132,11 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
      */
     function getPonderAmount(uint256 shares) external view returns (uint256) {
         uint256 totalShares = totalSupply();
+
+        // Strict equality required: Special case for initial stake
+        // slither-disable-next-line dangerous-strict-equalities
         if (totalShares == 0) return shares;
+
         return (shares * PONDER.balanceOf(address(this))) / totalShares;
     }
 
@@ -138,7 +145,11 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
      */
     function getSharesAmount(uint256 amount) external view returns (uint256) {
         uint256 totalShares = totalSupply();
+
+        // Strict equality required: Special case for initial stake
+        // slither-disable-next-line dangerous-strict-equalities
         if (totalShares == 0) return amount;
+
         return (amount * totalShares) / PONDER.balanceOf(address(this));
     }
 

@@ -128,6 +128,8 @@ library FiveFiveFiveContributionLib {
         }
 
         // Transfer PONDER tokens with return value check
+        // The contributor address is validated against msg.sender above
+        // slither-disable-next-line arbitrary-from-in-transferfrom
         bool success = ponder.transferFrom(contributor, address(this), amount);
         if (!success) {
             revert FiveFiveFiveLauncherTypes.KubTransferFailed();

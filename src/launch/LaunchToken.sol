@@ -182,7 +182,7 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         if (block.timestamp < lastClaimTime + MIN_CLAIM_INTERVAL) revert ClaimTooFrequent();
 
         uint256 claimableAmount = _calculateVestedAmount();
-        if (claimableAmount == 0) revert NoTokensAvailable();
+        if (claimableAmount <= 0) revert NoTokensAvailable();
         if (balanceOf(launcher) < claimableAmount) revert InsufficientLauncherBalance();
 
         // Update state before transfer (CEI pattern)

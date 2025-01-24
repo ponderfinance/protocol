@@ -130,7 +130,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         uint256 deadline
     ) public override ensure(deadline) returns (uint256 amountA, uint256 amountB) {
         address pair = FACTORY.getPair(tokenA, tokenB);
-        IPonderPair(pair).transferFrom(msg.sender, pair, liquidity);
+
+        bool success = IPonderPair(pair).transferFrom(msg.sender, pair, liquidity);
+        if (!success) revert PonderRouterTypes.TransferFailed();
+
         (amountA, amountB) = IPonderPair(pair).burn(to);
         if (amountA < amountAMin) revert PonderRouterTypes.InsufficientAAmount();
         if (amountB < amountBMin) revert PonderRouterTypes.InsufficientBAmount();

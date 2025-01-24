@@ -7,12 +7,15 @@ import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
 import { LaunchToken } from "../LaunchToken.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
 import { PonderERC20 } from "../../core/token/PonderERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title FiveFiveFiveRefundLib
 /// @author taayyohh
 /// @notice Library for handling refunds and cancellations
 /// @dev Contains logic for processing refunds and LP withdrawals
 library FiveFiveFiveRefundLib {
+    using SafeERC20 for PonderERC20;
+    using SafeERC20 for PonderToken;
     using FiveFiveFiveConstants for uint256;
     using Address for address payable;
 
@@ -103,7 +106,7 @@ library FiveFiveFiveRefundLib {
             // 2. The success of the transferFrom call is explicitly checked, reverting on failure.
             // 3. The contract's balance is verified post-transfer to ensure correctness.
             // 4. The claimer address is tightly controlled by the protocol logic, preventing misuse.
-            // slither-disable-next-line arbitrary-from
+            // slither-disable-next-line arbitrary-from-in-transferfrom
             bool success = token.transferFrom(claimer, address(this), tokensToReturn);
 
             if (!success) {
@@ -117,7 +120,7 @@ library FiveFiveFiveRefundLib {
         }
         // 2. Process PONDER refund
         if (ponderToRefund > 0) {
-            ponder.transfer(claimer, ponderToRefund);
+            ponder.safeTransfer(claimer, ponderToRefund);
         }
 
         // 3. Process KUB refund using OpenZeppelin's Address.sendValue
@@ -208,7 +211,7 @@ library FiveFiveFiveRefundLib {
 
         uint256 balance = PonderERC20(pair).balanceOf(address(this));
         if (balance > 0) {
-            PonderERC20(pair).transfer(recipient, balance);
+            PonderERC20(pair).safeTransfer(recipient, balance);
         }
     }
 }

@@ -70,11 +70,10 @@ library PonderOracleLibrary {
     ) internal pure returns (uint256 amountOut) {
         if (timeElapsed == 0) revert ElapsedTimeZero();
 
-        // Calculate the average price
+        // Calculate price difference
         uint256 priceDiff = priceCumulativeEnd - priceCumulativeStart;
-        uint256 priceAverage = (priceDiff * UQ112x112.Q112) / (timeElapsed * UQ112x112.Q112);
 
-        // Calculate amount out using the average price
-        return (amountIn * priceAverage) / UQ112x112.Q112;
+
+        return (priceDiff * amountIn) / (timeElapsed * UQ112x112.Q112);
     }
 }

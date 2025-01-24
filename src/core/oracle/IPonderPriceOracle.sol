@@ -109,4 +109,6 @@ interface IPonderPriceOracle {
         uint256 price1Cumulative,
         uint32 blockTimestamp
     );
+
+    event PairInitialized(address indexed pair, uint32 timestamp);
 }

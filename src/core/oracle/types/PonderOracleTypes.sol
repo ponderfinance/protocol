@@ -26,6 +26,8 @@ library PonderOracleTypes {
     error StalePrice();
     error InsufficientData();
     error InvalidPeriod();
+    error AlreadyInitialized();
+    error NotInitialized();
 
     // Constants
     /// @notice Standard observation period

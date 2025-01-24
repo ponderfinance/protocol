@@ -146,11 +146,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
      * @param pairs Array of pair addresses to collect and distribute fees from
      */
     function distributePairFees(address[] calldata pairs) external nonReentrant {
-        // Check array bounds
+        // Checks
         if (pairs.length == 0 || pairs.length > FeeDistributorTypes.MAX_PAIRS_PER_DISTRIBUTION)
             revert FeeDistributorTypes.InvalidPairCount();
 
-        // First collect from all pairs with safety checks
+        // Effects - Update timestamps first
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
 
@@ -158,28 +158,26 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             if (currentPair == address(0) || processedPairs[currentPair])
                 revert FeeDistributorTypes.InvalidPair();
 
-            // Check if enough time has passed since last distribution
             if (block.timestamp - lastPairDistribution[currentPair] < FeeDistributorTypes.DISTRIBUTION_COOLDOWN)
                 revert FeeDistributorTypes.DistributionTooFrequent();
 
-            // Mark as processed
+            // Mark as processed and update timestamp
             processedPairs[currentPair] = true;
-
-            // Update last distribution time
             lastPairDistribution[currentPair] = block.timestamp;
+        }
 
-            // Try to collect fees
+        // Interactions
+        for (uint256 i = 0; i < pairs.length; i++) {
+            address currentPair = pairs[i];
             try this.collectFeesFromPair(currentPair) {
-                // Reset processed flag after successful collection
                 processedPairs[currentPair] = false;
             } catch {
-                // Reset processed flag and continue if collection fails
                 processedPairs[currentPair] = false;
                 continue;
             }
         }
 
-        // Convert collected fees to PONDER with slippage protection
+        // Convert and distribute
         address[] memory uniqueTokens = _getUniqueTokens(pairs);
         uint256 preBalance = IERC20(PONDER).balanceOf(address(this));
 
@@ -188,19 +186,17 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             uint256 tokenBalance = IERC20(token).balanceOf(address(this));
 
             if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
-                // Add slippage check for conversion
                 uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
                 _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
             }
         }
 
-        // Verify minimum accumulated PONDER
+        // Final checks and distribution
         uint256 postBalance = IERC20(PONDER).balanceOf(address(this));
         if (postBalance - preBalance < FeeDistributorTypes.MINIMUM_AMOUNT) {
             revert FeeDistributorTypes.InsufficientAccumulation();
         }
 
-        // Distribute converted PONDER
         if (IERC20(PONDER).balanceOf(address(this)) >= FeeDistributorTypes.MINIMUM_AMOUNT) {
             _distribute();
         }

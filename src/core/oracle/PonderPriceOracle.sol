@@ -47,8 +47,34 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         return _observations[pair].length;
     }
 
+    function initializePair(address pair) public {
+        if (!_isValidPair(pair)) revert PonderOracleTypes.InvalidPair();
+        if (_initializedPairs[pair]) revert PonderOracleTypes.AlreadyInitialized();
+
+        (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) =
+                            PonderOracleLibrary.currentCumulativePrices(pair);
+
+        PonderOracleTypes.Observation memory firstObservation = PonderOracleTypes.Observation({
+            timestamp: blockTimestamp,
+            price0Cumulative: uint224(price0Cumulative),
+            price1Cumulative: uint224(price1Cumulative)
+        });
+
+        // Initialize the observations array
+        for (uint16 i = 0; i < PonderOracleTypes.OBSERVATION_CARDINALITY; i++) {
+            _observations[pair].push(firstObservation);
+        }
+
+        _currentIndex[pair] = 0;
+        _lastUpdateTime[pair] = block.timestamp;
+        _initializedPairs[pair] = true;
+
+        emit PairInitialized(pair, blockTimestamp);
+    }
+
+
     /// @inheritdoc IPonderPriceOracle
-    function update(address pair) external {
+    function update(address pair) external override {
         if (block.timestamp < _lastUpdateTime[pair] + PonderOracleTypes.MIN_UPDATE_DELAY) {
             revert PonderOracleTypes.UpdateTooFrequent();
         }
@@ -56,37 +82,26 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
             revert PonderOracleTypes.InvalidPair();
         }
 
+        if (!_initializedPairs[pair]) {
+            initializePair(pair);
+            return;
+        }
+
         (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) =
                             PonderOracleLibrary.currentCumulativePrices(pair);
 
-        PonderOracleTypes.Observation[] storage history = _observations[pair];
-
-        if (history.length == 0) {
-            // Initialize history array
-            history.push(PonderOracleTypes.Observation({
-                timestamp: blockTimestamp,
-                price0Cumulative: uint224(price0Cumulative),
-                price1Cumulative: uint224(price1Cumulative)
-            }));
-
-            for (uint16 i = 1; i < PonderOracleTypes.OBSERVATION_CARDINALITY; i++) {
-                history.push(history[0]);
-            }
-            _currentIndex[pair] = 0;
-        } else {
-            uint256 index = (_currentIndex[pair] + 1) % PonderOracleTypes.OBSERVATION_CARDINALITY;
-            history[index] = PonderOracleTypes.Observation({
-                timestamp: blockTimestamp,
-                price0Cumulative: uint224(price0Cumulative),
-                price1Cumulative: uint224(price1Cumulative)
-            });
-            _currentIndex[pair] = index;
-        }
-
+        uint256 index = (_currentIndex[pair] + 1) % PonderOracleTypes.OBSERVATION_CARDINALITY;
+        _observations[pair][index] = PonderOracleTypes.Observation({
+            timestamp: blockTimestamp,
+            price0Cumulative: uint224(price0Cumulative),
+            price1Cumulative: uint224(price1Cumulative)
+        });
+        _currentIndex[pair] = index;
         _lastUpdateTime[pair] = block.timestamp;
 
         emit OracleUpdated(pair, price0Cumulative, price1Cumulative, blockTimestamp);
     }
+
 
     /// @inheritdoc IPonderPriceOracle
     function consult(
@@ -95,6 +110,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         uint256 amountIn,
         uint32 period
     ) external view returns (uint256 amountOut) {
+        if (!_initializedPairs[pair]) revert PonderOracleTypes.NotInitialized();
         if (period == 0 || period > PonderOracleTypes.PERIOD) revert PonderOracleTypes.InvalidPeriod();
         if (amountIn == 0) return 0;
 
@@ -152,33 +168,30 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         IPonderPair pairContract = IPonderPair(pair);
         (uint112 reserve0, uint112 reserve1,) = pairContract.getReserves();
 
+        // Check which token is token0 based on address ordering
         bool isToken0 = tokenIn == pairContract.token0();
         if (!isToken0 && tokenIn != pairContract.token1()) revert PonderOracleTypes.InvalidToken();
 
+        // Get decimal places for both tokens
         uint8 decimalsIn = IERC20Metadata(tokenIn).decimals();
         uint8 decimalsOut = IERC20Metadata(isToken0 ? pairContract.token1() : pairContract.token0()).decimals();
 
+        // Get reserves matching input token
         uint256 reserveIn = uint256(isToken0 ? reserve0 : reserve1);
         uint256 reserveOut = uint256(isToken0 ? reserve1 : reserve0);
 
-        // Normalize reserves to handle decimal differences
-        if (decimalsIn > decimalsOut) {
-            reserveOut = reserveOut * (10 ** (decimalsIn - decimalsOut));
-        } else if (decimalsOut > decimalsIn) {
-            reserveIn = reserveIn * (10 ** (decimalsOut - decimalsIn));
-        }
-
         if (reserveIn == 0) return 0;
 
+        // Calculate base quote
+        // If we're calculating KUB -> USDT where KUB is 18 decimals and USDT is 6:
+        // amountIn = 1e18
+        // reserveIn = 100e18 (100 KUB)
+        // reserveOut = 3000e6 (3000 USDT)
+        // quote = (1e18 * 3000e6) / 100e18 = 30e6
         uint256 quote = (amountIn * reserveOut) / reserveIn;
 
-        // Adjust quote based on decimal differences
-        if (decimalsIn > decimalsOut) {
-            quote = quote / (10 ** (decimalsIn - decimalsOut));
-        } else if (decimalsOut > decimalsIn) {
-            quote = quote * (10 ** (decimalsOut - decimalsIn));
-        }
-
+        // No need to adjust decimals further since the reserves are already stored
+        // in their native decimal precision in the pair
         return quote;
     }
 
@@ -263,5 +276,12 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
             IPonderPair(pair).token0(),
             IPonderPair(pair).token1()
         ) == pair;
+    }
+
+    /// @notice Check if a pair has been initialized
+    /// @param pair Address of the pair to check
+    /// @return bool True if the pair has been initialized
+    function isPairInitialized(address pair) external view returns (bool) {
+        return _initializedPairs[pair];
     }
 }

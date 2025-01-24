@@ -18,4 +18,7 @@ abstract contract PonderOracleStorage {
 
     /// @notice Last update timestamp for each pair
     mapping(address => uint256) internal _lastUpdateTime;
+
+    /// @notice Mapping to track initialized pairs
+    mapping(address => bool) internal _initializedPairs;
 }

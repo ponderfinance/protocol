@@ -9,12 +9,14 @@ import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { LaunchToken } from "../LaunchToken.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title FiveFiveFivePoolLib
 /// @author taayyohh
 /// @notice Library for managing liquidity pool operations
 /// @dev Handles pool creation, liquidity addition, and pool calculations
 library FiveFiveFivePoolLib {
+    using SafeERC20 for PonderERC20;
     using FiveFiveFiveConstants for uint256;
 
     /*//////////////////////////////////////////////////////////////
@@ -232,7 +234,7 @@ library FiveFiveFivePoolLib {
 
         amount = PonderERC20(pair).balanceOf(address(this));
         if (amount > 0) {
-            PonderERC20(pair).transfer(recipient, amount);
+            PonderERC20(pair).safeTransfer(recipient, amount);
         }
 
         return amount;

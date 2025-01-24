@@ -222,18 +222,35 @@ library PonderLaunchGuard {
         uint256 kubReserve,
         uint256 ponderAmount
     ) internal pure returns (uint256) {
+        // Input validation
         if (ponderReserve == 0 || kubReserve == 0) return type(uint256).max;
 
+        // Calculate constant product k
         uint256 k = ponderReserve * kubReserve;
         uint256 newPonderReserve = ponderReserve + ponderAmount;
-        uint256 newKubReserve = k / newPonderReserve;
 
+        // Calculate old price: kubReserve/ponderReserve scaled by BASIS_POINTS
         uint256 oldPrice = (kubReserve * BASIS_POINTS) / ponderReserve;
-        uint256 newPrice = (newKubReserve * BASIS_POINTS) / newPonderReserve;
 
-        return oldPrice > newPrice ?
-            ((oldPrice - newPrice) * BASIS_POINTS) / oldPrice :
-            ((newPrice - oldPrice) * BASIS_POINTS) / oldPrice;
+        uint256 newPrice;
+
+        // Use a check for overflow protection when squaring newPonderReserve
+        if (newPonderReserve <= type(uint256).max / newPonderReserve) {
+            uint256 squaredNewReserve = newPonderReserve * newPonderReserve;
+            newPrice = (k * BASIS_POINTS) / squaredNewReserve;
+        } else {
+            // If squaring would overflow, use alternative calculation with reduced precision
+            // newPrice = (k/newPonderReserve * BASIS_POINTS) / newPonderReserve
+            uint256 intermediateReserve = k / newPonderReserve;
+            newPrice = (intermediateReserve * BASIS_POINTS) / newPonderReserve;
+        }
+
+        // Calculate absolute price impact
+        if (oldPrice > newPrice) {
+            return ((oldPrice - newPrice) * BASIS_POINTS) / oldPrice;
+        } else {
+            return ((newPrice - oldPrice) * BASIS_POINTS) / oldPrice;
+        }
     }
 
     function getAcceptablePonderAmount(

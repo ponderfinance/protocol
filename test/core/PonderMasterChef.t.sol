@@ -109,6 +109,7 @@ contract PonderMasterChefTest is Test {
         vm.startPrank(alice);
         pair.approve(address(masterChef), INITIAL_LP_SUPPLY);
         masterChef.deposit(0, INITIAL_LP_SUPPLY);
+
         vm.stopPrank();
 
         // Move forward 1 day

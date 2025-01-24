@@ -71,7 +71,7 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         if (block.timestamp < _teamVestingStart) revert PonderTokenTypes.VestingNotStarted();
 
         uint256 vestedAmount = _calculateVestedAmount();
-        if (vestedAmount == 0) revert PonderTokenTypes.NoTokensAvailable();
+        if (vestedAmount <= 0) revert PonderTokenTypes.NoTokensAvailable();
 
         _reservedForTeam -= vestedAmount;
         _teamTokensClaimed += vestedAmount;

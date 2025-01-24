@@ -128,19 +128,21 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
      * @return pair Address of the created pair
      */
     function createPair(address tokenA, address tokenB) external returns (address pair) {
+        // Checks
         if (tokenA == tokenB) revert PonderFactoryTypes.IdenticalAddresses();
-
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-
         if (token0 == address(0)) revert PonderFactoryTypes.ZeroAddress();
         if (_getPair[token0][token1] != address(0)) revert PonderFactoryTypes.PairExists();
 
-        pair = address(new PonderPair{salt: keccak256(abi.encodePacked(token0, token1))}());
-        PonderPair(pair).initialize(token0, token1);
-
+        // Effects
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
+        pair = address(new PonderPair{salt: salt}());
         _getPair[token0][token1] = pair;
         _getPair[token1][token0] = pair;
         _allPairs.push(pair);
+
+        // Interactions
+        PonderPair(pair).initialize(token0, token1);
 
         emit PairCreated(token0, token1, pair, _allPairs.length);
     }

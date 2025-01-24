@@ -157,6 +157,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount0Out,
         uint256 amount1Out
     ) private {
+        // Strict equality check is intentional - early return for zero fees
+        // slither-disable-next-line dangerous-strict-equalities
         if (amountIn == 0) return;
 
         address feeTo = IPonderFactory(_factory).feeTo();
@@ -287,7 +289,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         state.amount1In = state.balance1 > state.reserve1 - amount1Out ?
             state.balance1 - (state.reserve1 - amount1Out) : 0;
 
-        if (state.amount0In == 0 && state.amount1In == 0) {
+        if (state.amount0In <= 0 && state.amount1In <= 0) {
             revert PonderPairTypes.InsufficientInputAmount();
         }
 
@@ -370,7 +372,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
 
         amount0 = (liquidity * balance0) / _totalSupply;
         amount1 = (liquidity * balance1) / _totalSupply;
-        if (amount0 == 0 || amount1 == 0) revert PonderPairTypes.InsufficientLiquidityBurned();
+        if (amount0 <= 0 || amount1 <= 0) revert PonderPairTypes.InsufficientLiquidityBurned();
 
         // EFFECTS - Update all state variables before external calls
         _burn(address(this), liquidity);
@@ -404,6 +406,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         bool feeOn = _mintFee(reserve0_, reserve1_);
         uint256 _totalSupply = totalSupply();
 
+
+        // Strict equality required: Special initialization case for first LP token mint
+        // slither-disable-next-line dangerous-strict-equalities
         if (_totalSupply == 0) {
             if (amount0 < PonderPairTypes.MINIMUM_LIQUIDITY ||
                 amount1 < PonderPairTypes.MINIMUM_LIQUIDITY) {
@@ -418,7 +423,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             );
         }
 
-        if (liquidity == 0) revert PonderPairTypes.InsufficientLiquidityMinted();
+        if (liquidity <= 0) revert PonderPairTypes.InsufficientLiquidityMinted();
         _mint(to, liquidity);
 
         _update(balance0, balance1, reserve0_, reserve1_);

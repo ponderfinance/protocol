@@ -65,12 +65,12 @@ contract KKUBUnwrapper is
             revert KKUBUnwrapperTypes.BlacklistedAddress();
         }
 
-        // Effects
-        _lockedBalance += amount;
-
-        // Interactions
         uint256 initialBalance = address(this).balance;
 
+        // Effects - Update state before external calls
+        _lockedBalance += amount;
+
+        // Interactions - External calls after state updates
         // 1. Transfer KKUB tokens
         IERC20(KKUB).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -80,45 +80,43 @@ contract KKUBUnwrapper is
         // Verify withdrawal success
         uint256 ethReceived = address(this).balance - initialBalance;
         if (ethReceived < amount) {
+            // Effects - Revert state changes if withdrawal fails
             _lockedBalance -= amount;
             revert KKUBUnwrapperTypes.WithdrawFailed();
         }
 
+        // Final state update before last external call
+        _lockedBalance -= amount;
+
         // 3. Transfer ETH to recipient
-        // sendValue will revert on failure, no need for additional error handling
         payable(recipient).sendValue(amount);
 
-        _lockedBalance -= amount;
         emit UnwrappedKKUB(recipient, amount);
         return true;
     }
 
 
     /// @inheritdoc IKKUBUnwrapper
-    function emergencyWithdraw()
-    external
-    override
-    onlyOwner
-    nonReentrant
-    {
+    function emergencyWithdraw() external override onlyOwner nonReentrant {
+        // Checks
         if (block.timestamp < lastWithdrawalTime + KKUBUnwrapperTypes.WITHDRAWAL_DELAY) {
             revert KKUBUnwrapperTypes.WithdrawalTooFrequent();
         }
 
         uint256 withdrawableAmount = address(this).balance - _lockedBalance;
-        if (withdrawableAmount == 0) revert KKUBUnwrapperTypes.InsufficientBalance();
+        if (withdrawableAmount <= 0) revert KKUBUnwrapperTypes.InsufficientBalance();
 
         if (withdrawableAmount > KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT) {
             withdrawableAmount = KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT;
         }
 
-        // Update state before transfer
+        // Effects - Update state before transfer
         lastWithdrawalTime = block.timestamp;
         if (!paused()) {
             _pause();
         }
 
-        // Transfer withdrawable amount
+        // Interactions - Transfer after state updates
         payable(owner()).sendValue(withdrawableAmount);
 
         emit EmergencyWithdraw(withdrawableAmount, block.timestamp);

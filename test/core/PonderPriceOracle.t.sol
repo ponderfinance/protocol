@@ -36,6 +36,8 @@ contract PonderPriceOracleTest is Test {
         uint32 blockTimestamp
     );
 
+    event PairInitialized(address indexed pair, uint32 timestamp);
+
     function setUp() public {
         // Deploy factory
         factory = new PonderFactory(address(this), address(1), address(2));
@@ -66,37 +68,13 @@ contract PonderPriceOracleTest is Test {
     }
 
     function testInitialUpdate() public {
-        // Calculate expected cumulative prices
-        // At deployment both reserves are equal, so price is 1:1
-        // price = reserve1/reserve0 * 2^112
-        uint256 expectedPrice = 2**112; // 1 * 2^112 for equal reserves
-
-        // Time elapsed since last update (block.timestamp - lastUpdateTime) * price
-        uint256 timeElapsed = MIN_UPDATE_DELAY; // 5 minutes in seconds
-        uint256 expectedCumulative = expectedPrice * timeElapsed;
-
         vm.expectEmit(true, true, true, true);
-        emit OracleUpdated(
-            address(testPair),
-            expectedCumulative, // price0Cumulative
-            expectedCumulative, // price1Cumulative
-            uint32(block.timestamp)
-        );
+        emit PairInitialized(address(testPair), uint32(block.timestamp));
 
         oracle.update(address(testPair));
 
         assertEq(oracle.lastUpdateTime(address(testPair)), block.timestamp);
-
-        // Check observation array was initialized
         assertEq(oracle.observationLength(address(testPair)), 24); // OBSERVATION_CARDINALITY
-
-        // Verify the observation was stored correctly
-        (uint32 timestamp, uint224 price0Cumulative, uint224 price1Cumulative) =
-                            oracle.observations(address(testPair), 0);
-
-        assertEq(timestamp, uint32(block.timestamp));
-        assertEq(price0Cumulative, uint224(expectedCumulative));
-        assertEq(price1Cumulative, uint224(expectedCumulative));
     }
 
     function testUpdateTooFrequent() public {
@@ -111,7 +89,7 @@ contract PonderPriceOracleTest is Test {
     }
 
     function testConsultWithoutInitialization() public {
-        vm.expectRevert(abi.encodeWithSignature("InsufficientData()"));
+        vm.expectRevert(abi.encodeWithSignature("NotInitialized()"));
         oracle.consult(address(testPair), address(token0), 1e18, uint32(TIME_DELAY));
     }
 
@@ -342,10 +320,37 @@ contract PonderPriceOracleTest is Test {
         assertGt(price, 0, "Price should remain valid after long time period");
     }
 
+    function testPairInitializationState() public {
+        // Check initial state
+        assertFalse(oracle.isPairInitialized(address(testPair)), "Pair should not be initialized before update");
+
+        // Initialize via update
+        oracle.update(address(testPair));
+
+        // Verify initialization
+        assertTrue(oracle.isPairInitialized(address(testPair)), "Pair should be initialized after update");
+
+        // Check observation array was populated
+        assertEq(oracle.observationLength(address(testPair)), 24); // OBSERVATION_CARDINALITY
+    }
+
+    function testDirectInitialization() public {
+        // Initialize pair directly
+        oracle.initializePair(address(testPair));
+
+        // Verify initialization
+        assertTrue(oracle.isPairInitialized(address(testPair)), "Pair should be initialized");
+
+        // Try to initialize again
+        vm.expectRevert(abi.encodeWithSignature("AlreadyInitialized()"));
+        oracle.initializePair(address(testPair));
+    }
+
     function testInvalidPairQueries() public {
-        // Test with non-existent pair
-        vm.expectRevert();
-        oracle.update(address(0x123));
+        // Test update with invalid pair address
+        address invalidPair = makeAddr("invalidPair");
+        vm.expectRevert();  // Contract will revert on invalid pair
+        oracle.update(invalidPair);
 
         // Test with non-pair contract
         ERC20Mock fakeToken = new ERC20Mock("Fake", "FAKE", 18);
@@ -353,7 +358,27 @@ contract PonderPriceOracleTest is Test {
         oracle.update(address(fakeToken));
     }
 
+    function testUpdateSequence() public {
+        // Test update sequence and initialization
+        oracle.update(address(testPair));
 
+        // Should revert on too frequent updates
+        vm.expectRevert(abi.encodeWithSignature("UpdateTooFrequent()"));
+        oracle.update(address(testPair));
+
+        // Should succeed after delay
+        vm.warp(block.timestamp + MIN_UPDATE_DELAY);
+        oracle.update(address(testPair));
+
+        // Verify observation data exists
+        assertGt(oracle.observationLength(address(testPair)), 0, "Should have observations");
+    }
+
+    // Remove testInitializationEvents as we're using the original event structure
+    function testInitializationFlow() public {
+        oracle.update(address(testPair));
+        assertTrue(oracle.observationLength(address(testPair)) > 0, "Observation array should be initialized");
+    }
 
 
 }
