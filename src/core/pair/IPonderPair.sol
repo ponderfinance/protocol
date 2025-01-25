@@ -157,10 +157,13 @@ interface IPonderPair is IERC20 {
      */
     function sync() external;
 
+
     /**
+        * @dev Initialize function uses underscore suffix naming convention
+     * to explicitly avoid shadowing while maintaining clear parameter names
      * @notice Initializes the pair with token addresses
-     * @param token0 Address of the first token
-     * @param token1 Address of the second token
+     * @param token0_ Address of the first token
+     * @param token1_ Address of the second token
      */
-    function initialize(address token0, address token1) external;
+    function initialize(address token0_, address token1_) external;
 }

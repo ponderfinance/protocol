@@ -8,6 +8,13 @@ pragma solidity 0.8.20;
  */
 interface IPonderFactory {
     /**
+    * @dev Parameter shadowing is intentional and safe in this context as:
+     * 1. Parameters are scoped to function
+     * 2. Interface functions have no implementation
+     * 3. Parameter naming matches convention for clarity
+     */
+
+    /**
      * @notice Returns the address authorized to set fee collection address
      * @return Address of the fee setter
      */
@@ -83,6 +90,7 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param feeTo New address to receive protocol fees
      */
+    // slither-disable-next-line local-variable-shadowing
     function setFeeTo(address feeTo) external;
 
     /**
@@ -90,6 +98,7 @@ interface IPonderFactory {
      * @dev Can only be called by current feeToSetter
      * @param feeToSetter New address authorized to set fee receiver
      */
+    // slither-disable-next-line local-variable-shadowing
     function setFeeToSetter(address feeToSetter) external;
 
     /**
@@ -97,6 +106,7 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param migrator New migrator contract address
      */
+    // slither-disable-next-line local-variable-shadowing
     function setMigrator(address migrator) external;
 
     /**
@@ -104,6 +114,7 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param launcher Address of the new launcher contract
      */
+    // slither-disable-next-line local-variable-shadowing
     function setLauncher(address launcher) external;
 
     /**
@@ -117,6 +128,7 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param ponder New PONDER token address
      */
+    // slither-disable-next-line local-variable-shadowing
     function setPonder(address ponder) external;
 
     /**

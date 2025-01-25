@@ -377,10 +377,10 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 liquidity = balanceOf(address(this));
 
         bool feeOn = _mintFee(reserve0_, reserve1_);
-        uint256 _totalSupply = totalSupply();
+        uint256 currentSupply = totalSupply();
 
-        amount0 = (liquidity * balance0) / _totalSupply;
-        amount1 = (liquidity * balance1) / _totalSupply;
+        amount0 = (liquidity * balance0) / currentSupply;
+        amount1 = (liquidity * balance1) / currentSupply;
         if (amount0 <= 0 || amount1 <= 0) revert PonderPairTypes.InsufficientLiquidityBurned();
 
         // EFFECTS - Update all state variables before external calls
@@ -413,12 +413,12 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount1 = balance1 - reserve1_;
 
         bool feeOn = _mintFee(reserve0_, reserve1_);
-        uint256 _totalSupply = totalSupply();
+        uint256 currentSupply = totalSupply();
 
 
         // Strict equality required: Special initialization case for first LP token mint
         // slither-disable-next-line dangerous-strict-equalities
-        if (_totalSupply == 0) {
+        if (currentSupply == 0) {
             if (amount0 < PonderPairTypes.MINIMUM_LIQUIDITY ||
                 amount1 < PonderPairTypes.MINIMUM_LIQUIDITY) {
                 revert PonderPairTypes.InsufficientInitialLiquidity();
@@ -427,8 +427,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             _mint(address(1), PonderPairTypes.MINIMUM_LIQUIDITY);
         } else {
             liquidity = Math.min(
-                (amount0 * _totalSupply) / reserve0_,
-                (amount1 * _totalSupply) / reserve1_
+                (amount0 * currentSupply) / reserve0_,
+                (amount1 * currentSupply) / reserve1_
             );
         }
 
