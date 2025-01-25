@@ -239,10 +239,8 @@ library PonderLaunchGuard {
             uint256 squaredNewReserve = newPonderReserve * newPonderReserve;
             newPrice = (k * BASIS_POINTS) / squaredNewReserve;
         } else {
-            // If squaring would overflow, use alternative calculation with reduced precision
-            // newPrice = (k/newPonderReserve * BASIS_POINTS) / newPonderReserve
-            uint256 intermediateReserve = k / newPonderReserve;
-            newPrice = (intermediateReserve * BASIS_POINTS) / newPonderReserve;
+            // Scale down newPonderReserve first to avoid precision loss
+            newPrice = k / (newPonderReserve / BASIS_POINTS) / newPonderReserve;
         }
 
         // Calculate absolute price impact

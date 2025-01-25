@@ -324,11 +324,11 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
             return;
         }
 
-        // Calculate ponder rewards first
+        // Calculate ponder rewards and shares with precision in a single operation
         uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint) / _totalAllocPoint;
-
-        // Calculate share updates with precision in a single operation
-        uint256 rewardShare = (ponderReward * 1e12) / pool.totalWeightedShares;
+        uint256 rewardShare =
+            (timeElapsed * _ponderPerSecond * pool.allocPoint * 1e12)
+            / (_totalAllocPoint * pool.totalWeightedShares);
 
         pool.accPonderPerShare += rewardShare;
         pool.lastRewardTime = block.timestamp;
