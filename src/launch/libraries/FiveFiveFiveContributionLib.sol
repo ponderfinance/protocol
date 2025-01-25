@@ -55,6 +55,10 @@ library FiveFiveFiveContributionLib {
         address contributor
     ) internal returns (bool shouldFinalize) {
         // Validate contribution first
+
+        // Third value from validateKubContribution is newTotal
+        // which we don't need for contribution processing
+        // slither-disable-next-line unused-return
         (,bool shouldFin) = FiveFiveFiveValidation.validateKubContribution(
             launch,
             amount

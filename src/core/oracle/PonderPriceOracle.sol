@@ -166,6 +166,10 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         if (!_isValidPair(pair)) revert PonderOracleTypes.InvalidPair();
 
         IPonderPair pairContract = IPonderPair(pair);
+
+        /// Third value from getReserves is block.timestamp
+        // which we don't need for price calculation
+        /// slither-disable-next-line unused-return
         (uint112 reserve0, uint112 reserve1,) = pairContract.getReserves();
 
         // Check which token is token0 based on address ordering

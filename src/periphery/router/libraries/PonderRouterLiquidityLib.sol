@@ -31,7 +31,8 @@ library PonderRouterLiquidityLib {
         IPonderFactory factory
     ) internal returns (uint256 amountA, uint256 amountB) {
         if (factory.getPair(tokenA, tokenB) == address(0)) {
-            factory.createPair(tokenA, tokenB);
+            address pair = factory.createPair(tokenA, tokenB);
+            if (pair == address(0)) revert PonderRouterTypes.PairCreationFailed();
         }
 
         (uint256 reserveA, uint256 reserveB) = PonderRouterSwapLib.getReserves(tokenA, tokenB, factory);

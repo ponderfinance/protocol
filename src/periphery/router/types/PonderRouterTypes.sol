@@ -95,4 +95,10 @@ library PonderRouterTypes {
 
     /// @notice Thrown when input amount is insufficient
     error InsufficientInputAmount();
+
+    error ApprovalFailed();
+
+    error UnwrapFailed();
+
+    error PairCreationFailed();
 }

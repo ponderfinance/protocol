@@ -202,6 +202,7 @@ contract FiveFiveFiveLauncher is
      * @param launchId Identifier of the launch.
      * @param contributor Address of the contributor.
      * @return Contribution details (amounts, timestamps, etc.).
+     * @custom:slither-disable-next-line ignore-return
      */
     function getContributorInfo(uint256 launchId, address contributor)
     external
@@ -215,6 +216,7 @@ contract FiveFiveFiveLauncher is
      * @notice Retrieve overall contribution information for a launch.
      * @param launchId Identifier of the launch.
      * @return Contribution summary details.
+     * @custom:slither-disable-next-line ignore-return
      */
     function getContributionInfo(uint256 launchId)
     external
@@ -228,6 +230,7 @@ contract FiveFiveFiveLauncher is
      * @notice Retrieve pool-specific information for a launch.
      * @param launchId Identifier of the launch.
      * @return Pool details (addresses, states, etc.).
+     * @custom:slither-disable-next-line ignore-return
      */
     function getPoolInfo(uint256 launchId)
     external
@@ -241,6 +244,7 @@ contract FiveFiveFiveLauncher is
      * @notice Retrieve launch-specific information.
      * @param launchId Identifier of the launch.
      * @return Launch details (name, symbol, etc.).
+     * @custom:slither-disable-next-line ignore-return
      */
     function getLaunchInfo(uint256 launchId)
     external
@@ -253,6 +257,7 @@ contract FiveFiveFiveLauncher is
     /**
      * @notice Retrieve minimum requirements for a launch.
      * @return Minimum contribution thresholds.
+     * @custom:slither-disable-next-line ignore-return
      */
     function getMinimumRequirements()
     external
@@ -266,6 +271,7 @@ contract FiveFiveFiveLauncher is
      * @notice Retrieve remaining contribution requirements for a launch.
      * @param launchId Identifier of the launch.
      * @return Remaining amounts to be raised.
+     * @custom:slither-disable-next-line ignore-return
      */
     function getRemainingToRaise(uint256 launchId)
     external

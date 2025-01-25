@@ -110,7 +110,10 @@ library FiveFiveFiveFinalizationLib {
         FiveFiveFivePoolLib.validatePoolCreation(pools, launch.pools.memeKubPair);
 
         // Add KUB liquidity
-        LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount);
+        if (!LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount)) {
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+        }
+
         FiveFiveFivePoolLib.addKubLiquidity(
             router,
             launch.base.tokenAddress,
@@ -177,7 +180,10 @@ library FiveFiveFiveFinalizationLib {
         FiveFiveFivePoolLib.validatePoolCreation(pools, launch.pools.memePonderPair);
 
         // Add PONDER liquidity
-        ponder.approve(address(router), pools.ponderAmount);
+        if (!ponder.approve(address(router), pools.ponderAmount)) {
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+        }
+
         FiveFiveFivePoolLib.addPonderLiquidity(
             router,
             launch.base.tokenAddress,

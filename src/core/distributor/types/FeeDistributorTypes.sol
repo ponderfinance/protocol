@@ -29,4 +29,5 @@ library FeeDistributorTypes {
     error InvalidRecipient();
     error InvalidRecoveryAmount();
     error InvalidReserves();
+    error ApprovalFailed();
 }

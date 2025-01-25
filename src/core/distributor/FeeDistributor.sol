@@ -25,7 +25,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         owner = msg.sender;
 
         // Approve router for all conversions
-        IERC20(_ponder).approve(_router, type(uint256).max);
+        if (!IERC20(_ponder).approve(_router, type(uint256).max)) {
+            revert FeeDistributorTypes.ApprovalFailed();
+        }
     }
 
     /**
@@ -78,7 +80,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 minOutAmount = _calculateMinimumPonderOut(token, amount);
 
         // Approve router
-        IERC20(token).approve(address(ROUTER), amount);
+        if (!IERC20(token).approve(address(ROUTER), amount)) {
+            revert FeeDistributorTypes.ApprovalFailed();
+        }
 
         // Setup path
         address[] memory path = new address[](2);
@@ -212,6 +216,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         address pair = FACTORY.getPair(token, PONDER);
         if (pair == address(0)) revert FeeDistributorTypes.PairNotFound();
 
+        /// @dev Third value from getReserves is block.timestamp
+        /// which we don't need for minimal output calculation
+        /// slither-disable-next-line unused-return
         (uint112 reserve0, uint112 reserve1, ) = IPonderPair(pair).getReserves();
 
         (uint112 tokenReserve, uint112 ponderReserve) =
@@ -258,8 +265,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (token == PONDER) return;
 
         // Approve router if needed
-        IERC20(token).approve(address(ROUTER), amountIn);
-
+        if (!IERC20(token).approve(address(ROUTER), amountIn)) {
+            revert FeeDistributorTypes.ApprovalFailed();
+        }
         // Setup path for swap
         address[] memory path = new address[](2);
         path[0] = token;

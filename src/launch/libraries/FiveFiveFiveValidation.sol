@@ -193,6 +193,8 @@ library FiveFiveFiveValidation {
         address ponder,
         uint256 amount
     ) internal view returns (uint256 spotPrice) {
+        // Only need lastUpdateTime from getReserves for staleness check
+        // slither-disable-next-line unused-return
         (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
 
         // Check price staleness

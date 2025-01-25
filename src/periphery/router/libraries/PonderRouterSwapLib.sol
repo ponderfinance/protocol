@@ -71,6 +71,9 @@ library PonderRouterSwapLib {
 
         if (params.supportingFee) {
             (uint256 reserve0, uint256 reserve1,) = pair.getReserves();
+
+            if (reserve0 == 0 && reserve1 == 0) revert PonderRouterTypes.InsufficientLiquidity();
+
             (uint256 reserveIn, uint256 reserveOut) = params.input == token0
                 ? (reserve0, reserve1)
                 : (reserve1, reserve0);

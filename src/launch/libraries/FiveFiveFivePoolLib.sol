@@ -75,7 +75,12 @@ library FiveFiveFivePoolLib {
         }
 
         // Validate pair state
+
+        // Third value from getReserves is block.timestamp
+        // which we don't need for reserve validation
+        // slither-disable-next-line unused-return
         (uint112 r0, uint112 r1,) = PonderPair(pair).getReserves();
+
         if (r0 != 0 || r1 != 0) {
             revert FiveFiveFiveLauncherTypes.PriceOutOfBounds();
         }
@@ -100,7 +105,11 @@ library FiveFiveFivePoolLib {
         }
 
         // Validate pair state
+        // Third value from getReserves is block.timestamp
+        // which we don't need for reserve validation
+        // slither-disable-next-line unused-return
         (uint112 r0, uint112 r1,) = PonderPair(pair).getReserves();
+
         if (r0 != 0 || r1 != 0) {
             revert FiveFiveFiveLauncherTypes.PriceOutOfBounds();
         }
@@ -137,7 +146,9 @@ library FiveFiveFivePoolLib {
         uint256 minKubAmount = kubAmount * 995 / 1000;
 
         // Add approvals first
-        LaunchToken(tokenAddress).approve(address(router), tokenAmount);
+        if (!LaunchToken(tokenAddress).approve(address(router), tokenAmount)) {
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+        }
 
         // Add liquidity with slippage protection
         return router.addLiquidityETH{value: kubAmount}(
@@ -177,8 +188,12 @@ library FiveFiveFivePoolLib {
         uint256 minPonderAmount = ponderAmount * 995 / 1000;
 
         // Add approvals first
-        LaunchToken(tokenAddress).approve(address(router), tokenAmount);
-        PonderToken(ponder).approve(address(router), ponderAmount);
+        if (!LaunchToken(tokenAddress).approve(address(router), tokenAmount)) {
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+        }
+        if (!PonderToken(ponder).approve(address(router), ponderAmount)) {
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+        }
 
         // Add liquidity with slippage protection
         return router.addLiquidity(
@@ -211,7 +226,11 @@ library FiveFiveFivePoolLib {
 
         // Verify pair has no existing liquidity
         if (pair != address(0)) {
+            // Third value from getReserves is block.timestamp
+            // which we don't need for reserve validation
+            // slither-disable-next-line unused-return
             (uint112 r0, uint112 r1,) = PonderPair(pair).getReserves();
+
             if (r0 != 0 || r1 != 0) {
                 revert FiveFiveFiveLauncherTypes.PriceOutOfBounds();
             }

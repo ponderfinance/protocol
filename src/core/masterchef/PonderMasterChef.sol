@@ -272,12 +272,14 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     ) external onlyOwner {
         if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
 
+        // Effects: Update state variables before external calls
+        _totalAllocPoint = _totalAllocPoint - _poolInfo[_pid].allocPoint + _allocPoint;
+        _poolInfo[_pid].allocPoint = _allocPoint;
+
+        // Interactions: External calls last
         if (_withUpdate) {
             _massUpdatePools();
         }
-
-        _totalAllocPoint = _totalAllocPoint - _poolInfo[_pid].allocPoint + _allocPoint;
-        _poolInfo[_pid].allocPoint = _allocPoint;
 
         emit PoolUpdated(_pid, _allocPoint);
     }
@@ -343,7 +345,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        // Effects
+        // Effects: Update state variables before external calls
         if (!_farmingStarted && _amount > 0) {
             _startTime = block.timestamp;
             _farmingStarted = true;
@@ -360,7 +362,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         if (_amount > 0) {
             uint256 beforeBalance = IERC20(pool.lpToken).balanceOf(address(this));
 
-            // Interactions
+            // Interactions: External calls last
             if (!IERC20(pool.lpToken).transferFrom(msg.sender, address(this), _amount)) {
                 revert PonderMasterChefTypes.TransferFailed();
             }
@@ -368,7 +370,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
             uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
             actualAmount = afterBalance - beforeBalance;
 
-            if (actualAmount == 0) revert PonderMasterChefTypes.NoTokensTransferred();
+            if (actualAmount <= 0) revert PonderMasterChefTypes.NoTokensTransferred();
 
             if (pool.depositFeeBP > 0) {
                 uint256 depositFee = (actualAmount * pool.depositFeeBP) / PonderMasterChefTypes.BASIS_POINTS;
@@ -400,25 +402,29 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
+        // CHECKS
         if (user.amount < _amount) revert PonderMasterChefTypes.InsufficientAmount();
 
+        // Calculate pending rewards BEFORE state changes
         _updatePool(_pid);
-
         uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
+
+        // EFFECTS
+        user.amount -= _amount;
+        pool.totalStaked -= _amount;
+        _updateUserWeightedShares(_pid, msg.sender);
+        user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
+
+        // INTERACTIONS
         if (pending > 0) {
             _safePonderTransfer(msg.sender, pending);
         }
 
         if (_amount > 0) {
-            user.amount -= _amount;
-            pool.totalStaked -= _amount;
             if (!IERC20(pool.lpToken).transfer(msg.sender, _amount)) {
                 revert PonderMasterChefTypes.TransferFailed();
             }
         }
-
-        _updateUserWeightedShares(_pid, msg.sender);
-        user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
         emit Withdraw(msg.sender, _pid, _amount);
     }
@@ -459,28 +465,26 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         uint256 beforeBalance = PONDER.balanceOf(address(this));
 
-        // Effects
-        _updatePool(_pid);
-        uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
-
+        // Effects: Update state variables before external calls
         user.ponderStaked += _amount;
-
-        // Update weighted shares using existing function
         _updateUserWeightedShares(_pid, msg.sender);
 
         if (user.weightedShares > user.amount * pool.boostMultiplier / PonderMasterChefTypes.BASE_MULTIPLIER) {
             revert PonderMasterChefTypes.BoostTooHigh();
         }
 
+        // Interactions: External calls last
+        _updatePool(_pid);
+
+        uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
-        // Interactions
         if (!PONDER.transferFrom(msg.sender, address(this), _amount)) {
             revert PonderMasterChefTypes.TransferFailed();
         }
 
         uint256 actualAmount = PONDER.balanceOf(address(this)) - beforeBalance;
-        if (actualAmount == 0) revert PonderMasterChefTypes.ZeroAmount();
+        if (actualAmount <= 0) revert PonderMasterChefTypes.ZeroAmount();
         if (actualAmount != _amount) revert PonderMasterChefTypes.InvalidAmount();
 
         if (pending > 0) {
@@ -498,25 +502,26 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
         if (user.ponderStaked < _amount) revert PonderMasterChefTypes.InsufficientAmount();
 
+        // Effects: Update state variables before external calls
+        user.ponderStaked -= _amount;
+        _updateUserWeightedShares(_pid, msg.sender);
+
+        // Interactions: External calls last
         _updatePool(_pid);
 
         uint256 pending = (user.weightedShares * _poolInfo[_pid].accPonderPerShare / 1e12) - user.rewardDebt;
+        user.rewardDebt = (user.weightedShares * _poolInfo[_pid].accPonderPerShare) / 1e12;
+
         if (pending > 0) {
             _safePonderTransfer(msg.sender, pending);
         }
 
-        user.ponderStaked -= _amount;
         if (!PONDER.transfer(msg.sender, _amount)) {
             revert PonderMasterChefTypes.TransferFailed();
         }
 
-        _updateUserWeightedShares(_pid, msg.sender);
-        user.rewardDebt = (user.weightedShares * _poolInfo[_pid].accPonderPerShare) / 1e12;
-
         emit BoostUnstake(msg.sender, _pid, _amount);
     }
-
-    // Internal Helper Functions
 
     /**
      * @notice Update user's weighted shares in pool
@@ -613,8 +618,12 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
     /// @inheritdoc IPonderMasterChef
     function setPonderPerSecond(uint256 _newPonderPerSecond) external onlyOwner {
-        _massUpdatePools();
+        // Effects: Update state variables before external calls
         _ponderPerSecond = _newPonderPerSecond;
+
+        // Interactions: External calls last
+        _massUpdatePools();
+
         emit PonderPerSecondUpdated(_ponderPerSecond);
     }
 }

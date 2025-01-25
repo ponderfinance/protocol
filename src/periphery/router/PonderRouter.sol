@@ -157,8 +157,12 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
             deadline
         );
         TransferHelper.safeTransfer(token, to, amountToken);
-        IERC20(WETH).approve(KKUB_UNWRAPPER, amountETH);
-        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
+
+        bool success = IERC20(WETH).approve(KKUB_UNWRAPPER, amountETH);
+        if (!success) revert PonderRouterTypes.ApprovalFailed();
+
+        success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
+        if (!success) revert PonderRouterTypes.UnwrapFailed();
     }
 
     function removeLiquidityETHSupportingFeeOnTransferTokens(
@@ -179,8 +183,12 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
             deadline
         );
         TransferHelper.safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
-        IERC20(WETH).approve(KKUB_UNWRAPPER, amountETH);
-        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
+
+        bool success = IERC20(WETH).approve(KKUB_UNWRAPPER, amountETH);
+        if (!success) revert PonderRouterTypes.ApprovalFailed();
+
+        success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
+        if (!success) revert PonderRouterTypes.UnwrapFailed();
     }
 
     function swapExactTokensForTokens(
@@ -254,8 +262,11 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
 
         PonderRouterSwapLib.executeSwap(amounts, path, address(this), false, FACTORY);
 
-        IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut);
-        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
+        bool success = IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut);
+        if (!success) revert PonderRouterTypes.ApprovalFailed();
+
+        success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
+        if (!success) revert PonderRouterTypes.UnwrapFailed();
     }
 
     function swapExactTokensForETH(
@@ -277,8 +288,11 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
 
         PonderRouterSwapLib.executeSwap(amounts, path, address(this), false, FACTORY);
 
-        IERC20(WETH).approve(KKUB_UNWRAPPER, amounts[amounts.length - 1]);
-        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amounts[amounts.length - 1], to);
+        bool success = IERC20(WETH).approve(KKUB_UNWRAPPER, amounts[amounts.length - 1]);
+        if (!success) revert PonderRouterTypes.ApprovalFailed();
+
+        success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amounts[amounts.length - 1], to);
+        if (!success) revert PonderRouterTypes.UnwrapFailed();
     }
 
     function swapETHForExactTokens(
@@ -358,8 +372,11 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         uint256 amountOut = IERC20(WETH).balanceOf(address(this));
         if (amountOut < amountOutMin) revert PonderRouterTypes.InsufficientOutputAmount();
 
-        IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut);
-        KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
+        bool success = IERC20(WETH).approve(KKUB_UNWRAPPER, amountOut);
+        if (!success) revert PonderRouterTypes.ApprovalFailed();
+
+        success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
+        if (!success) revert PonderRouterTypes.UnwrapFailed();
     }
 
     /// @inheritdoc IPonderRouter
