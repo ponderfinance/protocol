@@ -7,7 +7,7 @@ import { PonderPairStorage } from "./storage/PonderPairStorage.sol";
 import { PonderPairTypes } from "./types/PonderPairTypes.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
 import { IPonderCallee } from "./IPonderCallee.sol";
-import { ILaunchToken } from "./ILaunchToken.sol";
+import { ILaunchToken } from "../../launch/ILaunchToken.sol";
 import { Math } from "../../libraries/Math.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -102,6 +102,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      */
     function initialize(address token0_, address token1_) external override {
         if (msg.sender != _factory) revert PonderPairTypes.Forbidden();
+
         _token0 = token0_;
         _token1 = token1_;
     }
@@ -126,9 +127,11 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      * @param value Amount to transfer
      */
     function _safeTransfer(address token, address to, uint256 value) private {
+        if (token == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (to == address(0)) revert PonderPairTypes.ZeroAddress();
+
         IERC20(token).safeTransfer(to, value);
     }
-
     /**
      * @dev Executes token transfers and flash loan callback if applicable
      */
@@ -138,6 +141,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount1Out,
         bytes calldata data
     ) private {
+        if (to == address(0)) revert PonderPairTypes.ZeroAddress();
+
         if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out);
         if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out);
         if (data.length > 0) {
@@ -157,6 +162,10 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount0Out,
         uint256 amount1Out
     ) private {
+        if (token == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (token0Address == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (token1Address == address(0)) revert PonderPairTypes.ZeroAddress();
+
         // Strict equality check is intentional - early return for zero fees
         // slither-disable-next-line dangerous-strict-equalities
         if (amountIn <= 0) return;

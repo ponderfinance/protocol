@@ -1,19 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { PonderERC20 } from "../core/token/PonderERC20.sol";
-import { IPonderFactory } from "../core/factory/IPonderFactory.sol";
-import { PonderToken } from "../core/token/PonderToken.sol";
-import { IPonderRouter } from "../periphery/router/IPonderRouter.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { ILaunchToken } from "./ILaunchToken.sol";
+import { LaunchTokenTypes } from "./types/LaunchTokenTypes.sol";
+import { IPonderFactory} from "../core/factory/IPonderFactory.sol";
+import { IPonderRouter } from "../periphery/router/IPonderRouter.sol";
+import { PonderToken } from "../core/token/PonderToken.sol";
+import { PonderERC20 } from "../core/token/PonderERC20.sol";
 
-contract LaunchToken is PonderERC20, ReentrancyGuard {
-    /// @notice Core protocol addresses
-    address public launcher;
-    address public pendingLauncher;
+/// @title LaunchToken
+/// @notice Implements a token with vesting, trading restrictions, and fee mechanisms
+/// @dev Inherits from PonderERC20 and implements ILaunchToken interface
+contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
+    using LaunchTokenTypes for *;
+
+    /// @notice Core protocol immutable addresses
     IPonderFactory public immutable FACTORY;
     IPonderRouter public immutable ROUTER;
     PonderToken public immutable PONDER;
+
+    /// @notice Protocol control addresses
+    address public launcher;
+    address public pendingLauncher;
 
     /// @notice Trading state
     bool public transfersEnabled;
@@ -25,7 +34,6 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
     uint256 public totalVestedAmount;
     uint256 public vestedClaimed;
     uint256 public lastClaimTime;
-    uint256 public constant TRADING_RESTRICTION_PERIOD = 15 minutes;
     uint256 public tradingEnabledAt;
     uint256 public maxTxAmount;
     bool public tradingRestricted = true;
@@ -34,42 +42,16 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
     address public kubPair;      // Primary KUB pair
     address public ponderPair;   // Secondary PONDER pair
 
-    /// @notice Protocol constants
-    uint256 public constant TOTAL_SUPPLY = 555_555_555 ether;
-    uint256 public constant VESTING_DURATION = 180 days;
-    uint256 public constant MIN_CLAIM_INTERVAL = 1 hours;
-
     /// @notice Vesting initialization status
-    bool private _vestingInitialized;
+    bool public vestingInitialized;
 
-    /// @notice Custom errors
-    error TransfersDisabled();
-    error Unauthorized();
-    error InsufficientAllowance();
-    error NoTokensAvailable();
-    error VestingNotStarted();
-    error VestingNotInitialized();
-    error VestingAlreadyInitialized();
-    error InvalidCreator();
-    error InvalidAmount();
-    error ExcessiveAmount();
-    error InsufficientLauncherBalance();
-    error PairAlreadySet();
-    error ClaimTooFrequent();
-    error ZeroAddress();
-    error NotPendingLauncher();
-    error MaxTransferExceeded();
-    error ContractBuyingRestricted();
-    error TradingRestricted();
-
-    /// @notice Events
-    event VestingInitialized(address indexed creator, uint256 amount, uint256 startTime, uint256 endTime);
-    event TokensClaimed(address indexed creator, uint256 amount);
-    event TransfersEnabled();
-    event PairsSet(address kubPair, address ponderPair);
-    event NewPendingLauncher(address indexed previousPending, address indexed newPending);
-    event LauncherTransferred(address indexed previousLauncher, address indexed newLauncher);
-
+    /// @notice Initializes the launch token with core protocol addresses
+    /// @param _name Token name
+    /// @param _symbol Token symbol
+    /// @param _launcher Address of initial launcher
+    /// @param _factory Address of factory contract
+    /// @param _router Address of router contract
+    /// @param _ponder Address of PONDER token
     constructor(
         string memory _name,
         string memory _symbol,
@@ -78,14 +60,23 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         address payable _router,
         address _ponder
     ) PonderERC20(_name, _symbol) {
-        if (_launcher == address(0)) revert ZeroAddress();
-        launcher = _launcher;
+        if (_launcher == address(0)) revert LaunchTokenTypes.ZeroAddress();
+        if (_factory == address(0)) revert LaunchTokenTypes.ZeroAddress();
+        if (_router == address(0)) revert LaunchTokenTypes.ZeroAddress();
+        if (_ponder == address(0)) revert LaunchTokenTypes.ZeroAddress();
+
         FACTORY = IPonderFactory(_factory);
         ROUTER = IPonderRouter(_router);
         PONDER = PonderToken(_ponder);
-        _mint(_launcher, TOTAL_SUPPLY);
+        launcher = _launcher;
+        _mint(_launcher, LaunchTokenTypes.TOTAL_SUPPLY);
     }
 
+    /// @notice Manages token transfers with trading restrictions and fee handling
+    /// @dev Overrides PonderERC20._update
+    /// @param from Source address
+    /// @param to Destination address
+    /// @param amount Transfer amount
     function _update(
         address from,
         address to,
@@ -105,19 +96,18 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
 
         // Check if transfers are enabled for non-launcher operations
         if (!transfersEnabled) {
-            revert TransfersDisabled();
+            revert LaunchTokenTypes.TransfersDisabled();
         }
 
         // Apply trading restrictions during initial period
-// Apply trading restrictions during initial period
-        if (block.timestamp < tradingEnabledAt + TRADING_RESTRICTION_PERIOD) {
+        if (block.timestamp < tradingEnabledAt + LaunchTokenTypes.TRADING_RESTRICTION_PERIOD) {
             // Check max transaction amount
             if (amount > maxTxAmount) {
-                revert MaxTransferExceeded();
+                revert LaunchTokenTypes.MaxTransferExceeded();
             }
 
             // Check for contracts trading in either direction
-            if (to.code.length > 0 || from.code.length > 0) {  // Check both directions
+            if (to.code.length > 0 || from.code.length > 0) {
                 // Check if this is our pair address
                 if (to == kubPair || to == ponderPair ||
                 from == kubPair || from == ponderPair) {
@@ -137,7 +127,7 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
                 from != address(FACTORY) &&
                 from != kubPairCheck &&
                     from != ponderPairCheck) {
-                    revert ContractBuyingRestricted();
+                    revert LaunchTokenTypes.ContractBuyingRestricted();
                 }
             }
         }
@@ -145,45 +135,56 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         super._update(from, to, amount);
     }
 
-
+    /// @notice Sets up vesting schedule for token creator
+    /// @param _creator Address of token creator
+    /// @param _amount Amount of tokens to vest
     function setupVesting(address _creator, uint256 _amount) external {
+        if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
+        if (vestingInitialized) revert LaunchTokenTypes.VestingAlreadyInitialized();
+        if (_creator == address(0)) revert LaunchTokenTypes.InvalidCreator();
+        if (_amount == 0) revert LaunchTokenTypes.InvalidAmount();
+
         // Authorization check
-        if (msg.sender != launcher) revert Unauthorized();
+        if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
 
         // State checks
-        if (_vestingInitialized) revert VestingAlreadyInitialized();
-        if (_creator == address(0)) revert InvalidCreator();
-        if (_amount == 0) revert InvalidAmount();
+        if (vestingInitialized) revert LaunchTokenTypes.VestingAlreadyInitialized();
+        if (_creator == address(0)) revert LaunchTokenTypes.InvalidCreator();
+        if (_amount == 0) revert LaunchTokenTypes.InvalidAmount();
 
-        // Amount validation - check total supply first
-        if (_amount > TOTAL_SUPPLY) revert ExcessiveAmount();
-        if (_amount > balanceOf(launcher)) revert InsufficientLauncherBalance();
+        // Amount validation
+        if (_amount > LaunchTokenTypes.TOTAL_SUPPLY) revert LaunchTokenTypes.ExcessiveAmount();
+        if (_amount > balanceOf(launcher)) revert LaunchTokenTypes.InsufficientLauncherBalance();
 
         // State updates
         creator = _creator;
         totalVestedAmount = _amount;
         vestingStart = block.timestamp;
-        vestingEnd = block.timestamp + VESTING_DURATION;
+        vestingEnd = block.timestamp + LaunchTokenTypes.VESTING_DURATION;
 
         // Set initialized flag last (CEI pattern)
-        _vestingInitialized = true;
+        vestingInitialized = true;
 
         emit VestingInitialized(_creator, _amount, vestingStart, vestingEnd);
     }
 
+    /// @notice Returns vesting initialization status
     function isVestingInitialized() external view returns (bool) {
-        return _vestingInitialized;
+        return vestingInitialized;
     }
 
+    /// @notice Allows creator to claim vested tokens
     function claimVestedTokens() external nonReentrant {
-        if (!_vestingInitialized) revert VestingNotInitialized();
-        if (msg.sender != creator) revert Unauthorized();
-        if (block.timestamp < vestingStart) revert VestingNotStarted();
-        if (block.timestamp < lastClaimTime + MIN_CLAIM_INTERVAL) revert ClaimTooFrequent();
+        if (!vestingInitialized) revert LaunchTokenTypes.VestingNotInitialized();
+        if (msg.sender != creator) revert LaunchTokenTypes.Unauthorized();
+        if (block.timestamp < vestingStart) revert LaunchTokenTypes.VestingNotStarted();
+        if (block.timestamp < lastClaimTime + LaunchTokenTypes.MIN_CLAIM_INTERVAL) {
+            revert LaunchTokenTypes.ClaimTooFrequent();
+        }
 
         uint256 claimableAmount = _calculateVestedAmount();
-        if (claimableAmount <= 0) revert NoTokensAvailable();
-        if (balanceOf(launcher) < claimableAmount) revert InsufficientLauncherBalance();
+        if (claimableAmount <= 0) revert LaunchTokenTypes.NoTokensAvailable();
+        if (balanceOf(launcher) < claimableAmount) revert LaunchTokenTypes.InsufficientLauncherBalance();
 
         // Update state before transfer (CEI pattern)
         lastClaimTime = block.timestamp;
@@ -195,17 +196,19 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         emit TokensClaimed(creator, claimableAmount);
     }
 
+    /// @notice Calculates amount of tokens vested and available for claim
+    /// @return Amount of tokens available to claim
     function _calculateVestedAmount() internal view returns (uint256) {
         if (block.timestamp < vestingStart) return 0;
 
         // Calculate elapsed time with cap
         uint256 elapsed = block.timestamp - vestingStart;
-        if (elapsed > VESTING_DURATION) {
-            elapsed = VESTING_DURATION;
+        if (elapsed > LaunchTokenTypes.VESTING_DURATION) {
+            elapsed = LaunchTokenTypes.VESTING_DURATION;
         }
 
         // Calculate linearly vested amount with high precision
-        uint256 totalVestedNow = (totalVestedAmount * elapsed) / VESTING_DURATION;
+        uint256 totalVestedNow = (totalVestedAmount * elapsed) / LaunchTokenTypes.VESTING_DURATION;
 
         // If we've claimed this much or more, nothing to claim
         if (totalVestedNow <= vestedClaimed) return 0;
@@ -218,37 +221,54 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         return claimable > remaining ? remaining : claimable;
     }
 
+    /// @notice Verification function for launch token
     function isLaunchToken() external pure returns (bool) {
         return true;
     }
 
-    function setPairs(address _kubPair, address _ponderPair) external {
-        if (msg.sender != launcher) revert Unauthorized();
-        if (kubPair != address(0) || ponderPair != address(0)) revert PairAlreadySet();
-        kubPair = _kubPair;
-        ponderPair = _ponderPair;
-        emit PairsSet(_kubPair, _ponderPair);
+    /// @notice Sets the trading pairs for the token
+    /// @param kubPair_ Address of the KUB pair
+    /// @param ponderPair_ Address of the PONDER pair
+    function setPairs(address kubPair_, address ponderPair_) external {
+        if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
+        if (kubPair != address(0) || ponderPair != address(0)) revert LaunchTokenTypes.PairAlreadySet();
+
+        kubPair = kubPair_;
+        ponderPair = ponderPair_;
+
+        emit PairsSet(kubPair_, ponderPair_);
     }
 
+    /// @notice Enables token transfers and sets initial trading parameters
     function enableTransfers() external {
-        if (msg.sender != launcher) revert Unauthorized();
+        if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
 
         transfersEnabled = true;
         tradingEnabledAt = block.timestamp;
-        maxTxAmount = TOTAL_SUPPLY / 200; // 0.5% max transaction limit
+        maxTxAmount = LaunchTokenTypes.TOTAL_SUPPLY / 200; // 0.5% max transaction limit
 
         emit TransfersEnabled();
     }
 
-    function setMaxTxAmount(uint256 _maxTxAmount) external {
-        if (msg.sender != launcher) revert Unauthorized();
-        if (block.timestamp < tradingEnabledAt + TRADING_RESTRICTION_PERIOD) revert TradingRestricted();
-        maxTxAmount = _maxTxAmount;
+    /// @notice Sets the maximum transaction amount
+    /// @param maxTxAmount_ New maximum transaction amount
+    function setMaxTxAmount(uint256 maxTxAmount_) external {
+        if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
+        if (block.timestamp < tradingEnabledAt + LaunchTokenTypes.TRADING_RESTRICTION_PERIOD) {
+            revert LaunchTokenTypes.TradingRestricted();
+        }
+
+        uint256 oldMaxTxAmount = maxTxAmount;
+        maxTxAmount = maxTxAmount_;
+
+        emit MaxTxAmountUpdated(oldMaxTxAmount, maxTxAmount_);
     }
 
+    /// @notice Initiates launcher transfer process
+    /// @param newLauncher Address of the new launcher
     function transferLauncher(address newLauncher) external {
-        if (msg.sender != launcher) revert Unauthorized();
-        if (newLauncher == address(0)) revert ZeroAddress();
+        if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
+        if (newLauncher == address(0)) revert LaunchTokenTypes.ZeroAddress();
 
         address oldPending = pendingLauncher;
         pendingLauncher = newLauncher;
@@ -256,15 +276,17 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         emit NewPendingLauncher(oldPending, newLauncher);
     }
 
+    /// @notice Completes launcher transfer process
+    /// @custom:security No zero-address check needed for pendingLauncher as it's validated in transferLauncher
     function acceptLauncher() external {
-        if (msg.sender != pendingLauncher) revert NotPendingLauncher();
+        if (msg.sender != pendingLauncher) revert LaunchTokenTypes.NotPendingLauncher();
 
         address oldLauncher = launcher;
         address newLauncher = msg.sender;
 
-        // Update state first
+        // slither-disable-next-line missing-zero-check
         launcher = newLauncher;
-        pendingLauncher = address(0);
+        pendingLauncher = address(0); // Intentionally zeroing out
 
         // Transfer any remaining balance using internal _transfer
         uint256 remainingBalance = balanceOf(oldLauncher);
@@ -275,6 +297,12 @@ contract LaunchToken is PonderERC20, ReentrancyGuard {
         emit LauncherTransferred(oldLauncher, newLauncher);
     }
 
+    /// @notice Returns current vesting information
+    /// @return total Total amount being vested
+    /// @return claimed Amount already claimed
+    /// @return available Amount currently available to claim
+    /// @return start Vesting start timestamp
+    /// @return end Vesting end timestamp
     function getVestingInfo() external view returns (
         uint256 total,
         uint256 claimed,

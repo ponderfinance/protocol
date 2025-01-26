@@ -132,4 +132,6 @@ library PonderPairTypes {
     error InvariantViolation();
     /// @notice Thrown when a calculation would overflow
     error Overflow();
+
+    error ZeroAddress();
 }

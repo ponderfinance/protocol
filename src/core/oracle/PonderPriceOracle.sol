@@ -22,6 +22,11 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     address public immutable STABLECOIN;
 
     constructor(address _factory, address _baseToken, address _stablecoin) {
+        if (_factory == address(0)) revert PonderOracleTypes.ZeroAddress();
+        if (_baseToken == address(0)) revert PonderOracleTypes.ZeroAddress();
+        if (_stablecoin == address(0)) revert PonderOracleTypes.ZeroAddress();
+
+
         FACTORY = _factory;
         BASE_TOKEN = _baseToken;
         STABLECOIN = _stablecoin;
@@ -48,6 +53,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     }
 
     function initializePair(address pair) public {
+        if (pair == address(0)) revert PonderOracleTypes.ZeroAddress();
         if (!_isValidPair(pair)) revert PonderOracleTypes.InvalidPair();
         if (_initializedPairs[pair]) revert PonderOracleTypes.AlreadyInitialized();
 
@@ -276,6 +282,8 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
      * @return bool True if pair is valid
      */
     function _isValidPair(address pair) internal view returns (bool) {
+        if (pair == address(0)) return false;
+
         return IPonderFactory(FACTORY).getPair(
             IPonderPair(pair).token0(),
             IPonderPair(pair).token1()

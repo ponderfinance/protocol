@@ -34,7 +34,7 @@ contract PonderLaunchGuardSecurityTest is Test {
         oracle = new PonderPriceOracle(
             address(factory),
             address(weth),
-            address(0)
+            address(ponder)
         );
 
         // Setup initial state

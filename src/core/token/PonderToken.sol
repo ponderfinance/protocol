@@ -23,7 +23,9 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
      * @param teamReserveAddr Address for team token allocation
      * @param marketingAddr Address for marketing allocation
      * @param launcherAddr Initial launcher address
+     * @custom:security Launcher can be zero address in constructor due to deployment sequence requirements
      */
+
     constructor(
         address teamReserveAddr,
         address marketingAddr,
@@ -32,8 +34,10 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         if (teamReserveAddr == address(0) || marketingAddr == address(0)) {
             revert PonderTokenTypes.ZeroAddress();
         }
-
+        // Launcher is intentionally allowed to be zero address in constructor
+        // slither-disable-next-line missing-zero-check
         _launcher = launcherAddr;
+
         _owner = msg.sender;
         _DEPLOYMENT_TIME = block.timestamp;
         _teamReserve = teamReserveAddr;

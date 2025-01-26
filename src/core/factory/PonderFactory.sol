@@ -25,6 +25,10 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         address launcher_,
         address ponder_
     ) {
+        if (feeToSetter_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
+        if (launcher_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
+        if (ponder_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
+
         _feeToSetter = feeToSetter_;
         _launcher = launcher_;
         _ponder = ponder_;
@@ -163,6 +167,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
      * @param newFeeToSetter New fee setter address
      */
     function setFeeToSetter(address newFeeToSetter) external onlyFeeToSetter {
+        if (newFeeToSetter == address(0)) revert PonderFactoryTypes.ZeroAddress();
         _feeToSetter = newFeeToSetter;
     }
 
@@ -171,6 +176,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
      * @param newMigrator New migrator address
      */
     function setMigrator(address newMigrator) external onlyFeeToSetter {
+        if (newMigrator == address(0)) revert PonderFactoryTypes.ZeroAddress();
         _migrator = newMigrator;
     }
 
@@ -211,6 +217,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
      * @param newPonder New Ponder token address
      */
     function setPonder(address newPonder) external onlyFeeToSetter {
+        if (newPonder == address(0)) revert PonderFactoryTypes.ZeroAddress();
+
         address oldPonder = _ponder;
         _ponder = newPonder;
         emit LauncherUpdated(oldPonder, newPonder);

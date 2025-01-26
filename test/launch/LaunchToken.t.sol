@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/launch/LaunchToken.sol";
+import "../../src/launch/types/LaunchTokenTypes.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/token/PonderToken.sol";
 import "../../src/periphery/router/PonderRouter.sol";
@@ -110,7 +111,7 @@ contract LaunchTokenTest is Test {
         assertEq(address(token.FACTORY()), address(factory));
         assertEq(address(token.ROUTER()), address(router));
         assertEq(address(token.PONDER()), address(ponder));
-        assertEq(token.totalSupply(), token.TOTAL_SUPPLY());
+        assertEq(token.totalSupply(), LaunchTokenTypes.TOTAL_SUPPLY);
         assertTrue(token.transfersEnabled());
         assertNotEq(token.kubPair(), address(0));
         assertNotEq(token.ponderPair(), address(0));
@@ -130,18 +131,18 @@ contract LaunchTokenTest is Test {
         vm.startPrank(launcher);
 
         // Test 1: Zero address creator
-        vm.expectRevert(abi.encodeWithSelector(LaunchToken.InvalidCreator.selector));
+        vm.expectRevert(abi.encodeWithSelector(LaunchTokenTypes.InvalidCreator.selector));
         newToken.setupVesting(address(0), TEST_AMOUNT);
 
         // Test 2: Zero amount
-        vm.expectRevert(abi.encodeWithSelector(LaunchToken.InvalidAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(LaunchTokenTypes.InvalidAmount.selector));
         newToken.setupVesting(creator, 0);
 
         // Test 3: Excessive amount
-        uint256 totalSupply = newToken.TOTAL_SUPPLY();
+        uint256 totalSupply = LaunchTokenTypes.TOTAL_SUPPLY;
         uint256 excessiveAmount = totalSupply + 1;
 
-        vm.expectRevert(abi.encodeWithSelector(LaunchToken.ExcessiveAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(LaunchTokenTypes.ExcessiveAmount.selector));
         newToken.setupVesting(creator, excessiveAmount);
 
         vm.stopPrank();
@@ -157,11 +158,11 @@ contract LaunchTokenTest is Test {
             address(ponder)
         );
 
-        uint256 totalSupply = newToken.TOTAL_SUPPLY();
+        uint256 totalSupply = LaunchTokenTypes.TOTAL_SUPPLY;
         uint256 excessiveAmount = totalSupply + 1 ether; // Make sure it's clearly excessive
 
         vm.startPrank(launcher);
-        vm.expectRevert(abi.encodeWithSelector(LaunchToken.ExcessiveAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(LaunchTokenTypes.ExcessiveAmount.selector));
         newToken.setupVesting(creator, excessiveAmount);
         vm.stopPrank();
     }
@@ -203,7 +204,7 @@ contract LaunchTokenTest is Test {
         newToken.transfer(address(1), newToken.balanceOf(launcher));
         vm.stopPrank();
 
-        vm.warp(block.timestamp + newToken.VESTING_DURATION());
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION);
 
         vm.startPrank(creator);
         vm.expectRevert(abi.encodeWithSignature("InsufficientLauncherBalance()"));
@@ -253,7 +254,7 @@ contract LaunchTokenTest is Test {
         vm.stopPrank();
 
         // Fast forward to vesting completion
-        vm.warp(block.timestamp + newToken.VESTING_DURATION());
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION);
 
         // Verify vesting amount remains unchanged
         (uint256 total,,,,) = newToken.getVestingInfo();
@@ -276,7 +277,7 @@ contract LaunchTokenTest is Test {
         newToken.setupVesting(creator, TEST_AMOUNT);
 
         // Advance to middle of vesting period
-        vm.warp(block.timestamp + newToken.VESTING_DURATION() / 2);
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 2);
 
         // First claim should succeed
         vm.prank(creator);
@@ -302,7 +303,7 @@ contract LaunchTokenTest is Test {
         newToken.setupVesting(creator, TEST_AMOUNT);
 
         // Claim at 50% vesting
-        vm.warp(block.timestamp + newToken.VESTING_DURATION() / 2);
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 2);
         vm.prank(creator);
         newToken.claimVestedTokens();
 
@@ -315,7 +316,7 @@ contract LaunchTokenTest is Test {
         );
 
         // Advance time and claim remaining
-        vm.warp(block.timestamp + newToken.VESTING_DURATION() + newToken.MIN_CLAIM_INTERVAL());
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION + LaunchTokenTypes.MIN_CLAIM_INTERVAL);
         vm.prank(creator);
         newToken.claimVestedTokens();
 
@@ -329,7 +330,7 @@ contract LaunchTokenTest is Test {
     }
 
     function testGetVestingInfo() public {
-        vm.warp(block.timestamp + token.VESTING_DURATION() / 4);  // 25% through vesting
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 4);  // 25% through vesting
 
         (
             uint256 total,
@@ -343,7 +344,7 @@ contract LaunchTokenTest is Test {
         assertEq(claimed, 0, "Should not have claimed any tokens");
         assertApproxEqRel(available, TEST_AMOUNT / 4, 0.01e18, "Available amount should be ~25%");
         assertGt(start, 0, "Invalid vesting start time");
-        assertEq(end, start + token.VESTING_DURATION(), "Invalid vesting end time");
+        assertEq(end, start + LaunchTokenTypes.VESTING_DURATION, "Invalid vesting end time");
     }
 
     function testNoClaimAmountManipulation() public {
@@ -363,7 +364,7 @@ contract LaunchTokenTest is Test {
         // Try claiming at different intervals
         for(uint256 i = 1; i <= 4; i++) {
             // Move forward 25% each time
-            vm.warp(block.timestamp + newToken.VESTING_DURATION() / 4);
+            vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 4);
 
             uint256 preClaim = newToken.vestedClaimed();
             vm.prank(creator);
@@ -379,7 +380,7 @@ contract LaunchTokenTest is Test {
             );
 
             // Wait for next claim interval
-            vm.warp(block.timestamp + newToken.MIN_CLAIM_INTERVAL());
+            vm.warp(block.timestamp + LaunchTokenTypes.MIN_CLAIM_INTERVAL);
         }
 
         assertApproxEqRel(
@@ -392,7 +393,7 @@ contract LaunchTokenTest is Test {
 
     function testPartialVestingClaims() public {
         // Advance to 25% through vesting period
-        vm.warp(block.timestamp + token.VESTING_DURATION() / 4);
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 4);
 
         vm.prank(creator);
         token.claimVestedTokens();
@@ -419,7 +420,7 @@ contract LaunchTokenTest is Test {
         newToken.setupVesting(creator, TEST_AMOUNT);
 
         // Test claim at 25% vesting
-        vm.warp(block.timestamp + newToken.VESTING_DURATION() / 4);
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 4);
         vm.prank(creator);
         newToken.claimVestedTokens();
 
@@ -448,7 +449,7 @@ contract LaunchTokenTest is Test {
         newToken.enableTransfers();
         vm.stopPrank();
 
-        vm.warp(block.timestamp + newToken.VESTING_DURATION() / 2);
+        vm.warp(block.timestamp + LaunchTokenTypes.VESTING_DURATION / 2);
 
         // Use the exact custom error selector
         bytes4 customError = bytes4(keccak256("ReentrancyGuardReentrantCall()"));
@@ -494,11 +495,11 @@ contract LaunchTokenTest is Test {
 
         // Transfer most tokens away from launcher to create a low balance scenario
         vm.startPrank(launcher);
-        uint256 transferAmount = newToken.TOTAL_SUPPLY() - 1 ether;
+        uint256 transferAmount = LaunchTokenTypes.TOTAL_SUPPLY - 1 ether;
         newToken.transfer(address(1), transferAmount);
 
         // Try to vest more than launcher's remaining balance
-        vm.expectRevert(abi.encodeWithSelector(LaunchToken.InsufficientLauncherBalance.selector));
+        vm.expectRevert(abi.encodeWithSelector(LaunchTokenTypes.InsufficientLauncherBalance.selector));
         newToken.setupVesting(creator, 2 ether); // Try to vest more than remaining balance
         vm.stopPrank();
     }
@@ -625,9 +626,10 @@ contract LaunchTokenTest is Test {
 
         // Create pairs first
         address launchKubPair = factory.createPair(address(newToken), address(weth));
+        address ponderPair = factory.createPair(address(newToken), address(ponder));
 
         vm.startPrank(launcher);
-        newToken.setPairs(launchKubPair, address(0));
+        newToken.setPairs(launchKubPair,ponderPair);
         newToken.enableTransfers();
         vm.stopPrank();
 
@@ -653,7 +655,7 @@ contract LaunchTokenTest is Test {
         vm.stopPrank();
 
         // Test max tx limit
-        uint256 maxTx = newToken.TOTAL_SUPPLY() / 200; // 0.5% limit
+        uint256 maxTx = LaunchTokenTypes.TOTAL_SUPPLY / 200; // 0.5% limit
 
         // Fund user with enough tokens for the test
         deal(address(newToken), normalUser, maxTx * 3); // Ensure enough balance for all tests

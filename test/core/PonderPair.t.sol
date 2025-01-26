@@ -434,8 +434,11 @@ contract PonderPairTest is Test {
     function testActualSwapWithFees() public {
         // First create and setup the pairs
         address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address ponderPair = factory.createPair(address(launchToken), address(ponder));  // Add PONDER pair
+
         vm.startPrank(launcher);
-        launchToken.setPairs(launchKubPair, address(0));
+
+        launchToken.setPairs(launchKubPair, ponderPair);
         launchToken.enableTransfers();
         vm.stopPrank();
 
@@ -472,9 +475,10 @@ contract PonderPairTest is Test {
     function testKubPairFees() public {
         // Create and setup pairs
         address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address ponderPair = factory.createPair(address(launchToken), address(ponder));
 
         vm.startPrank(launcher);
-        launchToken.setPairs(launchKubPair, address(0));
+        launchToken.setPairs(launchKubPair, ponderPair);
         launchToken.enableTransfers();
         vm.stopPrank();
 
@@ -805,10 +809,11 @@ contract PonderPairTest is Test {
     function testETHToLaunchTokenViaRouter() public {
         // Create launch token/WETH pair
         address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address ponderPair = factory.createPair(address(launchToken), address(ponder));
 
         // Enable trading first
         vm.startPrank(launcher);
-        launchToken.setPairs(launchKubPair, address(0));
+        launchToken.setPairs(launchKubPair, ponderPair);
         launchToken.enableTransfers();
         vm.stopPrank();
 

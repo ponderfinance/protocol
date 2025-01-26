@@ -30,4 +30,5 @@ library FeeDistributorTypes {
     error InvalidRecoveryAmount();
     error InvalidReserves();
     error ApprovalFailed();
+    error AmountTooLarge();
 }

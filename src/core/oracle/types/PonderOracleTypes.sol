@@ -28,6 +28,7 @@ library PonderOracleTypes {
     error InvalidPeriod();
     error AlreadyInitialized();
     error NotInitialized();
+    error ZeroAddress();
 
     // Constants
     /// @notice Standard observation period

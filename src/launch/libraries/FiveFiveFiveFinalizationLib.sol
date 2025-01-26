@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 
 import { LaunchToken } from "../LaunchToken.sol";
+import { LaunchTokenTypes } from "../types/LaunchTokenTypes.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
 import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
@@ -57,8 +58,10 @@ library FiveFiveFiveFinalizationLib {
         if (launch.base.launched) {
             revert FiveFiveFiveLauncherTypes.AlreadyLaunched();
         }
-        if (launch.contributions.tokensDistributed + launch.allocation.tokensForLP >
-            LaunchToken(launch.base.tokenAddress).TOTAL_SUPPLY()) {
+        if (
+            launch.contributions.tokensDistributed
+            + launch.allocation.tokensForLP > LaunchTokenTypes.TOTAL_SUPPLY
+        ) {
             revert FiveFiveFiveLauncherTypes.InsufficientLPTokens();
         }
 

@@ -2,6 +2,7 @@
 pragma solidity 0.8.20;
 
 import { LaunchToken } from "../LaunchToken.sol";
+import { LaunchTokenTypes } from "../types/LaunchTokenTypes.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
 import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
 import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
@@ -41,7 +42,7 @@ library FiveFiveFiveInitLib {
         launch.base.launchDeadline = block.timestamp + FiveFiveFiveConstants.LAUNCH_DURATION;
 
         // Calculate allocations
-        uint256 totalSupply = launchToken.TOTAL_SUPPLY();
+        uint256 totalSupply = LaunchTokenTypes.TOTAL_SUPPLY;
         _setAllocations(launch, launchToken, totalSupply, creator);
 
         // Initialize contribution tracking
