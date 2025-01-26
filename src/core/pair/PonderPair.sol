@@ -311,26 +311,26 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             revert PonderPairTypes.InsufficientInputAmount();
         }
 
-        _validateKValue(state, amount0Out, amount1Out);
+        // Create SwapData struct and validate
+        PonderPairTypes.SwapData memory data = PonderPairTypes.SwapData({
+            amount0Out: amount0Out,
+            amount1Out: amount1Out,
+            amount0In: state.amount0In,
+            amount1In: state.amount1In,
+            balance0: state.balance0,
+            balance1: state.balance1,
+            reserve0: state.reserve0,
+            reserve1: state.reserve1
+        });
+
+        if (!_validateKValue(data)) {
+            revert PonderPairTypes.KValueCheckFailed();
+        }
 
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
         _handleFees(state, amount0Out, amount1Out);
 
         _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
-    }
-
-    function _validateKValue(
-        SwapState memory state,
-        uint256 amount0Out,
-        uint256 amount1Out
-    ) private pure {
-        uint256 balance0Adjusted = state.balance0 * 1000 - (state.amount0In * 3);
-        uint256 balance1Adjusted = state.balance1 * 1000 - (state.amount1In * 3);
-        uint256 initialK = uint256(state.reserve0) * uint256(state.reserve1);
-
-        if (!(balance0Adjusted * balance1Adjusted >= initialK * (1000 * 1000))) {
-            revert PonderPairTypes.KValueCheckFailed();
-        }
     }
 
     function _handleFees(

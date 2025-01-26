@@ -69,7 +69,7 @@ library FiveFiveFiveInitLib {
 
     function _isValidString(string memory str, bool allowSpaces) internal pure returns (bool) {
         bytes memory b = bytes(str);
-        for(uint i; i < b.length; i++) {
+        for(uint256 i; i < b.length; i++) {
             bytes1 char = b[i];
             if(
                 !(char >= 0x30 && char <= 0x39) && // 0-9

@@ -148,7 +148,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && _farmingStarted) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
 
-            uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint * 1e12) / (_totalAllocPoint * lpSupply);
+            uint256 ponderReward =
+                (timeElapsed * _ponderPerSecond * pool.allocPoint * 1e12)
+                / (_totalAllocPoint * lpSupply);
 
             uint256 remainingMintableForAccrual = PONDER.maximumSupply() - PONDER.totalSupply();
             if (ponderReward > remainingMintableForAccrual) {
@@ -189,7 +191,11 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         uint256 extraBoost = targetMultiplier - PonderMasterChefTypes.MIN_BOOST_MULTIPLIER;
 
         // Perform all multiplications first, then single division at end to minimize precision loss
-        uint256 numerator = lpAmount * PonderMasterChefTypes.BOOST_THRESHOLD_PERCENT * (PonderMasterChefTypes.MAX_EXTRA_BOOST_PERCENT + extraBoost);
+        uint256 numerator =
+            lpAmount *
+            PonderMasterChefTypes.BOOST_THRESHOLD_PERCENT *
+            (PonderMasterChefTypes.MAX_EXTRA_BOOST_PERCENT + extraBoost);
+
         uint256 denominator = PonderMasterChefTypes.BASIS_POINTS * PonderMasterChefTypes.MAX_EXTRA_BOOST_PERCENT;
 
         return numerator / denominator;

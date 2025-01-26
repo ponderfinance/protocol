@@ -7,7 +7,6 @@ import { PonderOracleTypes } from "./types/PonderOracleTypes.sol";
 import { PonderOracleLibrary } from "./PonderOracleLibrary.sol";
 import { IPonderPair } from "../pair/IPonderPair.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
-import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /**
  * @title PonderPriceOracle
@@ -181,10 +180,6 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         // Check which token is token0 based on address ordering
         bool isToken0 = tokenIn == pairContract.token0();
         if (!isToken0 && tokenIn != pairContract.token1()) revert PonderOracleTypes.InvalidToken();
-
-        // Get decimal places for both tokens
-        uint8 decimalsIn = IERC20Metadata(tokenIn).decimals();
-        uint8 decimalsOut = IERC20Metadata(isToken0 ? pairContract.token1() : pairContract.token0()).decimals();
 
         // Get reserves matching input token
         uint256 reserveIn = uint256(isToken0 ? reserve0 : reserve1);

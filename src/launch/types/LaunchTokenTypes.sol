@@ -3,10 +3,10 @@ pragma solidity 0.8.20;
 
 library LaunchTokenTypes {
     /// @notice Protocol constants
-    uint256 constant TOTAL_SUPPLY = 555_555_555 ether;
-    uint256 constant VESTING_DURATION = 180 days;
-    uint256 constant MIN_CLAIM_INTERVAL = 1 hours;
-    uint256 constant TRADING_RESTRICTION_PERIOD = 15 minutes;
+    uint256 constant public TOTAL_SUPPLY = 555_555_555 ether;
+    uint256 constant public VESTING_DURATION = 180 days;
+    uint256 constant public MIN_CLAIM_INTERVAL = 1 hours;
+    uint256 constant public TRADING_RESTRICTION_PERIOD = 15 minutes;
 
     /// @notice Custom errors
     error TransfersDisabled();

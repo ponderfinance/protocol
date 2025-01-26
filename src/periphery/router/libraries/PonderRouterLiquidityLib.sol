@@ -2,7 +2,6 @@
 pragma solidity 0.8.20;
 
 import { IPonderFactory } from "../../../core/factory/IPonderFactory.sol";
-import { IPonderPair } from "../../../core/pair/IPonderPair.sol";
 import { PonderRouterTypes } from "../types/PonderRouterTypes.sol";
 import { PonderRouterMathLib } from "./PonderRouterMathLib.sol";
 import { PonderRouterSwapLib } from "./PonderRouterSwapLib.sol";
