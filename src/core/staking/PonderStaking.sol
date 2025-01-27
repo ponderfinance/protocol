@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { IPonderStaking } from "./IPonderStaking.sol";
 import { PonderStakingStorage } from "./storage/PonderStakingStorage.sol";
@@ -108,10 +108,10 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         // Effects
         _burn(msg.sender, shares);
 
-        // Interactions
-        PONDER.safeTransfer(msg.sender, amount);
-
+        // Emit event before external interaction
         emit Withdrawn(msg.sender, amount, shares);
+
+        PONDER.safeTransfer(msg.sender, amount);
     }
 
     /**

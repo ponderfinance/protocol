@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
@@ -54,11 +54,7 @@ library FiveFiveFiveContributionLib {
         uint256 amount,
         address contributor
     ) internal returns (bool shouldFinalize) {
-        // Validate contribution first
-
-        // Third value from validateKubContribution is newTotal
-        // which we don't need for contribution processing
-        // slither-disable-next-line unused-return
+        // CHECKS
         (,bool shouldFin) = FiveFiveFiveValidation.validateKubContribution(
             launch,
             amount
@@ -68,23 +64,22 @@ library FiveFiveFiveContributionLib {
         uint256 tokensToDistribute = (amount * launch.allocation.tokensForContributors) /
                         FiveFiveFiveConstants.TARGET_RAISE;
 
-        // Update launch state
+        // EFFECTS - Update all state
         launch.contributions.kubCollected += amount;
         launch.contributions.tokensDistributed += tokensToDistribute;
 
-        // Update contributor state
         FiveFiveFiveLauncherTypes.ContributorInfo storage contributorInfo = launch.contributors[contributor];
         contributorInfo.kubContributed += amount;
         contributorInfo.tokensReceived += tokensToDistribute;
 
-        // Transfer tokens with return value check
+        // Emit events before external interactions
+        emit TokensDistributed(launchId, contributor, tokensToDistribute);
+        emit KUBContributed(launchId, contributor, amount);
+
+        // INTERACTIONS - External call last
         if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
             revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
         }
-
-        // Emit events
-        emit TokensDistributed(launchId, contributor, tokensToDistribute);
-        emit KUBContributed(launchId, contributor, amount);
 
         return shouldFin;
     }
@@ -110,54 +105,49 @@ library FiveFiveFiveContributionLib {
         address contributor,
         PonderToken ponder
     ) internal returns (bool shouldFinalize) {
+        // CHECKS
         if (contributor != msg.sender) {
             revert FiveFiveFiveLauncherTypes.Unauthorized();
         }
 
-        // Initial validation
         shouldFinalize = FiveFiveFiveValidation.validatePonderContribution(
             launch,
             amount,
             kubValue
         );
 
-        // Calculate token distribution
         uint256 tokensToDistribute = (kubValue * launch.allocation.tokensForContributors) /
                         FiveFiveFiveConstants.TARGET_RAISE;
 
-        // Check PONDER allowance before transfer
         uint256 allowance = ponder.allowance(contributor, address(this));
         if (allowance < amount) {
             revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
         }
 
-        // Transfer PONDER tokens with return value check
-        // The contributor address is validated against msg.sender above
-        // slither-disable-next-line arbitrary-from-in-transferfrom
+        // Emit events before external interactions
+        emit TokensDistributed(launchId, contributor, tokensToDistribute);
+        emit PonderContributed(launchId, contributor, amount, kubValue);
+
+        // INTERACTIONS - All external calls last
         bool success = ponder.transferFrom(contributor, address(this), amount);
         if (!success) {
             revert FiveFiveFiveLauncherTypes.KubTransferFailed();
         }
 
-        // Update launch state AFTER transfer
+        // EFFECTS - Update state after successful transfer
         launch.contributions.ponderCollected += amount;
         launch.contributions.ponderValueCollected += kubValue;
         launch.contributions.tokensDistributed += tokensToDistribute;
 
-        // Update contributor info
         FiveFiveFiveLauncherTypes.ContributorInfo storage contributorInfo = launch.contributors[contributor];
         contributorInfo.ponderContributed += amount;
         contributorInfo.ponderValue += kubValue;
         contributorInfo.tokensReceived += tokensToDistribute;
 
-        // Transfer launch tokens with return value check
+        // Final interaction
         if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
             revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
         }
-
-        // Emit events
-        emit TokensDistributed(launchId, contributor, tokensToDistribute);
-        emit PonderContributed(launchId, contributor, amount, kubValue);
 
         return shouldFinalize;
     }

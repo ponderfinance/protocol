@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 
 import { LaunchToken } from "../LaunchToken.sol";
@@ -136,7 +136,6 @@ library FiveFiveFiveFinalizationLib {
         PonderToken ponder,
         PonderPriceOracle priceOracle
     ) private {
-        // Get PONDER value
         uint256 ponderPoolValue = _getPonderValue(
             pools.ponderAmount,
             factory,
@@ -145,7 +144,6 @@ library FiveFiveFiveFinalizationLib {
             priceOracle
         );
 
-        // Create pool if enough liquidity
         if (ponderPoolValue >= FiveFiveFiveConstants.MIN_POOL_LIQUIDITY) {
             _createPonderPool(
                 launch,
@@ -156,10 +154,12 @@ library FiveFiveFiveFinalizationLib {
                 launchId
             );
         } else {
-            // Burn all PONDER if no pool created
-            ponder.burn(launch.contributions.ponderCollected);
-            emit PonderBurned(launchId, launch.contributions.ponderCollected);
+            // Emit events before external calls
             emit PonderPoolSkipped(launchId, pools.ponderAmount, ponderPoolValue);
+            emit PonderBurned(launchId, launch.contributions.ponderCollected);
+
+            // External call last
+            ponder.burn(launch.contributions.ponderCollected);
         }
     }
 
@@ -172,17 +172,22 @@ library FiveFiveFiveFinalizationLib {
         PonderToken ponder,
         uint256 launchId
     ) private {
-        // Create PONDER pair
+        // Calculate burn amount before external calls
+        uint256 ponderToBurn = (launch.contributions.ponderCollected *
+            FiveFiveFiveConstants.PONDER_TO_BURN) / FiveFiveFiveConstants.BASIS_POINTS;
+
+        // Emit event before external calls
+        emit PonderBurned(launchId, ponderToBurn);
+
+        // External calls last, in sequence
         launch.pools.memePonderPair = FiveFiveFivePoolLib.getOrCreatePonderPair(
             factory,
             launch.base.tokenAddress,
             address(ponder)
         );
 
-        // Validate pool creation
         FiveFiveFivePoolLib.validatePoolCreation(pools, launch.pools.memePonderPair);
 
-        // Add PONDER liquidity
         if (!ponder.approve(address(router), pools.ponderAmount)) {
             revert FiveFiveFiveLauncherTypes.ApprovalFailed();
         }
@@ -196,12 +201,9 @@ library FiveFiveFiveFinalizationLib {
             address(this)
         );
 
-        // Burn percentage of PONDER
-        uint256 ponderToBurn = (launch.contributions.ponderCollected *
-            FiveFiveFiveConstants.PONDER_TO_BURN) / FiveFiveFiveConstants.BASIS_POINTS;
         ponder.burn(ponderToBurn);
-        emit PonderBurned(launchId, ponderToBurn);
     }
+
 
     /*//////////////////////////////////////////////////////////////
                             TRADING ENABLEMENT
@@ -212,15 +214,8 @@ library FiveFiveFiveFinalizationLib {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId
     ) private {
-        // Enable trading
-        LaunchToken token = LaunchToken(launch.base.tokenAddress);
-        token.setPairs(launch.pools.memeKubPair, launch.pools.memePonderPair);
-        token.enableTransfers();
-
-        // Set LP unlock time
         launch.base.lpUnlockTime = block.timestamp + FiveFiveFiveConstants.LP_LOCK_PERIOD;
 
-        // Emit completion events
         emit DualPoolsCreated(
             launchId,
             launch.pools.memeKubPair,
@@ -234,7 +229,13 @@ library FiveFiveFiveFinalizationLib {
             launch.contributions.kubCollected,
             launch.contributions.ponderCollected
         );
+
+        // External calls last
+        LaunchToken token = LaunchToken(launch.base.tokenAddress);
+        token.setPairs(launch.pools.memeKubPair, launch.pools.memePonderPair);
+        token.enableTransfers();
     }
+
 
     /*//////////////////////////////////////////////////////////////
                             UTILITIES

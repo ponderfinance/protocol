@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /**
  * @title IPonderMasterChef
@@ -299,4 +299,7 @@ interface IPonderMasterChef {
      * @param totalWeightedShares New total weighted shares
      */
     event PoolWeightedSharesUpdated(uint256 indexed pid, uint256 totalWeightedShares);
+
+    event OwnershipTransferInitiated(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 }

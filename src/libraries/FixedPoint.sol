@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /// @title Fixed Point Math Library
 /// @notice A library for handling fixed-point arithmetic
@@ -9,10 +9,17 @@ library FixedPoint {
     error DivisionByZero();
 
     // 2^112
+    // RESOLUTION represents the number of bits used for the fixed-point representation
     uint8 internal constant RESOLUTION = 112;
-    uint256 internal constant Q112 = 0x10000000000000000000000000000;
-    uint256 internal constant Q224 = 0x100000000000000000000000000000000000000000000000000000000;
-    uint256 internal constant LOWER_MASK = 0xffffffffffffffffffffffffffff;
+
+    // Q112 represents 2^112, used as the fixed-point multiplier
+    uint256 internal constant Q112 = 2**112;
+
+    // Q224 represents 2^224, used for handling multiplication results
+    uint256 internal constant Q224 = 2**224;
+
+    // Mask for the lower 112 bits
+    uint256 internal constant LOWER_MASK = (1 << 112) - 1;
 
     struct UQ112x112 {
         uint224 _x;

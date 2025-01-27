@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { IPonderFactory } from "../core/factory/IPonderFactory.sol";
@@ -205,11 +205,18 @@ contract FiveFiveFiveLauncher is
      * @custom:slither-disable-next-line ignore-return
      */
     function getContributorInfo(uint256 launchId, address contributor)
-    external
-    view
-    returns (uint256, uint256, uint256, uint256)
+        external
+        view
+        returns (uint256, uint256, uint256, uint256)
     {
-        return FiveFiveFiveViewLib.getContributorInfo(launches[launchId], contributor);
+        (
+            uint256 kubContributed,
+            uint256 ponderContributed,
+            uint256 ponderValue,
+            uint256 tokensReceived
+        ) = FiveFiveFiveViewLib.getContributorInfo(launches[launchId], contributor);
+
+        return (kubContributed, ponderContributed, ponderValue, tokensReceived);
     }
 
     /**
@@ -219,11 +226,18 @@ contract FiveFiveFiveLauncher is
      * @custom:slither-disable-next-line ignore-return
      */
     function getContributionInfo(uint256 launchId)
-    external
-    view
-    returns (uint256, uint256, uint256, uint256)
+        external
+        view
+        returns (uint256, uint256, uint256, uint256)
     {
-        return FiveFiveFiveViewLib.getContributionInfo(launches[launchId]);
+        (
+            uint256 kubCollected,
+            uint256 ponderCollected,
+            uint256 ponderValueCollected,
+            uint256 totalValue
+        ) = FiveFiveFiveViewLib.getContributionInfo(launches[launchId]);
+
+        return (kubCollected, ponderCollected, ponderValueCollected, totalValue);
     }
 
     /**
@@ -237,7 +251,13 @@ contract FiveFiveFiveLauncher is
     view
     returns (address, address, bool)
     {
-        return FiveFiveFiveViewLib.getPoolInfo(launches[launchId]);
+        (
+            address memeKubPair,
+            address memePonderPair,
+            bool hasSecondaryPool
+        ) = FiveFiveFiveViewLib.getPoolInfo(launches[launchId]);
+
+        return (memeKubPair, memePonderPair, hasSecondaryPool);
     }
 
     /**

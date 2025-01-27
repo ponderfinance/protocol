@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /**
  * @title PonderPairStorage
@@ -7,11 +7,6 @@ pragma solidity 0.8.20;
  * @dev Pure storage contract that only defines state variables
  */
 abstract contract PonderPairStorage {
-    /**
-     * @notice Address of the factory that created this pair
-     */
-    address internal _factory;
-
     /**
      * @notice Address of the first token in the pair
      * @dev Token with the lower address value between the two pair tokens
@@ -59,12 +54,6 @@ abstract contract PonderPairStorage {
      * @dev Used for LP fee calculation when feeTo is set
      */
     uint256 internal _kLast;
-
-    /**
-     * @notice Reentrancy guard state
-     * @dev 1 = not entered, 2 = entered
-     */
-    uint256 internal _unlocked = 1;
 
     /**
      * @notice Accumulated protocol fees for token0 pending collection

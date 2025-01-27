@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { PonderERC20 } from "../token/PonderERC20.sol";
 import { IPonderPair } from "./IPonderPair.sol";
@@ -25,10 +25,15 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     using SafeERC20 for IERC20;
 
     /**
+  * @notice Address of the factory that created this pair
+     */
+    address internal immutable _FACTORY;
+
+    /**
      * @dev Sets the factory address
      */
     constructor() {
-        _factory = msg.sender;
+        _FACTORY = msg.sender;
     }
 
 
@@ -43,7 +48,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      * @inheritdoc IPonderPair
      */
     function factory() external view override returns (address) {
-        return _factory;
+        return _FACTORY;
     }
 
     /**
@@ -86,7 +91,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      * @return Address of the launcher contract
      */
     function launcher() public view returns (address) {
-        return IPonderFactory(_factory).launcher();
+        return IPonderFactory(_FACTORY).launcher();
     }
 
     /**
@@ -94,14 +99,16 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      * @return Address of the PONDER token
      */
     function ponder() public view returns (address) {
-        return IPonderFactory(_factory).ponder();
+        return IPonderFactory(_FACTORY).ponder();
     }
 
     /**
      * @inheritdoc IPonderPair
      */
     function initialize(address token0_, address token1_) external override {
-        if (msg.sender != _factory) revert PonderPairTypes.Forbidden();
+        if (msg.sender != _FACTORY) revert PonderPairTypes.Forbidden();
+        if (token0_ == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (token1_ == address(0)) revert PonderPairTypes.ZeroAddress();
 
         _token0 = token0_;
         _token1 = token1_;
@@ -166,11 +173,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         if (token0Address == address(0)) revert PonderPairTypes.ZeroAddress();
         if (token1Address == address(0)) revert PonderPairTypes.ZeroAddress();
 
-        // Strict equality check is intentional - early return for zero fees
-        // slither-disable-next-line dangerous-strict-equalities
         if (amountIn <= 0) return;
 
-        address feeTo = IPonderFactory(_factory).feeTo();
+        address feeTo = IPonderFactory(_FACTORY).feeTo();
         if (feeTo == address(0)) return;
 
         bool isTokenOutput = (token == token0Address && amount0Out > 0) ||
@@ -180,10 +185,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 protocolFeeAmount = 0;
         uint256 creatorFeeAmount = 0;
 
+        // Calculate fees first
         try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
             if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
-                address creator = ILaunchToken(token).creator();
-
                 if (isPonderPair) {
                     protocolFeeAmount = (amountIn * PonderPairTypes.PONDER_PROTOCOL_FEE) /
                                     PonderPairTypes.FEE_DENOMINATOR;
@@ -195,10 +199,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
                     creatorFeeAmount = (amountIn * PonderPairTypes.KUB_CREATOR_FEE) /
                                     PonderPairTypes.FEE_DENOMINATOR;
                 }
-
-                if (creatorFeeAmount > 0) {
-                    _safeTransfer(token, creator, creatorFeeAmount);
-                }
             } else {
                 protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
                                 PonderPairTypes.FEE_DENOMINATOR;
@@ -208,10 +208,16 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
                             PonderPairTypes.FEE_DENOMINATOR;
         }
 
+        // Update state before external calls
         if (token == _token0) {
             _accumulatedFee0 += protocolFeeAmount;
         } else {
             _accumulatedFee1 += protocolFeeAmount;
+        }
+
+        // External calls last
+        if (creatorFeeAmount > 0) {
+            _safeTransfer(token, ILaunchToken(token).creator(), creatorFeeAmount);
         }
     }
 
@@ -244,22 +250,24 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         if (amount0Out == 0 && amount1Out == 0) revert PonderPairTypes.InsufficientOutputAmount();
         if (to == _token0 || to == _token1) revert PonderPairTypes.InvalidToAddress();
 
-        /**
-        * @dev Slither reports this as an uninitialized struct, but it's a false positive.
-        * The SwapState struct fields are properly initialized:
-        * - reserve0/reserve1 via getReserves()
-        * - balance0/balance1 via balanceOf() calls
-        * - amount0In/amount1In calculated from balances
-        * - isPonderPair set based on token addresses
-        */
-        // slither-disable-next-line uninitialized-local-variables
-        SwapState memory state;
+        SwapState memory state = SwapState({
+            reserve0: 0,
+            reserve1: 0,
+            balance0: 0,
+            balance1: 0,
+            amount0In: 0,
+            amount1In: 0,
+            isPonderPair: false
+        });
+
+        // Get current reserves
         (state.reserve0, state.reserve1,) = getReserves();
 
         if (amount0Out >= state.reserve0 || amount1Out >= state.reserve1) {
             revert PonderPairTypes.InsufficientLiquidity();
         }
 
+        // INITIAL EFFECTS - Flash loan protection
         _update(
             uint256(state.reserve0) - amount0Out,
             uint256(state.reserve1) - amount1Out,
@@ -268,29 +276,44 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         );
 
         // INTERACTIONS
-        _executeSwap(to, amount0Out, amount1Out, data);
+        _executeTransfers(to, amount0Out, amount1Out, data);
 
-        // Post-interaction validations and fee handling
-        _validateAndProcessSwap(
-            state,
-            amount0Out,
-            amount1Out
-        );
+        // POST-INTERACTION VALIDATION & EFFECTS
+        // Get actual balances after transfer
+        state.balance0 = IERC20(_token0).balanceOf(address(this));
+        state.balance1 = IERC20(_token1).balanceOf(address(this));
+
+        state.amount0In = state.balance0 > state.reserve0 - amount0Out ?
+            state.balance0 - (state.reserve0 - amount0Out) : 0;
+        state.amount1In = state.balance1 > state.reserve1 - amount1Out ?
+            state.balance1 - (state.reserve1 - amount1Out) : 0;
+
+        if (state.amount0In <= 0 && state.amount1In <= 0) {
+            revert PonderPairTypes.InsufficientInputAmount();
+        }
+
+        // Validate k-value with actual balances
+        PonderPairTypes.SwapData memory data = PonderPairTypes.SwapData({
+            amount0Out: amount0Out,
+            amount1Out: amount1Out,
+            amount0In: state.amount0In,
+            amount1In: state.amount1In,
+            balance0: state.balance0,
+            balance1: state.balance1,
+            reserve0: state.reserve0,
+            reserve1: state.reserve1
+        });
+
+        if (!_validateKValue(data)) {
+            revert PonderPairTypes.KValueCheckFailed();
+        }
+
+        state.isPonderPair = _token0 == ponder() || _token1 == ponder();
+        _handleFees(state, amount0Out, amount1Out);
+
+        _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
 
         emit Swap(msg.sender, state.amount0In, state.amount1In, amount0Out, amount1Out, to);
-    }
-
-    function _executeSwap(
-        address to,
-        uint256 amount0Out,
-        uint256 amount1Out,
-        bytes calldata data
-    ) private {
-        if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out);
-        if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out);
-        if (data.length > 0) {
-            IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
-        }
     }
 
     function _validateAndProcessSwap(
@@ -327,11 +350,14 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             revert PonderPairTypes.KValueCheckFailed();
         }
 
+        // Update state before external interactions
+        _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
+
+        // External interactions last
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
         _handleFees(state, amount0Out, amount1Out);
-
-        _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
     }
+
 
     function _handleFees(
         SwapState memory state,
@@ -489,7 +515,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      * @dev Mint LP fee to feeTo address if enabled
      */
     function _mintFee(uint112 reserve0_, uint112 reserve1_) private returns (bool feeOn) {
-        address feeTo = IPonderFactory(_factory).feeTo();
+        address feeTo = IPonderFactory(_FACTORY).feeTo();
         feeOn = feeTo != address(0);
         uint256 _kLastOld = _kLast;
         if (feeOn) {
@@ -512,7 +538,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
      * @inheritdoc IPonderPair
      */
     function skim(address to) external override nonReentrant {
-        address feeTo = IPonderFactory(_factory).feeTo();
+        address feeTo = IPonderFactory(_FACTORY).feeTo();
 
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));

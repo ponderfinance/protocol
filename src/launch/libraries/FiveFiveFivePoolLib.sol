@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { FiveFiveFiveConstants } from "./FiveFiveFiveConstants.sol";
 import { PonderPair } from "../../core/pair/PonderPair.sol";
@@ -151,7 +151,7 @@ library FiveFiveFivePoolLib {
         }
 
         // Add liquidity with slippage protection
-        return router.addLiquidityETH{value: kubAmount}(
+        (amountToken, amountKUB, liquidity) = router.addLiquidityETH{value: kubAmount}(
             tokenAddress,
             tokenAmount,
             minTokenAmount,
@@ -159,6 +159,8 @@ library FiveFiveFivePoolLib {
             recipient,
             block.timestamp + 3 minutes
         );
+
+        return (amountToken, amountKUB, liquidity);
     }
 
     /// @notice Adds PONDER liquidity to a pool with slippage protection
@@ -178,16 +180,10 @@ library FiveFiveFivePoolLib {
         uint256 ponderAmount,
         uint256 tokenAmount,
         address recipient
-    ) internal returns (
-        uint256 amountToken,
-        uint256 amountPonder,
-        uint256 liquidity
-    ) {
-        // Set slippage tolerance to 0.5%
+    ) internal returns (uint256 amountToken, uint256 amountPonder, uint256 liquidity) {
         uint256 minTokenAmount = tokenAmount * 995 / 1000;
         uint256 minPonderAmount = ponderAmount * 995 / 1000;
 
-        // Add approvals first
         if (!LaunchToken(tokenAddress).approve(address(router), tokenAmount)) {
             revert FiveFiveFiveLauncherTypes.ApprovalFailed();
         }
@@ -195,8 +191,7 @@ library FiveFiveFivePoolLib {
             revert FiveFiveFiveLauncherTypes.ApprovalFailed();
         }
 
-        // Add liquidity with slippage protection
-        return router.addLiquidity(
+        (amountToken, amountPonder, liquidity) = router.addLiquidity(
             tokenAddress,
             ponder,
             tokenAmount,
@@ -206,6 +201,8 @@ library FiveFiveFivePoolLib {
             recipient,
             block.timestamp + 3 minutes
         );
+
+        return (amountToken, amountPonder, liquidity);
     }
 
     /*//////////////////////////////////////////////////////////////

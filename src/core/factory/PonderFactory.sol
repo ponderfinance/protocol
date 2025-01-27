@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { IPonderFactory } from "./IPonderFactory.sol";
 import { PonderFactoryStorage } from "./storage/PonderFactoryStorage.sol";
@@ -168,7 +168,10 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
      */
     function setFeeToSetter(address newFeeToSetter) external onlyFeeToSetter {
         if (newFeeToSetter == address(0)) revert PonderFactoryTypes.ZeroAddress();
+        address oldFeeToSetter = _feeToSetter;
+
         _feeToSetter = newFeeToSetter;
+        emit FeeToSetterUpdated(oldFeeToSetter, newFeeToSetter);
     }
 
     /**
@@ -201,6 +204,10 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
      * @notice Applies pending launcher change after timelock
      */
     function applyLauncher() external onlyFeeToSetter {
+        // - Used for timelock functionality with long duration
+        // - Timestamp manipulation window (900s) is negligible compared to typical timelock periods
+        // - Only callable by privileged role (feeToSetter)
+        // slither-disable-next-line block-timestamp
         if (block.timestamp < _launcherDelay) revert PonderFactoryTypes.TimelockNotFinished();
         if (_pendingLauncher == address(0)) revert PonderFactoryTypes.InvalidLauncher();
 

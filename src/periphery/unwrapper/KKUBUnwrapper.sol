@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -99,6 +99,11 @@ contract KKUBUnwrapper is
     /// @inheritdoc IKKUBUnwrapper
     function emergencyWithdraw() external override onlyOwner nonReentrant {
         // Checks
+        // - Only callable by owner
+        // - Has maximum withdrawal amount limits
+        // - Withdrawal delay is much longer than possible manipulation window
+        // - Additional protections like pausable and nonReentrant are in place
+        // slither-disable-next-line timestamp
         if (block.timestamp < lastWithdrawalTime + KKUBUnwrapperTypes.WITHDRAWAL_DELAY) {
             revert KKUBUnwrapperTypes.WithdrawalTooFrequent();
         }
@@ -124,6 +129,10 @@ contract KKUBUnwrapper is
 
     /// @inheritdoc IKKUBUnwrapper
     function resetWithdrawalLimit() external override {
+        // - Only resets delay after significant time has passed
+        // - No direct economic impact from timing
+        // - Additional function calls still require owner privileges
+        // slither-disable-next-line block-timestamp
         if (block.timestamp >= lastWithdrawalTime + KKUBUnwrapperTypes.WITHDRAWAL_DELAY) {
             lastWithdrawalTime = 0;
             emit WithdrawalLimitReset();

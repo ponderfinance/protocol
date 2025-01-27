@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /// @title BitMath Library
 /// @notice Library for computing most and least significant bits of a uint256
@@ -14,15 +14,18 @@ library BitMath {
     function mostSignificantBit(uint256 x) internal pure returns (uint8 r) {
         if (x == 0) revert ZeroValue();
 
-        if (x >= 0x100000000000000000000000000000000) {
+        // Check if bits 128 and higher are set
+        if (x >= 0x1_00000000_00000000_00000000_00000000) {
             x >>= 128;
             r += 128;
         }
-        if (x >= 0x10000000000000000) {
+        // Check if bits 64-127 are set
+        if (x >= 0x1_00000000_00000000) {
             x >>= 64;
             r += 64;
         }
-        if (x >= 0x100000000) {
+        // Check if bits 32-63 are set
+        if (x >= 0x1_00000000) {
             x >>= 32;
             r += 32;
         }

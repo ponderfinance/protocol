@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { IPonderPriceOracle } from "./IPonderPriceOracle.sol";
 import { PonderOracleStorage } from "./storage/PonderOracleStorage.sol";
@@ -80,6 +80,10 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
 
     /// @inheritdoc IPonderPriceOracle
     function update(address pair) external override {
+        // - Used for TWAP calculation with built-in manipulation resistance
+        // - Multiple price points are used to calculate average
+        // - Additional price deviation checks are implemented
+        // slither-disable-next-line block-timestamp
         if (block.timestamp < _lastUpdateTime[pair] + PonderOracleTypes.MIN_UPDATE_DELAY) {
             revert PonderOracleTypes.UpdateTooFrequent();
         }
@@ -123,6 +127,9 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         if (_observations[pair].length == 0) revert PonderOracleTypes.InsufficientData();
 
         // Check oracle has recent data
+        // - TWAP mechanism inherently resistant to short-term manipulation
+        // - Price staleness check is much longer than possible timestamp manipulation
+        // slither-disable-next-line block-timestamp
         if (block.timestamp > _lastUpdateTime[pair] + PonderOracleTypes.PERIOD) {
             revert PonderOracleTypes.StalePrice();
         }
@@ -210,7 +217,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         // Try direct stablecoin pair first
         address stablePair = IPonderFactory(FACTORY).getPair(tokenIn, STABLECOIN);
         if (stablePair != address(0)) {
-            return this.getCurrentPrice(stablePair, tokenIn, amountIn);
+            return getCurrentPrice(stablePair, tokenIn, amountIn);
         }
 
         return 0;

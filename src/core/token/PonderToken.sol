@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { PonderERC20 } from "./PonderERC20.sol";
 import { PonderTokenStorage } from "./storage/PonderTokenStorage.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
@@ -49,13 +49,12 @@ library FiveFiveFiveRefundLib {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Processes refund for a failed or cancelled launch
-
     function processRefund(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address claimer,
         PonderToken ponder
     ) internal {
-        // Checks
+        // CHECKS
         if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
             revert FiveFiveFiveLauncherTypes.LaunchStillActive();
         }
@@ -66,70 +65,57 @@ library FiveFiveFiveRefundLib {
             revert FiveFiveFiveLauncherTypes.LaunchSucceeded();
         }
 
-        // Get contributor info
         FiveFiveFiveLauncherTypes.ContributorInfo storage contributor = launch.contributors[claimer];
         if (contributor.kubContributed == 0 && contributor.ponderContributed == 0) {
             revert FiveFiveFiveLauncherTypes.NoContributionToRefund();
         }
 
-        // Cache refund amounts
+        // Cache values before state changes
         uint256 kubToRefund = contributor.kubContributed;
         uint256 ponderToRefund = contributor.ponderContributed;
         uint256 tokensToReturn = contributor.tokensReceived;
 
-        // Effects - clear state before transfers (CEI pattern)
+        // EFFECTS - Clear state
         contributor.kubContributed = 0;
         contributor.ponderContributed = 0;
         contributor.tokensReceived = 0;
         contributor.ponderValue = 0;
 
-        // Interactions
-        // 1. Handle token return if any
-        // 1. Handle token return if any
+        // Emit event before external interactions
+        emit RefundProcessed(claimer, kubToRefund, ponderToRefund, tokensToReturn);
+
+        // INTERACTIONS - Handle token returns and refunds
         if (tokensToReturn > 0) {
             LaunchToken token = LaunchToken(launch.base.tokenAddress);
 
-            // Verify token balance
             if (token.balanceOf(claimer) < tokensToReturn) {
                 revert FiveFiveFiveLauncherTypes.InsufficientBalance();
             }
 
-            // Verify allowance
             uint256 currentAllowance = token.allowance(claimer, address(this));
             if (currentAllowance < tokensToReturn) {
                 revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
             }
 
-            // Use safe transfer and require success
-            // This transferFrom call is safe because:
-            // 1. The allowance of the claimer is validated before the transfer is attempted.
-            // 2. The success of the transferFrom call is explicitly checked, reverting on failure.
-            // 3. The contract's balance is verified post-transfer to ensure correctness.
-            // 4. The claimer address is tightly controlled by the protocol logic, preventing misuse.
-            // slither-disable-next-line arbitrary-from-in-transferfrom
             bool success = token.transferFrom(claimer, address(this), tokensToReturn);
-
             if (!success) {
                 revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
             }
 
-            // Verify the transfer was successful by checking balances
             if (token.balanceOf(address(this)) < tokensToReturn) {
                 revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
             }
         }
-        // 2. Process PONDER refund
+
         if (ponderToRefund > 0) {
             ponder.safeTransfer(claimer, ponderToRefund);
         }
 
-        // 3. Process KUB refund using OpenZeppelin's Address.sendValue
         if (kubToRefund > 0) {
             payable(claimer).sendValue(kubToRefund);
         }
-
-        emit RefundProcessed(claimer, kubToRefund, ponderToRefund, tokensToReturn);
     }
+
     /*//////////////////////////////////////////////////////////////
                         LAUNCH CANCELLATION
     //////////////////////////////////////////////////////////////*/
@@ -194,11 +180,12 @@ library FiveFiveFiveRefundLib {
             revert FiveFiveFiveLauncherTypes.LPStillLocked();
         }
 
-        // Process withdrawals from both pairs
+        // Emit event before external calls
+        emit LPTokensWithdrawn(launchId, launch.base.creator, block.timestamp);
+
+        // Process withdrawals from both pairs last
         _withdrawPairLP(launch.pools.memeKubPair, launch.base.creator);
         _withdrawPairLP(launch.pools.memePonderPair, launch.base.creator);
-
-        emit LPTokensWithdrawn(launchId, launch.base.creator, block.timestamp);
     }
 
     /*//////////////////////////////////////////////////////////////

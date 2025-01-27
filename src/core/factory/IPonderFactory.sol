@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /**
  * @title IPonderFactory
@@ -90,7 +90,6 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param feeTo New address to receive protocol fees
      */
-    // slither-disable-next-line local-variable-shadowing
     function setFeeTo(address feeTo) external;
 
     /**
@@ -98,7 +97,6 @@ interface IPonderFactory {
      * @dev Can only be called by current feeToSetter
      * @param feeToSetter New address authorized to set fee receiver
      */
-    // slither-disable-next-line local-variable-shadowing
     function setFeeToSetter(address feeToSetter) external;
 
     /**
@@ -106,7 +104,6 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param migrator New migrator contract address
      */
-    // slither-disable-next-line local-variable-shadowing
     function setMigrator(address migrator) external;
 
     /**
@@ -114,7 +111,6 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param launcher Address of the new launcher contract
      */
-    // slither-disable-next-line local-variable-shadowing
     function setLauncher(address launcher) external;
 
     /**
@@ -128,7 +124,6 @@ interface IPonderFactory {
      * @dev Can only be called by feeToSetter
      * @param ponder New PONDER token address
      */
-    // slither-disable-next-line local-variable-shadowing
     function setPonder(address ponder) external;
 
     /**
@@ -153,4 +148,12 @@ interface IPonderFactory {
      * @param newLauncher New launcher address
      */
     event LauncherUpdated(address indexed oldLauncher, address indexed newLauncher);
+
+    /**
+     * @notice Emitted when the fee setter address is updated
+     * @dev This event is emitted when the address authorized to modify fee-related parameters is changed
+     * @param oldFeeToSetter The previous address authorized to change fee parameters
+     * @param newFeeToSetter The new address authorized to change fee parameters
+     */
+    event FeeToSetterUpdated(address indexed oldFeeToSetter, address indexed newFeeToSetter);
 }

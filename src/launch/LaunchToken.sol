@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { ILaunchToken } from "./ILaunchToken.sol";
@@ -100,6 +100,10 @@ contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
         }
 
         // Apply trading restrictions during initial period
+        // - Trading restriction period is much longer than possible manipulation window
+        // - Additional protections like maxTxAmount are in place
+        // - Short-term manipulation doesn't significantly impact trading restrictions
+        // slither-disable-next-line block-timestamp
         if (block.timestamp < tradingEnabledAt + LaunchTokenTypes.TRADING_RESTRICTION_PERIOD) {
             // Check max transaction amount
             if (amount > maxTxAmount) {
@@ -232,6 +236,7 @@ contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
     function setPairs(address kubPair_, address ponderPair_) external {
         if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
         if (kubPair != address(0) || ponderPair != address(0)) revert LaunchTokenTypes.PairAlreadySet();
+        if (kubPair_ == address(0)) revert LaunchTokenTypes.ZeroAddress();
 
         kubPair = kubPair_;
         ponderPair = ponderPair_;
@@ -254,6 +259,11 @@ contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
     /// @param maxTxAmount_ New maximum transaction amount
     function setMaxTxAmount(uint256 maxTxAmount_) external {
         if (msg.sender != launcher) revert LaunchTokenTypes.Unauthorized();
+
+        // - Restriction period is much longer than manipulation window
+        // - Only callable by launcher address
+        // - No direct economic impact from timing
+        // slither-disable-next-line block-timestamp
         if (block.timestamp < tradingEnabledAt + LaunchTokenTypes.TRADING_RESTRICTION_PERIOD) {
             revert LaunchTokenTypes.TradingRestricted();
         }

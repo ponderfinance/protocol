@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 import { IFeeDistributor } from "./IFeeDistributor.sol";
 import { FeeDistributorStorage } from "./storage/FeeDistributorStorage.sol";
@@ -112,6 +112,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     }
 
     function _distribute() internal {
+        // - Only used for rate limiting fee distributions
+        // - Small timestamp manipulation doesn't significantly impact distribution mechanics
+        // - No critical value calculations depend on this timestamp
+        // slither-disable-next-line block.timestamp
         if (lastDistributionTimestamp != 0) {
             uint256 timeElapsed = block.timestamp - lastDistributionTimestamp;
             if (timeElapsed < FeeDistributorTypes.DISTRIBUTION_COOLDOWN) {
@@ -145,31 +149,40 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
 
         emit FeesDistributed(totalAmount, stakingAmount, teamAmount);
     }
-    /**
-     * @notice Distributes fees from specific pairs
-     * @param pairs Array of pair addresses to collect and distribute fees from
-     */
-    function distributePairFees(address[] calldata pairs) external nonReentrant {
+
+    /// @notice Validates an array of pairs for fee distribution
+    /// @dev Checks for array length, zero addresses, duplicate processing, and distribution cooldown
+    /// @param pairs Array of pair addresses to validate
+    function validatePairs(address[] calldata pairs) internal view {
         if (pairs.length == 0 || pairs.length > FeeDistributorTypes.MAX_PAIRS_PER_DISTRIBUTION)
             revert FeeDistributorTypes.InvalidPairCount();
 
-        /// Safe external view calls in limited lookup path for DEX operations
-        /// slither-disable-next-line calls-loop
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
-
             if (currentPair == address(0) || processedPairs[currentPair])
                 revert FeeDistributorTypes.InvalidPair();
 
             if (block.timestamp - lastPairDistribution[currentPair] < FeeDistributorTypes.DISTRIBUTION_COOLDOWN)
                 revert FeeDistributorTypes.DistributionTooFrequent();
-
-            processedPairs[currentPair] = true;
-            lastPairDistribution[currentPair] = block.timestamp;
         }
+    }
 
-        /// Safe external view calls in limited lookup path for DEX operations
-        /// slither-disable-next-line calls-loop
+
+
+    /// @notice Marks pairs as being processed and updates their last distribution timestamp
+    /// @dev Sets processedPairs mapping to true and updates lastPairDistribution timestamp
+    /// @param pairs Array of pair addresses to mark for processing
+    function markPairsForProcessing(address[] calldata pairs) internal {
+        for (uint256 i = 0; i < pairs.length; i++) {
+            processedPairs[pairs[i]] = true;
+            lastPairDistribution[pairs[i]] = block.timestamp;
+        }
+    }
+
+    /// @notice Collects fees from multiple pairs and handles any collection failures
+    /// @dev Attempts to collect fees from each pair, catching and handling any failures
+    /// @param pairs Array of pair addresses to collect fees from
+    function collectFeesFromPairs(address[] calldata pairs) internal {
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
             try this.collectFeesFromPair(currentPair) {
@@ -179,12 +192,19 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
                 continue;
             }
         }
+    }
 
-        address[] memory uniqueTokens = _getUniqueTokens(pairs);
-        uint256 preBalance = IERC20(PONDER).balanceOf(address(this));
+    /// @notice Converts collected fees from various tokens to PONDER tokens
+    /// @dev Calculates minimum output amounts and performs conversions with slippage protection
+    /// @param uniqueTokens Array of unique token addresses to convert
+    /// @return preBalance The PONDER balance before conversions
+    /// @return postBalance The PONDER balance after all conversions
+    function convertCollectedFees(address[] memory uniqueTokens)
+        internal
+        returns
+    (uint256 preBalance, uint256 postBalance) {
+        preBalance = IERC20(PONDER).balanceOf(address(this));
 
-        /// Safe external view calls in limited lookup path for DEX operations
-        /// slither-disable-next-line calls-loop
         for (uint256 i = 0; i < uniqueTokens.length; i++) {
             address token = uniqueTokens[i];
             uint256 tokenBalance = IERC20(token).balanceOf(address(this));
@@ -195,8 +215,28 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             }
         }
 
-        // Final checks and distribution
-        uint256 postBalance = IERC20(PONDER).balanceOf(address(this));
+        postBalance = IERC20(PONDER).balanceOf(address(this));
+    }
+
+    /**
+    * @notice Distributes fees from specific pairs
+     * @param pairs Array of pair addresses to collect and distribute fees from
+     */
+    function distributePairFees(address[] calldata pairs) external nonReentrant {
+        // Step 1: Validate pairs
+        validatePairs(pairs);
+
+        // Step 2: Mark pairs for processing
+        markPairsForProcessing(pairs);
+
+        // Step 3: Collect fees
+        collectFeesFromPairs(pairs);
+
+        // Step 4: Get unique tokens and convert fees
+        address[] memory uniqueTokens = _getUniqueTokens(pairs);
+        (uint256 preBalance, uint256 postBalance) = convertCollectedFees(uniqueTokens);
+
+        // Step 5: Verify and distribute
         if (postBalance - preBalance < FeeDistributorTypes.MINIMUM_AMOUNT) {
             revert FeeDistributorTypes.InsufficientAccumulation();
         }
@@ -205,7 +245,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             _distribute();
         }
     }
-
     /**
      * @notice Calculates minimum PONDER output for a given token input with 0.5% max slippage
      */
@@ -220,7 +259,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         /// @dev Third value from getReserves is block.timestamp
         /// which we don't need for minimal output calculation
         /// slither-disable-next-line unused-return
-        (uint112 reserve0, uint112 reserve1, ) = IPonderPair(pair).getReserves();
+        (uint112 reserve0, uint112 reserve1,) = IPonderPair(pair).getReserves();
 
         (uint112 tokenReserve, uint112 ponderReserve) =
             IPonderPair(pair).token0() == token ?
