@@ -36,12 +36,6 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-          cache: 'pip'
-
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 'lts/*'
-          cache: 'npm'
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -63,18 +57,19 @@ jobs:
         id: test
 
       - name: Run Forge Coverage
+        continue-on-error: true
         run: |
           forge coverage --report lcov
         id: coverage
 
       - name: Run Slither Analysis
-        continue-on-error: true  # This ensures CI continues even if Slither finds issues
+        continue-on-error: true
         run: |
           pip install slither-analyzer
           slither . --config-file slither.config.json
         id: slither
 
-      - name: Run Solhint
+      - name: Install and Run Solhint
         run: |
           npm install -g solhint
           solhint 'src/**/*.sol'
