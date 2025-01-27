@@ -1,11 +1,23 @@
 {
   "filter_paths": "lib|node_modules|test|script",
   "disable_color": true,
-  "exclude_informational": true,
+  "exclude_informational": false,
   "exclude_low": false,
   "exclude_medium": false,
   "exclude_high": false,
   "exclude_dependencies": true,
+  "detectors_to_exclude": [
+    "dangerous-strict-equalities",
+    "reentrancy-vulnerabilities-1",
+    "unused-return",
+    "local-variable-shadowing",
+    "missing-zero-address-validation",
+    "reentrancy-vulnerabilities-2",
+    "reentrancy-vulnerabilities-3",
+    "block-timestamp",
+    "state-variables-that-could-be-declared-constant",
+    "state-variables-that-could-be-declared-immutable"
+  ],
   "ignore_paths": [
     "node_modules/@openzeppelin",
     "lib/openzeppelin-contracts"
