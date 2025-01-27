@@ -1,13 +1,13 @@
 {
-  "filter_paths": "node_modules",
-  "solc_remaps": [
-    "@openzeppelin/=node_modules/@openzeppelin/"
-  ],
-  "detectors_to_exclude": [
-    "naming-convention"
-  ],
-  "exclude_informational": false,
+  "filter_paths": "lib|node_modules|test|script",
+  "disable_color": true,
+  "exclude_informational": true,
   "exclude_low": false,
   "exclude_medium": false,
-  "exclude_high": false
+  "exclude_high": false,
+  "exclude_dependencies": true,
+  "ignore_paths": [
+    "node_modules/@openzeppelin",
+    "lib/openzeppelin-contracts"
+  ]
 }
