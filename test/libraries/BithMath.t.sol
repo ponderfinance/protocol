@@ -38,18 +38,18 @@ contract BitMathTest is Test {
     }
 
     function testRevertOnZeroMSB() public {
-        vm.expectRevert(abi.encodeWithSignature("ZeroValue()"));
+        vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
         BitMath.mostSignificantBit(0);
     }
 
     function testRevertOnZeroLSB() public {
-        vm.expectRevert(abi.encodeWithSignature("ZeroValue()"));
+        vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
         BitMath.leastSignificantBit(0);
     }
 
     function testFuzz_MostSignificantBit(uint256 value) public {
         if (value == 0) {
-            vm.expectRevert(abi.encodeWithSignature("ZeroValue()"));
+            vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
             BitMath.mostSignificantBit(value);
         } else {
             uint8 result = BitMath.mostSignificantBit(value);
@@ -69,7 +69,7 @@ contract BitMathTest is Test {
 
     function testFuzz_LeastSignificantBit(uint256 value) public {
         if (value == 0) {
-            vm.expectRevert(abi.encodeWithSignature("ZeroValue()"));
+            vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
             BitMath.leastSignificantBit(value);
         } else {
             uint8 result = BitMath.leastSignificantBit(value);

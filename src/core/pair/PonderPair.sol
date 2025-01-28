@@ -293,7 +293,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         }
 
         // Validate k-value with actual balances
-        PonderPairTypes.SwapData memory data = PonderPairTypes.SwapData({
+        PonderPairTypes.SwapData memory swapData = PonderPairTypes.SwapData({
             amount0Out: amount0Out,
             amount1Out: amount1Out,
             amount0In: state.amount0In,
@@ -304,7 +304,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             reserve1: state.reserve1
         });
 
-        if (!_validateKValue(data)) {
+        if (!_validateKValue(swapData)) {
             revert PonderPairTypes.KValueCheckFailed();
         }
 
@@ -335,7 +335,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         }
 
         // Create SwapData struct and validate
-        PonderPairTypes.SwapData memory data = PonderPairTypes.SwapData({
+        PonderPairTypes.SwapData memory swapData = PonderPairTypes.SwapData({
             amount0Out: amount0Out,
             amount1Out: amount1Out,
             amount0In: state.amount0In,
@@ -346,7 +346,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             reserve1: state.reserve1
         });
 
-        if (!_validateKValue(data)) {
+        if (!_validateKValue(swapData)) {
             revert PonderPairTypes.KValueCheckFailed();
         }
 
@@ -390,15 +390,15 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
 
     /**
      * @dev Validates K value hasn't decreased after fees
-     * @param data Swap data for validation
+     * @param swapData Swap data for validation
      * @return bool indicating if K value is valid
      */
-    function _validateKValue(PonderPairTypes.SwapData memory data) private pure returns (bool) {
-        uint256 balance0Adjusted = data.balance0 * 1000 - (data.amount0In * 3);
-        uint256 balance1Adjusted = data.balance1 * 1000 - (data.amount1In * 3);
+    function _validateKValue(PonderPairTypes.SwapData memory swapData) private pure returns (bool) {
+        uint256 balance0Adjusted = swapData.balance0 * 1000 - (swapData.amount0In * 3);
+        uint256 balance1Adjusted = swapData.balance1 * 1000 - (swapData.amount1In * 3);
 
         return balance0Adjusted * balance1Adjusted >=
-            uint256(data.reserve0) * uint256(data.reserve1) * (1000 * 1000);
+            uint256(swapData.reserve0) * uint256(swapData.reserve1) * (1000 * 1000);
     }
 
     /**

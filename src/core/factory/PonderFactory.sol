@@ -26,7 +26,6 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         address ponder_
     ) {
         if (feeToSetter_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
-        if (launcher_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
         if (ponder_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
 
         _feeToSetter = feeToSetter_;
@@ -66,13 +65,6 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         return _ponder;
     }
 
-    /**
-     * @notice Returns the migrator contract address
-     * @return Address of the migrator
-     */
-    function migrator() external view returns (address) {
-        return _migrator;
-    }
 
     /**
      * @notice Returns the pending launcher address
@@ -174,14 +166,6 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit FeeToSetterUpdated(oldFeeToSetter, newFeeToSetter);
     }
 
-    /**
-     * @notice Sets the migrator contract address
-     * @param newMigrator New migrator address
-     */
-    function setMigrator(address newMigrator) external onlyFeeToSetter {
-        if (newMigrator == address(0)) revert PonderFactoryTypes.ZeroAddress();
-        _migrator = newMigrator;
-    }
 
     /**
      * @notice Initiates or completes launcher address change

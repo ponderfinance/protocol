@@ -25,11 +25,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Clear cache
+        run: |
+          rm -rf ~/.foundry
+          mkdir -p ~/.foundry
+
       - name: Cache Foundry Build
         uses: actions/cache@v3
         with:
           path: ~/.foundry
-          key: foundry-cache-${{ runner.os }}-${{ hashFiles('foundry.toml') }}
+          key: foundry-cache-${{ runner.os }}-${{ hashFiles('foundry.toml') }}-${{ matrix.solc_version }}-v1
           restore-keys: |
             foundry-cache-${{ runner.os }}-
 
@@ -42,8 +47,10 @@ jobs:
         with:
           version: nightly
 
-      - name: Set Solidity Version
-        run: forge config set solc ${solc_version}
+      - name: Set and Verify Solidity Version
+        run: |
+          forge config set solc ${solc_version}
+          forge config | grep solc
 
       - name: Run Forge Build
         run: |

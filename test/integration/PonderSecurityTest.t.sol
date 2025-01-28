@@ -157,7 +157,7 @@ contract ReentrantAttacker is IPonderCallee {
         pair.swap(1e18, 0, address(this), "trigger reentrancy");
     }
 
-    // This callback will be invoked during the swap
+    /// This callback will be invoked during the swap
     function ponderCall(
         address sender,
         uint256 amount0,

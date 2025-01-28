@@ -39,12 +39,6 @@ interface IPonderFactory {
     function ponder() external view returns (address);
 
     /**
-     * @notice Returns the address of the migrator contract
-     * @return Address of the migrator contract used for pool migrations
-     */
-    function migrator() external view returns (address);
-
-    /**
      * @notice Returns the pending launcher address during timelock period
      * @return Address of the pending launcher
      */
@@ -98,13 +92,6 @@ interface IPonderFactory {
      * @param feeToSetter New address authorized to set fee receiver
      */
     function setFeeToSetter(address feeToSetter) external;
-
-    /**
-     * @notice Sets the migrator contract address
-     * @dev Can only be called by feeToSetter
-     * @param migrator New migrator contract address
-     */
-    function setMigrator(address migrator) external;
 
     /**
      * @notice Initiates the launcher update process with timelock

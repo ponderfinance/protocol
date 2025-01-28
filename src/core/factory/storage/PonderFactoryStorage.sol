@@ -10,7 +10,6 @@ abstract contract PonderFactoryStorage {
     // State Variables
     address internal _feeTo;
     address internal _feeToSetter;
-    address internal _migrator;
     address internal _launcher;
     address internal _ponder;
     address internal _pendingLauncher;

@@ -112,18 +112,6 @@ contract PonderFactoryTest is Test {
         factory.setFeeToSetter(newFeeToSetter);
     }
 
-    function testSetMigrator() public {
-        address newMigrator = address(0x1);
-        vm.prank(feeToSetter);
-        factory.setMigrator(newMigrator);
-        assertEq(factory.migrator(), newMigrator);
-    }
-
-    function testFailSetMigratorUnauthorized() public {
-        address newMigrator = address(0x1);
-        factory.setMigrator(newMigrator);
-    }
-
     function testSetLauncher() public {
         address newLauncher = address(0x123);
 
