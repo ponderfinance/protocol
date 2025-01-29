@@ -11,7 +11,6 @@ import { PonderRouterLiquidityLib } from "../../src/periphery/router/libraries/P
 import { PonderRouterMathLib } from "../../src/periphery/router/libraries/PonderRouterMathLib.sol";
 import { PonderRouterSwapLib } from "../../src/periphery/router/libraries/PonderRouterSwapLib.sol";
 
-
 // Core Protocol
 import { PonderFactory } from "../../src/core/factory/PonderFactory.sol";
 import { PonderToken } from "../../src/core/token/PonderToken.sol";
@@ -19,20 +18,12 @@ import { PonderMasterChef } from "../../src/core/masterchef/PonderMasterChef.sol
 import { PonderPriceOracle } from "../../src/core/oracle/PonderPriceOracle.sol";
 import { PonderStaking } from "../../src/core/staking/PonderStaking.sol";
 import { FeeDistributor } from "../../src/core/distributor/FeeDistributor.sol";
-
-// Launch System
-import { FiveFiveFiveLauncher } from "../../src/launch/FiveFiveFiveLauncher.sol";
-// Launch System Libraries
-import { FiveFiveFiveContributionLib } from "../../src/launch/libraries/FiveFiveFiveContributionLib.sol";
-import { FiveFiveFiveFinalizationLib } from "../../src/launch/libraries/FiveFiveFiveFinalizationLib.sol";
-import { FiveFiveFiveInitLib } from "../../src/launch/libraries/FiveFiveFiveInitLib.sol";
-import { FiveFiveFivePoolLib } from "../../src/launch/libraries/FiveFiveFivePoolLib.sol";
-import { FiveFiveFiveRefundLib } from "../../src/launch/libraries/FiveFiveFiveRefundLib.sol";
-import { FiveFiveFiveValidation } from "../../src/launch/libraries/FiveFiveFiveValidation.sol";
-import { FiveFiveFiveViewLib } from "../../src/launch/libraries/FiveFiveFiveViewLib.sol";
 import { KKUBUnwrapper } from "../../src/periphery/unwrapper/KKUBUnwrapper.sol";
 import { PonderRouter } from "../../src/periphery/router/PonderRouter.sol";
 import { IPonderRouter } from "../../src/periphery/router/IPonderRouter.sol";
+
+// Launch System
+import { FiveFiveFiveLauncher } from "../../src/launch/FiveFiveFiveLauncher.sol";
 
 contract DeployBitkubScript is Script {
     // Protocol Constants
@@ -48,16 +39,6 @@ contract DeployBitkubScript is Script {
         address liquidityLib;
         address mathLib;
         address swapLib;
-    }
-
-    struct LauncherLibraries {
-        address contributionLib;
-        address finalizationLib;
-        address initLib;
-        address poolLib;
-        address refundLib;
-        address validationLib;
-        address viewLib;
     }
 
     // Core Protocol Addresses
@@ -86,7 +67,6 @@ contract DeployBitkubScript is Script {
         ParticipantAddresses participants;
         CoreAddresses core;
         RouterLibraries routerLibs;
-        LauncherLibraries launcherLibs;
         uint256 deploymentStartTime;
         bool initialized;
     }
@@ -128,10 +108,8 @@ contract DeployBitkubScript is Script {
         emit DeploymentStarted(deployer, block.timestamp + DEPLOYMENT_TIMEOUT);
     }
 
-    // Add this after initialize() and before run()
-
-    function deployAllLibraries() internal {
-        console.log("\nDeploying libraries...");
+    function deployRouterLibraries() internal {
+        console.log("\nDeploying Router libraries...");
 
         // Deploy Router Libraries
         state.routerLibs = RouterLibraries({
@@ -140,18 +118,7 @@ contract DeployBitkubScript is Script {
             swapLib: deployLibrary(type(PonderRouterSwapLib).creationCode, "RouterSwapLib")
         });
 
-        // Deploy Launcher Libraries
-        state.launcherLibs = LauncherLibraries({
-            contributionLib: deployLibrary(type(FiveFiveFiveContributionLib).creationCode, "ContributionLib"),
-            finalizationLib: deployLibrary(type(FiveFiveFiveFinalizationLib).creationCode, "FinalizationLib"),
-            initLib: deployLibrary(type(FiveFiveFiveInitLib).creationCode, "InitLib"),
-            poolLib: deployLibrary(type(FiveFiveFivePoolLib).creationCode, "PoolLib"),
-            refundLib: deployLibrary(type(FiveFiveFiveRefundLib).creationCode, "RefundLib"),
-            validationLib: deployLibrary(type(FiveFiveFiveValidation).creationCode, "ValidationLib"),
-            viewLib: deployLibrary(type(FiveFiveFiveViewLib).creationCode, "ViewLib")
-        });
-
-        emit DeploymentPhaseCompleted("Library Deployment", true);
+        emit DeploymentPhaseCompleted("Router Library Deployment", true);
     }
 
     function deployLibrary(bytes memory bytecode, string memory name) internal returns (address lib) {
@@ -276,15 +243,14 @@ contract DeployBitkubScript is Script {
         emit ContractDeployed("FeeDistributor", state.core.feeDistributor);
         console.log("FeeDistributor deployed at: %s", state.core.feeDistributor);
 
-        // 8. Deploy Launcher
-        state.core.launcher = deployLauncherWithLibraries(
-            state.launcherLibs,
+        // 8. Deploy Launcher (no more library dependencies)
+        state.core.launcher = address(new FiveFiveFiveLauncher(
             state.core.factory,
-            state.core.router,
+            payable(state.core.router),
             state.participants.teamReserve,
             state.core.ponder,
             state.core.oracle
-        );
+        ));
         emit ContractDeployed("Launcher", state.core.launcher);
         console.log("Launcher deployed at: %s", state.core.launcher);
 
@@ -324,77 +290,42 @@ contract DeployBitkubScript is Script {
         return routerAddress;
     }
 
-    function deployLauncherWithLibraries(
-        LauncherLibraries memory libs,
-        address factory,
-        address router,
-        address teamReserve,
-        address ponder,
-        address oracle
-    ) internal returns (address launcherAddress) {
-        bytes memory bytecode = type(FiveFiveFiveLauncher).creationCode;
-        bytecode = linkLibrary(bytecode, "FiveFiveFiveContributionLib", libs.contributionLib);
-        bytecode = linkLibrary(bytecode, "FiveFiveFiveFinalizationLib", libs.finalizationLib);
-        bytecode = linkLibrary(bytecode, "FiveFiveFiveInitLib", libs.initLib);
-        bytecode = linkLibrary(bytecode, "FiveFiveFivePoolLib", libs.poolLib);
-        bytecode = linkLibrary(bytecode, "FiveFiveFiveRefundLib", libs.refundLib);
-        bytecode = linkLibrary(bytecode, "FiveFiveFiveValidation", libs.validationLib);
-        bytecode = linkLibrary(bytecode, "FiveFiveFiveViewLib", libs.viewLib);
-
-        bytes memory constructorArgs = abi.encode(
-            factory,
-            router,
-            teamReserve,
-            ponder,
-            oracle
-        );
-
-        bytes memory deploymentBytecode = abi.encodePacked(bytecode, constructorArgs);
-        assembly {
-            launcherAddress := create(0, add(deploymentBytecode, 0x20), mload(deploymentBytecode))
-            if iszero(extcodesize(launcherAddress)) { revert(0, 0) }
-        }
-
-        require(launcherAddress != address(0), "Launcher deployment failed");
-        return launcherAddress;
-    }
-
     function setupInitialLiquidity() internal {
-        console.log("\nSetting up initial liquidity...");
+console.log("\nSetting up initial liquidity...");
 
-        // Approve router for PONDER transfers
-        console.log("Approving router for PONDER transfers...");
-        require(
-            PonderToken(state.core.ponder).approve(
-                state.core.router,
-                INITIAL_LIQUIDITY_ALLOCATION
-            ),
-            "Router approval failed"
-        );
+// Approve router for PONDER transfers
+console.log("Approving router for PONDER transfers...");
+require(
+PonderToken(state.core.ponder).approve(
+state.core.router,
+INITIAL_LIQUIDITY_ALLOCATION
+),
+"Router approval failed"
+);
 
-        // Add initial liquidity
-        console.log("Adding initial liquidity...");
-        console.log("KUB Amount: %s", INITIAL_KUB_AMOUNT);
-        console.log("PONDER Amount: %s", INITIAL_LIQUIDITY_ALLOCATION);
+// Add initial liquidity
+console.log("Adding initial liquidity...");
+console.log("KUB Amount: %s", INITIAL_KUB_AMOUNT);
+console.log("PONDER Amount: %s", INITIAL_LIQUIDITY_ALLOCATION);
 
-        try IPonderRouter(state.core.router).addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
-            state.core.ponder,
-            INITIAL_LIQUIDITY_ALLOCATION,
-            INITIAL_LIQUIDITY_ALLOCATION,  // min PONDER
-            INITIAL_KUB_AMOUNT,            // min ETH
-            state.participants.deployer,    // LP tokens recipient
-            block.timestamp + 300          // deadline
-        ) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
-            console.log("Liquidity added successfully:");
-            console.log("- PONDER added: %s", amountToken);
-            console.log("- KUB added: %s", amountETH);
-            console.log("- LP tokens received: %s", liquidity);
+try IPonderRouter(state.core.router).addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
+state.core.ponder,
+INITIAL_LIQUIDITY_ALLOCATION,
+INITIAL_LIQUIDITY_ALLOCATION,  // min PONDER
+INITIAL_KUB_AMOUNT,            // min ETH
+state.participants.deployer,    // LP tokens recipient
+block.timestamp + 300          // deadline
+) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
+console.log("Liquidity added successfully:");
+console.log("- PONDER added: %s", amountToken);
+console.log("- KUB added: %s", amountETH);
+console.log("- LP tokens received: %s", liquidity);
 
-            emit LiquidityAdded(amountETH, amountToken);
-        } catch Error(string memory reason) {
-            console.log("Liquidity addition failed: %s", reason);
-            revert(string(abi.encodePacked("Liquidity addition failed: ", reason)));
-        }
+emit LiquidityAdded(amountETH, amountToken);
+} catch Error(string memory reason) {
+console.log("Liquidity addition failed: %s", reason);
+    revert(string(abi.encodePacked("Liquidity addition failed: ", reason)));
+}
 
         // Validate liquidity was added correctly
         validateLiquiditySetup();
@@ -461,7 +392,6 @@ contract DeployBitkubScript is Script {
         emit DeploymentPhaseCompleted("Configuration Finalization", true);
     }
 
-
     function validateFinalConfiguration() internal view {
         // Validate PONDER configuration
         PonderToken ponder = PonderToken(state.core.ponder);
@@ -501,18 +431,8 @@ contract DeployBitkubScript is Script {
         console.log("- LiquidityLib:", state.routerLibs.liquidityLib);
         console.log("- MathLib:", state.routerLibs.mathLib);
         console.log("- SwapLib:", state.routerLibs.swapLib);
-
-        console.log("\nLauncher Libraries:");
-        console.log("- ContributionLib:", state.launcherLibs.contributionLib);
-        console.log("- FinalizationLib:", state.launcherLibs.finalizationLib);
-        console.log("- InitLib:", state.launcherLibs.initLib);
-        console.log("- PoolLib:", state.launcherLibs.poolLib);
-        console.log("- RefundLib:", state.launcherLibs.refundLib);
-        console.log("- ValidationLib:", state.launcherLibs.validationLib);
-        console.log("- ViewLib:", state.launcherLibs.viewLib);
     }
 
-    // Updated run function
     function run() external {
         // Load environment variables
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -526,7 +446,7 @@ contract DeployBitkubScript is Script {
         // Start deployment
         vm.startBroadcast(deployerPrivateKey);
 
-        deployAllLibraries();
+        deployRouterLibraries();
         deployCoreProtocol();
         setupInitialLiquidity();
         finalizeConfiguration();

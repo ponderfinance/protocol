@@ -364,7 +364,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 ponderAmount = maxPonderValue * 10 * 1e18 / PONDER_PRICE; // Convert to PONDER amount with 18 decimals
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -443,7 +443,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         vm.startPrank(bob);
         ponder.approve(address(launcher), ponderAmount);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -1114,7 +1114,7 @@ contract FiveFiveFiveLauncherTest is Test {
         assertEq(ponderValue, maxPonderValue, "Should accept exactly 20% in PONDER value");
 
         // Try to contribute any more PONDER
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION);
         vm.stopPrank();
     }
@@ -1409,7 +1409,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 skewedPonderAmount = _getPonderEquivalent(largeContribution * 3);
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePonderContribution.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, skewedPonderAmount);
         vm.stopPrank();
     }
@@ -1944,7 +1944,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Test 4: Cannot cancel completed launch
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.AlreadyLaunched.selector);
+        vm.expectRevert(FiveFiveFiveLauncherTypes.LaunchNotCancellable.selector);
         launcher.cancelLaunch(launchId2);
     }
 

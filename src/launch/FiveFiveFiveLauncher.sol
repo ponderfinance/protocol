@@ -9,45 +9,52 @@ import { PonderPriceOracle } from "../core/oracle/PonderPriceOracle.sol";
 import { IFiveFiveFiveLauncher } from "./IFiveFiveFiveLauncher.sol";
 import { FiveFiveFiveLauncherStorage } from "./storage/FiveFiveFiveStorage.sol";
 import { FiveFiveFiveLauncherTypes } from "./types/FiveFiveFiveLauncherTypes.sol";
-import { FiveFiveFiveInitLib } from "./libraries/FiveFiveFiveInitLib.sol";
-import { FiveFiveFiveValidation } from "./libraries/FiveFiveFiveValidation.sol";
-import { FiveFiveFivePoolLib } from "./libraries/FiveFiveFivePoolLib.sol";
-import { FiveFiveFiveRefundLib } from "./libraries/FiveFiveFiveRefundLib.sol";
-import { FiveFiveFiveViewLib } from "./libraries/FiveFiveFiveViewLib.sol";
-import { FiveFiveFiveContributionLib } from "./libraries/FiveFiveFiveContributionLib.sol";
-import { FiveFiveFiveFinalizationLib } from "./libraries/FiveFiveFiveFinalizationLib.sol";
+import { SetupLib } from "./libraries/SetupLib.sol";
+import { FundsLib } from "./libraries/FundsLib.sol";
+import { LiquidityLib } from "./libraries/LiquidityLib.sol";
 
-/**
- * @title FiveFiveFiveLauncher
- * @notice This contract enables the creation, contribution, and management of token launches in the Ponder ecosystem.
- */
+/// @title FiveFiveFiveLauncher
+/// @author taayyohh
+/// @notice Main contract for managing token launches in the Ponder ecosystem
+/// @dev Handles launch creation, contributions, refunds, and liquidity management
 contract FiveFiveFiveLauncher is
     IFiveFiveFiveLauncher,
     FiveFiveFiveLauncherStorage,
     ReentrancyGuard
 {
     using FiveFiveFiveLauncherTypes for *;
-    using FiveFiveFiveInitLib for FiveFiveFiveLauncherTypes.LaunchInfo;
-    using FiveFiveFiveValidation for FiveFiveFiveLauncherTypes.LaunchInfo;
-    using FiveFiveFivePoolLib for FiveFiveFiveLauncherTypes.LaunchInfo;
-    using FiveFiveFiveRefundLib for FiveFiveFiveLauncherTypes.LaunchInfo;
-    using FiveFiveFiveViewLib for FiveFiveFiveLauncherTypes.LaunchInfo;
-    using FiveFiveFiveFinalizationLib for FiveFiveFiveLauncherTypes.LaunchInfo;
+    using SetupLib for FiveFiveFiveLauncherTypes.LaunchInfo;
+    using FundsLib for FiveFiveFiveLauncherTypes.LaunchInfo;
+    using LiquidityLib for FiveFiveFiveLauncherTypes.LaunchInfo;
 
-    /// @notice Core protocol contracts
+    /*//////////////////////////////////////////////////////////////
+                            IMMUTABLE STORAGE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Factory contract for creating pairs
     IPonderFactory public immutable FACTORY;
+
+    /// @notice Router contract for liquidity operations
     IPonderRouter public immutable ROUTER;
+
+    /// @notice PONDER token contract
     PonderToken public immutable PONDER;
+
+    /// @notice Oracle for PONDER price data
     PonderPriceOracle public immutable PRICE_ORACLE;
 
-    /**
-     * @notice Constructor to initialize the launcher with core protocol dependencies.
-     * @param _factory Address of the Ponder factory contract.
-     * @param _router Address of the Ponder router contract.
-     * @param _feeCollector Address to collect protocol fees.
-     * @param _ponder Address of the Ponder token contract.
-     * @param _priceOracle Address of the Ponder price oracle.
-     */
+
+    /*//////////////////////////////////////////////////////////////
+                            CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initializes the launcher with core protocol dependencies
+    /// @param _factory Address of the Ponder factory contract
+    /// @param _router Address of the Ponder router contract
+    /// @param _feeCollector Address that collects protocol fees
+    /// @param _ponder Address of the PONDER token
+    /// @param _priceOracle Address of the price oracle
+    /// @dev All addresses must be non-zero
     constructor(
         address _factory,
         address payable _router,
@@ -71,15 +78,18 @@ contract FiveFiveFiveLauncher is
         owner = msg.sender;
     }
 
-    /**
-     * @notice Creates a new token launch.
-     * @param params Launch parameters defined in FiveFiveFiveLauncherTypes.
-     * @return launchId Unique identifier for the created launch.
-     */
+    /*//////////////////////////////////////////////////////////////
+                            LAUNCH CREATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Creates a new token launch
+    /// @param params Struct containing launch parameters
+    /// @return launchId Unique identifier for the created launch
+    /// @dev Validates parameters and initializes launch state
     function createLaunch(
         FiveFiveFiveLauncherTypes.LaunchParams calldata params
     ) external returns (uint256 launchId) {
-        FiveFiveFiveValidation.validateTokenParams(
+        SetupLib.validateTokenParams(
             params.name,
             params.symbol,
             usedNames,
@@ -90,8 +100,7 @@ contract FiveFiveFiveLauncher is
         usedNames[params.name] = true;
         usedSymbols[params.symbol] = true;
 
-        address token = FiveFiveFiveInitLib.initializeLaunch(
-            launches[launchId],
+        address token = launches[launchId].initializeLaunch(
             params,
             msg.sender,
             FACTORY,
@@ -103,15 +112,18 @@ contract FiveFiveFiveLauncher is
         emit LaunchCreated(launchId, token, msg.sender, params.imageURI);
     }
 
-    /**
-     * @notice Contribute KUB to a token launch.
-     * @param launchId Identifier of the launch.
-     */
+    /*//////////////////////////////////////////////////////////////
+                            CONTRIBUTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Contribute KUB to a launch
+    /// @param launchId ID of the launch to contribute to
+    /// @dev Amount is determined by msg.value
     function contributeKUB(uint256 launchId) external payable nonReentrant {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch = launches[launchId];
-        FiveFiveFiveValidation.validateLaunchState(launch);
+        SetupLib.validateLaunchState(launch);
 
-        bool shouldFinalize = FiveFiveFiveContributionLib.processKubContribution(
+        bool shouldFinalize = FundsLib.processKubContribution(
             launch,
             launchId,
             msg.value,
@@ -119,7 +131,7 @@ contract FiveFiveFiveLauncher is
         );
 
         if (shouldFinalize) {
-            FiveFiveFiveFinalizationLib.finalizeLaunch(
+            LiquidityLib.finalizeLaunch(
                 launch,
                 launchId,
                 FACTORY,
@@ -130,15 +142,14 @@ contract FiveFiveFiveLauncher is
         }
     }
 
-    /**
-     * @notice Contribute PONDER tokens to a token launch.
-     * @param launchId Identifier of the launch.
-     * @param amount Amount of PONDER tokens to contribute.
-     */
+    /// @notice Contribute PONDER tokens to a launch
+    /// @param launchId ID of the launch to contribute to
+    /// @param amount Amount of PONDER tokens to contribute
+    /// @dev Requires prior approval of PONDER tokens
     function contributePONDER(uint256 launchId, uint256 amount) external {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch = launches[launchId];
 
-        bool shouldFinalize = FiveFiveFiveContributionLib.processPonderContribution(
+        bool shouldFinalize = FundsLib.processPonderContribution(
             launch,
             launchId,
             amount,
@@ -148,7 +159,7 @@ contract FiveFiveFiveLauncher is
         );
 
         if (shouldFinalize) {
-            FiveFiveFiveFinalizationLib.finalizeLaunch(
+            LiquidityLib.finalizeLaunch(
                 launch,
                 launchId,
                 FACTORY,
@@ -159,24 +170,26 @@ contract FiveFiveFiveLauncher is
         }
     }
 
-    /**
-     * @notice Claim a refund for a token launch.
-     * @param launchId Identifier of the launch.
-     */
+    /*//////////////////////////////////////////////////////////////
+                        REFUNDS AND CANCELLATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Claim refund for a failed or cancelled launch
+    /// @param launchId ID of the launch to claim refund from
+    /// @dev Returns both KUB and PONDER contributions
     function claimRefund(uint256 launchId) external nonReentrant {
-        FiveFiveFiveRefundLib.processRefund(
+        FundsLib.processRefund(
             launches[launchId],
             msg.sender,
             PONDER
         );
     }
 
-    /**
-     * @notice Cancel a token launch.
-     * @param launchId Identifier of the launch.
-     */
+    /// @notice Cancel a launch
+    /// @param launchId ID of the launch to cancel
+    /// @dev Only callable by launch creator before deadline
     function cancelLaunch(uint256 launchId) external {
-        FiveFiveFiveRefundLib.processLaunchCancellation(
+        FundsLib.processLaunchCancellation(
             launches[launchId],
             launchId,
             msg.sender,
@@ -185,130 +198,144 @@ contract FiveFiveFiveLauncher is
         );
     }
 
-    /**
-     * @notice Withdraw liquidity pool tokens from a token launch.
-     * @param launchId Identifier of the launch.
-     */
+    /// @notice Withdraw LP tokens from a completed launch
+    /// @param launchId ID of the launch to withdraw LP tokens from
+    /// @dev Only callable by launch creator after lock period
     function withdrawLP(uint256 launchId) external {
-        FiveFiveFiveRefundLib.processLPWithdrawal(
+        FundsLib.processLPWithdrawal(
             launches[launchId],
             launchId,
             msg.sender
         );
     }
 
-    /**
-     * @notice Retrieve contributor-specific information for a launch.
-     * @param launchId Identifier of the launch.
-     * @param contributor Address of the contributor.
-     * @return Contribution details (amounts, timestamps, etc.).
-     * @custom:slither-disable-next-line ignore-return
-     */
+    /*//////////////////////////////////////////////////////////////
+                            VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Get contributor information for a launch
+    /// @param launchId ID of the launch
+    /// @param contributor Address of the contributor
+    /// @return kubContributed Amount of KUB contributed
+    /// @return ponderContributed Amount of PONDER contributed
+    /// @return ponderValue KUB value of PONDER contribution
+    /// @return tokensReceived Amount of launch tokens received
     function getContributorInfo(uint256 launchId, address contributor)
-        external
-        view
-        returns (uint256, uint256, uint256, uint256)
+    external
+    view
+    returns (
+        uint256 kubContributed,
+        uint256 ponderContributed,
+        uint256 ponderValue,
+        uint256 tokensReceived
+    )
     {
-        (
-            uint256 kubContributed,
-            uint256 ponderContributed,
-            uint256 ponderValue,
-            uint256 tokensReceived
-        ) = FiveFiveFiveViewLib.getContributorInfo(launches[launchId], contributor);
-
-        return (kubContributed, ponderContributed, ponderValue, tokensReceived);
+        return LiquidityLib.getContributorInfo(launches[launchId], contributor);
     }
 
-    /**
-     * @notice Retrieve overall contribution information for a launch.
-     * @param launchId Identifier of the launch.
-     * @return Contribution summary details.
-     * @custom:slither-disable-next-line ignore-return
-     */
+    /// @notice Get overall contribution information for a launch
+    /// @param launchId ID of the launch
+    /// @return kubCollected Total KUB collected
+    /// @return ponderCollected Total PONDER collected
+    /// @return ponderValueCollected KUB value of collected PONDER
+    /// @return totalValue Total value collected (KUB + PONDER value)
     function getContributionInfo(uint256 launchId)
-        external
-        view
-        returns (uint256, uint256, uint256, uint256)
+    external
+    view
+    returns (
+        uint256 kubCollected,
+        uint256 ponderCollected,
+        uint256 ponderValueCollected,
+        uint256 totalValue
+    )
     {
-        (
-            uint256 kubCollected,
-            uint256 ponderCollected,
-            uint256 ponderValueCollected,
-            uint256 totalValue
-        ) = FiveFiveFiveViewLib.getContributionInfo(launches[launchId]);
-
-        return (kubCollected, ponderCollected, ponderValueCollected, totalValue);
+        return LiquidityLib.getContributionInfo(launches[launchId]);
     }
 
-    /**
-     * @notice Retrieve pool-specific information for a launch.
-     * @param launchId Identifier of the launch.
-     * @return Pool details (addresses, states, etc.).
-     * @custom:slither-disable-next-line ignore-return
-     */
+    /// @notice Get pool information for a launch
+    /// @param launchId ID of the launch
+    /// @return memeKubPair Address of token-KUB pool
+    /// @return memePonderPair Address of token-PONDER pool
+    /// @return hasSecondaryPool Whether secondary PONDER pool exists
     function getPoolInfo(uint256 launchId)
     external
     view
-    returns (address, address, bool)
+    returns (
+        address memeKubPair,
+        address memePonderPair,
+        bool hasSecondaryPool
+    )
     {
-        (
-            address memeKubPair,
-            address memePonderPair,
-            bool hasSecondaryPool
-        ) = FiveFiveFiveViewLib.getPoolInfo(launches[launchId]);
-
-        return (memeKubPair, memePonderPair, hasSecondaryPool);
+        return LiquidityLib.getPoolInfo(launches[launchId]);
     }
 
-    /**
-     * @notice Retrieve launch-specific information.
-     * @param launchId Identifier of the launch.
-     * @return Launch details (name, symbol, etc.).
-     * @custom:slither-disable-next-line ignore-return
-     */
+    /// @notice Get basic information about a launch
+    /// @param launchId ID of the launch
+    /// @return tokenAddress Address of the launched token
+    /// @return name Token name
+    /// @return symbol Token symbol
+    /// @return imageURI Token image URI
+    /// @return kubRaised Amount of KUB raised
+    /// @return launched Whether launch is complete
+    /// @return lpUnlockTime When LP tokens can be withdrawn
     function getLaunchInfo(uint256 launchId)
     external
     view
-    returns (address, string memory, string memory, string memory, uint256, bool, uint256)
+    returns (
+        address tokenAddress,
+        string memory name,
+        string memory symbol,
+        string memory imageURI,
+        uint256 kubRaised,
+        bool launched,
+        uint256 lpUnlockTime
+    )
     {
-        return FiveFiveFiveViewLib.getLaunchInfo(launches[launchId]);
+        return LiquidityLib.getLaunchInfo(launches[launchId]);
     }
 
-    /**
-     * @notice Retrieve minimum requirements for a launch.
-     * @return Minimum contribution thresholds.
-     * @custom:slither-disable-next-line ignore-return
-     */
+    /// @notice Get minimum requirements for contributions and liquidity
+    /// @return minKub Minimum KUB contribution
+    /// @return minPonder Minimum PONDER contribution
+    /// @return minPoolLiquidity Minimum pool liquidity required
     function getMinimumRequirements()
     external
     pure
-    returns (uint256, uint256, uint256)
+    returns (
+        uint256 minKub,
+        uint256 minPonder,
+        uint256 minPoolLiquidity
+    )
     {
-        return FiveFiveFiveViewLib.getMinimumRequirements();
+        return LiquidityLib.getMinimumRequirements();
     }
 
-    /**
-     * @notice Retrieve remaining contribution requirements for a launch.
-     * @param launchId Identifier of the launch.
-     * @return Remaining amounts to be raised.
-     * @custom:slither-disable-next-line ignore-return
-     */
+    /// @notice Get remaining amounts that can be raised
+    /// @param launchId ID of the launch
+    /// @return remainingTotal Total remaining amount that can be raised
+    /// @return remainingPonderValue Remaining amount that can be raised in PONDER
     function getRemainingToRaise(uint256 launchId)
     external
     view
-    returns (uint256, uint256)
+    returns (
+        uint256 remainingTotal,
+        uint256 remainingPonderValue
+    )
     {
-        return FiveFiveFiveViewLib.getRemainingToRaise(launches[launchId]);
+        return LiquidityLib.getRemainingToRaise(launches[launchId]);
     }
 
-    /**
-     * @dev Internal helper for calculating the PONDER token value in KUB.
-     * @param amount Amount of PONDER tokens.
-     * @return Value in KUB.
-     */
+    /*//////////////////////////////////////////////////////////////
+                            INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculate KUB value of PONDER amount
+    /// @param amount Amount of PONDER to value
+    /// @return KUB value of PONDER amount
+    /// @dev Uses price oracle with validation checks
     function _getPonderValue(uint256 amount) internal view returns (uint256) {
         address ponderKubPair = FACTORY.getPair(address(PONDER), ROUTER.weth());
-        return FiveFiveFiveValidation.validatePonderPrice(
+        return SetupLib.validatePonderPrice(
             ponderKubPair,
             PRICE_ORACLE,
             address(PONDER),
@@ -316,6 +343,7 @@ contract FiveFiveFiveLauncher is
         );
     }
 
-    /// @notice Fallback function to accept KUB contributions.
+    /// @notice Accept KUB payments
+    /// @dev Required to receive KUB for liquidity
     receive() external payable {}
 }
