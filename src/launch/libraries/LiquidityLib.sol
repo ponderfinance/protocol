@@ -12,74 +12,21 @@ import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { LaunchTokenTypes } from "../types/LaunchTokenTypes.sol";
 
-
 /// @title LiquidityLib
 /// @author taayyohh
 /// @notice Library for liquidity management and view operations
-/// @dev Combines pool operations with view functions for optimized handling
+/// @dev Optimized for storage operations and gas efficiency
 library LiquidityLib {
     using SafeERC20 for PonderERC20;
+    using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
-    /*//////////////////////////////////////////////////////////////
-                            CONSTANTS
-    //////////////////////////////////////////////////////////////*/
-
-    uint256 private constant BASIS_POINTS = 10000;
-    uint256 private constant MIN_POOL_LIQUIDITY = 50 ether;
-    uint256 private constant TARGET_RAISE = 5555 ether;
-    uint256 private constant MAX_PONDER_PERCENT = 2000;
-    uint256 private constant LP_LOCK_PERIOD = 180 days;
-
-    // KUB Distribution
-    uint256 private constant KUB_TO_MEME_KUB_LP = 6000;    // 60%
-    uint256 private constant KUB_TO_PONDER_KUB_LP = 2000;  // 20%
-    uint256 private constant KUB_TO_MEME_PONDER_LP = 2000; // 20%
-
-    // PONDER Distribution
-    uint256 private constant PONDER_TO_MEME_PONDER = 8000; // 80%
-    uint256 private constant PONDER_TO_BURN = 2000;        // 20%
-
-    /*//////////////////////////////////////////////////////////////
-                            CUSTOM ERRORS
-    //////////////////////////////////////////////////////////////*/
-
-    error InsufficientPoolLiquidity();
-    error PriceOutOfBounds();
-    error ApprovalFailed();
-    error AlreadyLaunched();
-    error InsufficientLPTokens();
-
-    /*//////////////////////////////////////////////////////////////
-                            EVENTS
-    //////////////////////////////////////////////////////////////*/
-
-    event PonderPoolSkipped(
-        uint256 indexed launchId,
-        uint256 ponderAmount,
-        uint256 ponderValueInKub
-    );
-
+    event PonderPoolSkipped(uint256 indexed launchId, uint256 ponderAmount, uint256 ponderValueInKub);
     event PonderBurned(uint256 indexed launchId, uint256 amount);
-
-    event DualPoolsCreated(
-        uint256 indexed launchId,
-        address memeKubPair,
-        address memePonderPair,
-        uint256 kubLiquidity,
-        uint256 ponderLiquidity
-    );
-
-    event LaunchCompleted(
-        uint256 indexed launchId,
-        uint256 kubRaised,
-        uint256 ponderRaised
-    );
-
-    /*//////////////////////////////////////////////////////////////
-                        LAUNCH FINALIZATION
-    //////////////////////////////////////////////////////////////*/
+    event DualPoolsCreated(uint256 indexed launchId, address memeKubPair, address memePonderPair, uint256 kubLiquidity, uint256 ponderLiquidity);
+    event LaunchCompleted(uint256 indexed launchId, uint256 kubRaised, uint256 ponderRaised);
 
     /// @notice Finalizes a launch by creating pools and enabling trading
+    /// @dev Uses packed storage values and optimized operations
     function finalizeLaunch(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -88,15 +35,21 @@ library LiquidityLib {
         PonderToken ponder,
         PonderPriceOracle priceOracle
     ) external {
-        if (launch.base.launched) revert AlreadyLaunched();
-        if (launch.contributions.tokensDistributed + launch.allocation.tokensForLP > LaunchTokenTypes.TOTAL_SUPPLY) {
-            revert InsufficientLPTokens();
+        if (launch.base.launched) revert FiveFiveFiveLauncherTypes.AlreadyLaunched();
+
+        // Check total distribution using uint128 comparison
+        unchecked {
+        // Safe arithmetic: tokensDistributed and tokensForLP are uint128
+            if (uint128(launch.contributions.tokensDistributed) + launch.allocation.tokensForLP >
+                uint128(LaunchTokenTypes.TOTAL_SUPPLY)) {
+                revert FiveFiveFiveLauncherTypes.InsufficientLPTokens();
+            }
         }
 
         // Mark as launched immediately to prevent reentrancy
         launch.base.launched = true;
 
-        // Calculate pool amounts
+        // Calculate pool amounts using packed values
         FiveFiveFiveLauncherTypes.PoolConfig memory pools = calculatePoolAmounts(launch);
 
         // Create and validate KUB pool
@@ -104,26 +57,14 @@ library LiquidityLib {
 
         // Handle PONDER pool if needed
         if (launch.contributions.ponderCollected > 0) {
-            _handlePonderPool(
-                launch,
-                launchId,
-                pools,
-                factory,
-                router,
-                ponder,
-                priceOracle
-            );
+            _handlePonderPool(launch, launchId, pools, factory, router, ponder, priceOracle);
         }
 
         // Enable trading and finalize
         _enableTrading(launch, launchId);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                        VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Gets information about a specific contributor's participation
+    /// @notice Gets contributor information using packed values
     function getContributorInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address contributor
@@ -134,15 +75,16 @@ library LiquidityLib {
         uint256 tokensReceived
     ) {
         FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
+        // Unpack uint128 values to uint256 for return
         return (
-            info.kubContributed,
-            info.ponderContributed,
-            info.ponderValue,
-            info.tokensReceived
+            uint256(info.kubContributed),
+            uint256(info.ponderContributed),
+            uint256(info.ponderValue),
+            uint256(info.tokensReceived)
         );
     }
 
-    /// @notice Gets overall contribution information for a launch
+    /// @notice Gets overall contribution information
     function getContributionInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view returns (
@@ -151,12 +93,14 @@ library LiquidityLib {
         uint256 ponderValueCollected,
         uint256 totalValue
     ) {
-        return (
-            launch.contributions.kubCollected,
-            launch.contributions.ponderCollected,
-            launch.contributions.ponderValueCollected,
-            launch.contributions.kubCollected + launch.contributions.ponderValueCollected
-        );
+        kubCollected = launch.contributions.kubCollected;
+        ponderCollected = launch.contributions.ponderCollected;
+        ponderValueCollected = launch.contributions.ponderValueCollected;
+
+        unchecked {
+        // Safe math: totalValue cannot overflow as contributions are limited
+            totalValue = kubCollected + ponderValueCollected;
+        }
     }
 
     /// @notice Gets pool information and checks pool state
@@ -174,7 +118,7 @@ library LiquidityLib {
         );
     }
 
-    /// @notice Gets basic information about a launch
+    /// @notice Gets basic launch information with packed values
     function getLaunchInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view returns (
@@ -193,20 +137,20 @@ library LiquidityLib {
             launch.base.imageURI,
             launch.contributions.kubCollected,
             launch.base.launched,
-            launch.base.lpUnlockTime
+            uint256(launch.base.lpUnlockTime)  // Unpack uint40 to uint256
         );
     }
 
-    /// @notice Gets minimum requirements for contributions and liquidity
+    /// @notice Gets minimum requirements
     function getMinimumRequirements() external pure returns (
         uint256 minKub,
         uint256 minPonder,
         uint256 minPoolLiquidity
     ) {
         return (
-            0.01 ether,    // MIN_KUB_CONTRIBUTION
-            0.1 ether,     // MIN_PONDER_CONTRIBUTION
-            MIN_POOL_LIQUIDITY
+            FiveFiveFiveLauncherTypes.MIN_KUB_CONTRIBUTION,
+            FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION,
+            FiveFiveFiveLauncherTypes.MIN_POOL_LIQUIDITY
         );
     }
 
@@ -217,13 +161,18 @@ library LiquidityLib {
         uint256 remainingTotal,
         uint256 remainingPonderValue
     ) {
-        uint256 total = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
-        remainingTotal = total >= TARGET_RAISE ? 0 : TARGET_RAISE - total;
+        unchecked {
+        // Safe math: contributions are limited by TARGET_RAISE
+            uint256 total = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
+            remainingTotal = total >= FiveFiveFiveLauncherTypes.TARGET_RAISE ?
+                0 : FiveFiveFiveLauncherTypes.TARGET_RAISE - total;
 
-        uint256 maxPonderValue = (TARGET_RAISE * MAX_PONDER_PERCENT) / BASIS_POINTS;
-        uint256 currentPonderValue = launch.contributions.ponderValueCollected;
-        remainingPonderValue = currentPonderValue >= maxPonderValue ?
-            0 : maxPonderValue - currentPonderValue;
+            uint256 maxPonderValue = (FiveFiveFiveLauncherTypes.TARGET_RAISE *
+                FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) / FiveFiveFiveLauncherTypes.BASIS_POINTS;
+            uint256 currentPonderValue = launch.contributions.ponderValueCollected;
+            remainingPonderValue = currentPonderValue >= maxPonderValue ?
+                0 : maxPonderValue - currentPonderValue;
+        }
 
         return (
             remainingTotal,
@@ -231,21 +180,22 @@ library LiquidityLib {
         );
     }
 
-    /*//////////////////////////////////////////////////////////////
-                        INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @dev Calculates amounts for pool creation
+    /// @dev Calculates amounts for pool creation using packed values
     function calculatePoolAmounts(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) internal view returns (FiveFiveFiveLauncherTypes.PoolConfig memory pools) {
-        pools.kubAmount = (launch.contributions.kubCollected * KUB_TO_MEME_KUB_LP) / BASIS_POINTS;
-        pools.ponderAmount = (launch.contributions.ponderCollected * PONDER_TO_MEME_PONDER) / BASIS_POINTS;
-        pools.tokenAmount = launch.allocation.tokensForLP / 2;
+        unchecked {
+        // Safe math: all values are bounded by constants
+            pools.kubAmount = (launch.contributions.kubCollected *
+                uint16(FiveFiveFiveLauncherTypes.KUB_TO_MEME_KUB_LP)) / FiveFiveFiveLauncherTypes.BASIS_POINTS;
+            pools.ponderAmount = (launch.contributions.ponderCollected *
+                uint16(FiveFiveFiveLauncherTypes.PONDER_TO_MEME_PONDER)) / FiveFiveFiveLauncherTypes.BASIS_POINTS;
+            pools.tokenAmount = uint128(launch.allocation.tokensForLP) / 2;
+        }
         return pools;
     }
 
-    /// @dev Creates KUB pool and adds initial liquidity
+    /// @dev Creates KUB pool with optimized operations
     function _createKubPool(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.PoolConfig memory pools,
@@ -259,20 +209,20 @@ library LiquidityLib {
         _validatePoolLiquidity(pools.kubAmount);
 
         if (!LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount)) {
-            revert ApprovalFailed();
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
         }
 
         router.addLiquidityETH{value: pools.kubAmount}(
             launch.base.tokenAddress,
             pools.tokenAmount,
-            pools.tokenAmount * 995 / 1000, // 0.5% slippage
-            pools.kubAmount * 995 / 1000,   // 0.5% slippage
+            (pools.tokenAmount * 995) / 1000, // 0.5% slippage
+            (pools.kubAmount * 995) / 1000,   // 0.5% slippage
             address(this),
             block.timestamp + 3 minutes
         );
     }
 
-    /// @dev Handles PONDER pool creation and initialization
+    /// @dev Handles PONDER pool creation with optimized value handling
     function _handlePonderPool(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -282,15 +232,9 @@ library LiquidityLib {
         PonderToken ponder,
         PonderPriceOracle priceOracle
     ) private {
-        uint256 ponderPoolValue = _getPonderValue(
-            pools.ponderAmount,
-            factory,
-            router,
-            ponder,
-            priceOracle
-        );
+        uint256 ponderPoolValue = _getPonderValue(pools.ponderAmount, factory, router, ponder, priceOracle);
 
-        if (ponderPoolValue >= MIN_POOL_LIQUIDITY) {
+        if (ponderPoolValue >= FiveFiveFiveLauncherTypes.MIN_POOL_LIQUIDITY) {
             _createPonderPool(launch, pools, factory, router, ponder);
 
             emit DualPoolsCreated(
@@ -308,7 +252,7 @@ library LiquidityLib {
         }
     }
 
-    /// @dev Creates PONDER pool and adds initial liquidity
+    /// @dev Creates PONDER pool with optimized operations
     function _createPonderPool(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.PoolConfig memory pools,
@@ -316,17 +260,22 @@ library LiquidityLib {
         IPonderRouter router,
         PonderToken ponder
     ) private {
-        uint256 ponderToBurn = (launch.contributions.ponderCollected * PONDER_TO_BURN) / BASIS_POINTS;
+        uint256 ponderToBurn;
+        unchecked {
+        // Safe math: bounded by constant percentages
+            ponderToBurn = (launch.contributions.ponderCollected *
+                uint16(FiveFiveFiveLauncherTypes.PONDER_TO_BURN)) / FiveFiveFiveLauncherTypes.BASIS_POINTS;
+        }
 
         address pair = _createOrGetPair(factory, launch.base.tokenAddress, address(ponder));
         _validatePairState(pair);
         launch.pools.memePonderPair = pair;
 
         if (!LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount)) {
-            revert ApprovalFailed();
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
         }
         if (!ponder.approve(address(router), pools.ponderAmount)) {
-            revert ApprovalFailed();
+            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
         }
 
         router.addLiquidity(
@@ -334,8 +283,8 @@ library LiquidityLib {
             address(ponder),
             pools.tokenAmount,
             pools.ponderAmount,
-            pools.tokenAmount * 995 / 1000, // 0.5% slippage
-            pools.ponderAmount * 995 / 1000, // 0.5% slippage
+            (pools.tokenAmount * 995) / 1000, // 0.5% slippage
+            (pools.ponderAmount * 995) / 1000, // 0.5% slippage
             address(this),
             block.timestamp + 3 minutes
         );
@@ -353,23 +302,27 @@ library LiquidityLib {
         return pair == address(0) ? factory.createPair(tokenA, tokenB) : pair;
     }
 
-    /// @dev Validates pair state for proper initialization
+    /// @dev Validates pair state
     function _validatePairState(address pair) private view {
         (uint112 r0, uint112 r1,) = PonderPair(pair).getReserves();
-        if (r0 != 0 || r1 != 0) revert PriceOutOfBounds();
+        if (r0 != 0 || r1 != 0) revert FiveFiveFiveLauncherTypes.PriceOutOfBounds();
     }
 
     /// @dev Validates minimum liquidity requirements
     function _validatePoolLiquidity(uint256 amount) private pure {
-        if (amount < MIN_POOL_LIQUIDITY) revert InsufficientPoolLiquidity();
+        if (amount < FiveFiveFiveLauncherTypes.MIN_POOL_LIQUIDITY)
+            revert FiveFiveFiveLauncherTypes.InsufficientPoolLiquidity();
     }
 
-    /// @dev Enables trading and sets final launch state
+    /// @dev Enables trading with optimized timestamp handling
     function _enableTrading(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId
     ) private {
-        launch.base.lpUnlockTime = block.timestamp + LP_LOCK_PERIOD;
+        unchecked {
+        // Safe math: timestamp addition is bounded
+            launch.base.lpUnlockTime = uint40(block.timestamp + FiveFiveFiveLauncherTypes.LP_LOCK_PERIOD);
+        }
 
         LaunchToken token = LaunchToken(launch.base.tokenAddress);
         token.setPairs(launch.pools.memeKubPair, launch.pools.memePonderPair);
@@ -382,7 +335,7 @@ library LiquidityLib {
         );
     }
 
-/// @dev Gets KUB value of PONDER amount
+    /// @dev Gets KUB value of PONDER amount
     function _getPonderValue(
         uint256 amount,
         IPonderFactory factory,

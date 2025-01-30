@@ -22,7 +22,7 @@ contract FiveFiveFiveLauncher is
     FiveFiveFiveLauncherStorage,
     ReentrancyGuard
 {
-    using FiveFiveFiveLauncherTypes for *;
+    using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
     using SetupLib for FiveFiveFiveLauncherTypes.LaunchInfo;
     using FundsLib for FiveFiveFiveLauncherTypes.LaunchInfo;
     using LiquidityLib for FiveFiveFiveLauncherTypes.LaunchInfo;
@@ -42,7 +42,6 @@ contract FiveFiveFiveLauncher is
 
     /// @notice Oracle for PONDER price data
     PonderPriceOracle public immutable PRICE_ORACLE;
-
 
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
@@ -235,10 +234,6 @@ contract FiveFiveFiveLauncher is
 
     /// @notice Get overall contribution information for a launch
     /// @param launchId ID of the launch
-    /// @return kubCollected Total KUB collected
-    /// @return ponderCollected Total PONDER collected
-    /// @return ponderValueCollected KUB value of collected PONDER
-    /// @return totalValue Total value collected (KUB + PONDER value)
     function getContributionInfo(uint256 launchId)
     external
     view
@@ -254,9 +249,6 @@ contract FiveFiveFiveLauncher is
 
     /// @notice Get pool information for a launch
     /// @param launchId ID of the launch
-    /// @return memeKubPair Address of token-KUB pool
-    /// @return memePonderPair Address of token-PONDER pool
-    /// @return hasSecondaryPool Whether secondary PONDER pool exists
     function getPoolInfo(uint256 launchId)
     external
     view
@@ -271,13 +263,6 @@ contract FiveFiveFiveLauncher is
 
     /// @notice Get basic information about a launch
     /// @param launchId ID of the launch
-    /// @return tokenAddress Address of the launched token
-    /// @return name Token name
-    /// @return symbol Token symbol
-    /// @return imageURI Token image URI
-    /// @return kubRaised Amount of KUB raised
-    /// @return launched Whether launch is complete
-    /// @return lpUnlockTime When LP tokens can be withdrawn
     function getLaunchInfo(uint256 launchId)
     external
     view
@@ -295,9 +280,6 @@ contract FiveFiveFiveLauncher is
     }
 
     /// @notice Get minimum requirements for contributions and liquidity
-    /// @return minKub Minimum KUB contribution
-    /// @return minPonder Minimum PONDER contribution
-    /// @return minPoolLiquidity Minimum pool liquidity required
     function getMinimumRequirements()
     external
     pure
@@ -312,8 +294,6 @@ contract FiveFiveFiveLauncher is
 
     /// @notice Get remaining amounts that can be raised
     /// @param launchId ID of the launch
-    /// @return remainingTotal Total remaining amount that can be raised
-    /// @return remainingPonderValue Remaining amount that can be raised in PONDER
     function getRemainingToRaise(uint256 launchId)
     external
     view

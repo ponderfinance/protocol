@@ -15,39 +15,10 @@ import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.so
 /// @notice Library for launch initialization and validation
 /// @dev Combines initialization and validation logic with optimized storage access
 library SetupLib {
-    /*//////////////////////////////////////////////////////////////
-                            CONSTANTS
-    //////////////////////////////////////////////////////////////*/
-
-    uint256 private constant LAUNCH_DURATION = 7 days;
-    uint256 private constant PRICE_STALENESS_THRESHOLD = 2 hours;
-    uint256 private constant BASIS_POINTS = 10000;
-    uint256 private constant CREATOR_PERCENT = 1000;      // 10%
-    uint256 private constant LP_PERCENT = 2000;           // 20%
-    uint256 private constant CONTRIBUTOR_PERCENT = 7000;  // 70%
-
-    /*//////////////////////////////////////////////////////////////
-                            CUSTOM ERRORS
-    //////////////////////////////////////////////////////////////*/
-
-    error LaunchNotFound();
-    error AlreadyLaunched();
-    error ImageRequired();
-    error InvalidTokenParams();
-    error TokenNameExists();
-    error TokenSymbolExists();
-    error LaunchDeadlinePassed();
-    error LaunchBeingFinalized();
-    error StalePrice();
-    error ExcessivePriceDeviation();
-    error InsufficientPriceHistory();
-
-    /*//////////////////////////////////////////////////////////////
-                        LAUNCH INITIALIZATION
-    //////////////////////////////////////////////////////////////*/
+    using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
     /// @notice Initializes a new token launch with validated parameters
-    /// @dev Combines previous initializeLaunch with inline validation
+    /// @dev Storage optimized initialization with packed values
     function initializeLaunch(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.LaunchParams calldata params,
@@ -57,7 +28,7 @@ library SetupLib {
         PonderToken ponder,
         address caller
     ) external returns (address token) {
-        // Create token with optimized parameters
+        // Create token
         LaunchToken launchToken = new LaunchToken(
             params.name,
             params.symbol,
@@ -68,44 +39,34 @@ library SetupLib {
         );
         token = address(launchToken);
 
-        // Set base info with single storage write
+        // Pack base info into minimal storage writes
         _setBaseInfo(launch, token, params, creator);
 
-        // Calculate and set allocations
+        // Pack allocation values and set in single write
         _setAllocations(launch, launchToken, creator);
 
-        // Initialize contribution tracking with minimal storage operations
+        // Initialize state with packed values
         _initializeState(launch);
 
         return token;
     }
 
     /// @notice Validates token parameters and checks for uniqueness
-    /// @dev Validates name and symbol format and uniqueness
+    /// @dev Uses calldata for string params to save gas
     function validateTokenParams(
-        string memory name,
-        string memory symbol,
+        string calldata name,
+        string calldata symbol,
         mapping(string => bool) storage usedNames,
         mapping(string => bool) storage usedSymbols
     ) external view {
-        // Check image URI
         bytes memory nameBytes = bytes(name);
         bytes memory symbolBytes = bytes(symbol);
 
-        // Length checks first
         if(nameBytes.length == 0 || nameBytes.length > 32) {
-            revert InvalidTokenParams();
+            revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
         }
         if(symbolBytes.length == 0 || symbolBytes.length > 8) {
-            revert InvalidTokenParams();
-        }
-
-        // Uniqueness checks
-        if(usedNames[name]) {
-            revert TokenNameExists();
-        }
-        if(usedSymbols[symbol]) {
-            revert TokenSymbolExists();
+            revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
         }
 
         // Name character validation
@@ -119,7 +80,7 @@ library SetupLib {
                 char == 0x2D || // -
                 char == 0x5F    // _
             )) {
-                revert InvalidTokenParams();
+                revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
             }
         }
 
@@ -131,9 +92,12 @@ library SetupLib {
                 (char >= 0x41 && char <= 0x5A) || // A-Z
                 (char >= 0x61 && char <= 0x7A)    // a-z
             )) {
-                revert InvalidTokenParams();
+                revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
             }
         }
+
+        if(usedNames[name]) revert FiveFiveFiveLauncherTypes.TokenNameExists();
+        if(usedSymbols[symbol]) revert FiveFiveFiveLauncherTypes.TokenSymbolExists();
     }
 
     /// @notice Validates PONDER price data from oracle
@@ -147,9 +111,8 @@ library SetupLib {
         // Only need lastUpdateTime from getReserves for staleness check
         (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
 
-        // Check price staleness
-        if (block.timestamp - lastUpdateTime > PRICE_STALENESS_THRESHOLD) {
-            revert StalePrice();
+        if (block.timestamp - lastUpdateTime > FiveFiveFiveLauncherTypes.PRICE_STALENESS_THRESHOLD) {
+            revert FiveFiveFiveLauncherTypes.StalePrice();
         }
 
         // Get spot price
@@ -168,51 +131,58 @@ library SetupLib {
         );
 
         if (twapPrice == 0) {
-            revert InsufficientPriceHistory();
+            revert FiveFiveFiveLauncherTypes.InsufficientPriceHistory();
         }
 
         // Verify price is within acceptable bounds
-        uint256 maxDeviation = (twapPrice * 110) / 100; // 10% max deviation
-        uint256 minDeviation = (twapPrice * 90) / 100;  // 10% min deviation
+        uint256 maxDeviation = (twapPrice * 110) / 100;
+        uint256 minDeviation = (twapPrice * 90) / 100;
 
         if (spotPrice > maxDeviation || spotPrice < minDeviation) {
-            revert ExcessivePriceDeviation();
+            revert FiveFiveFiveLauncherTypes.ExcessivePriceDeviation();
         }
 
         return spotPrice;
     }
 
     /// @notice Validates the current launch state
-    /// @dev Checks for active, non-expired launch
+    /// @dev Uses packed boolean checks
     function validateLaunchState(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view {
-        if (launch.base.tokenAddress == address(0)) revert LaunchNotFound();
-        if (launch.base.launched) revert AlreadyLaunched();
-        if (block.timestamp > launch.base.launchDeadline) revert LaunchDeadlinePassed();
-        if (launch.base.isFinalizingLaunch) revert LaunchBeingFinalized();
+        if (launch.base.tokenAddress == address(0)) revert FiveFiveFiveLauncherTypes.LaunchNotFound();
+        if (launch.base.launched) revert FiveFiveFiveLauncherTypes.AlreadyLaunched();
+        if (block.timestamp > launch.base.launchDeadline) revert FiveFiveFiveLauncherTypes.LaunchDeadlinePassed();
+        if (launch.base.isFinalizingLaunch) revert FiveFiveFiveLauncherTypes.LaunchBeingFinalized();
     }
 
-    /*//////////////////////////////////////////////////////////////
-                        INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @dev Sets base launch information with optimized storage access
+    /// @dev Sets base info with optimized storage packing
     function _setBaseInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address token,
         FiveFiveFiveLauncherTypes.LaunchParams calldata params,
         address creator
     ) private {
+        // Pack addresses into first slot
         launch.base.tokenAddress = token;
+        launch.base.creator = creator;
+
+        // Pack timestamps into uint40s in second slot
+        launch.base.launchDeadline = uint40(block.timestamp + FiveFiveFiveLauncherTypes.LAUNCH_DURATION);
+        launch.base.lpUnlockTime = 0;
+
+        // Pack booleans together in same slot
+        launch.base.launched = false;
+        launch.base.cancelled = false;
+        launch.base.isFinalizingLaunch = false;
+
+        // Set strings in separate slots (no packing possible)
         launch.base.name = params.name;
         launch.base.symbol = params.symbol;
         launch.base.imageURI = params.imageURI;
-        launch.base.creator = creator;
-        launch.base.launchDeadline = block.timestamp + LAUNCH_DURATION;
     }
 
-    /// @dev Sets token allocations with optimized calculations
+    /// @dev Sets allocations with proper uint256 calculations and uint128 casting
     function _setAllocations(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         LaunchToken launchToken,
@@ -220,30 +190,37 @@ library SetupLib {
     ) private {
         uint256 totalSupply = LaunchTokenTypes.TOTAL_SUPPLY;
 
-        // Calculate allocations using constants
-        launch.allocation.tokensForContributors = (totalSupply * CONTRIBUTOR_PERCENT) / BASIS_POINTS;
-        launch.allocation.tokensForLP = (totalSupply * LP_PERCENT) / BASIS_POINTS;
+        // Calculate allocations using uint256 for precision, then safely cast to uint128
+        uint256 contributorTokens = (totalSupply * FiveFiveFiveLauncherTypes.CONTRIBUTOR_PERCENT) /
+                        FiveFiveFiveLauncherTypes.BASIS_POINTS;
+        uint256 lpTokens = (totalSupply * FiveFiveFiveLauncherTypes.LP_PERCENT) /
+                        FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
-        // Set creator allocation
-        uint256 creatorTokens = (totalSupply * CREATOR_PERCENT) / BASIS_POINTS;
+        // Verify the values fit in uint128 before casting
+        require(contributorTokens <= type(uint128).max, "Contributor tokens overflow");
+        require(lpTokens <= type(uint128).max, "LP tokens overflow");
+
+        // Set the packed values
+        launch.allocation.tokensForContributors = uint128(contributorTokens);
+        launch.allocation.tokensForLP = uint128(lpTokens);
+
+        // Calculate creator allocation
+        uint256 creatorTokens = (totalSupply * FiveFiveFiveLauncherTypes.CREATOR_PERCENT) /
+                        FiveFiveFiveLauncherTypes.BASIS_POINTS;
         launchToken.setupVesting(creator, creatorTokens);
     }
 
-    /// @dev Initializes launch state with minimal storage operations
-    function _initializeState(FiveFiveFiveLauncherTypes.LaunchInfo storage launch) private {
-        // Single storage write for base flags
-        launch.base.launched = false;
-        launch.base.cancelled = false;
-        launch.base.isFinalizingLaunch = false;
-        launch.base.lpUnlockTime = 0;
-
-        // Single storage write for contributions
+    /// @dev Initializes state with packed values and minimal storage writes
+    function _initializeState(
+        FiveFiveFiveLauncherTypes.LaunchInfo storage launch
+    ) private {
+        // Clear contributions in single write with zero values
         launch.contributions.kubCollected = 0;
         launch.contributions.ponderCollected = 0;
         launch.contributions.ponderValueCollected = 0;
         launch.contributions.tokensDistributed = 0;
 
-        // Single storage write for pool addresses
+        // Clear pool addresses in single write
         launch.pools.memeKubPair = address(0);
         launch.pools.memePonderPair = address(0);
     }
