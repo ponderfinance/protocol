@@ -13,12 +13,12 @@ export const pondermasterchefAbi = [
         "internalType": "contract IPonderFactory"
       },
       {
-        "name": "_teamReserve",
+        "name": "_teamReserve_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_ponderPerSecond",
+        "name": "_ponderPerSecond_",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -27,81 +27,36 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
-    "name": "BASE_MULTIPLIER",
+    "name": "FACTORY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract IPonderFactory"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "BASIS_POINTS",
+    "name": "PONDER",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract PonderToken"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "BOOST_THRESHOLD_PERCENT",
+    "name": "acceptOwnership",
     "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_ALLOC_POINT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_EXTRA_BOOST_PERCENT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_BOOST_MULTIPLIER",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -133,6 +88,32 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "baseMultiplier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "basisPoints",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "boostStake",
     "inputs": [
       {
@@ -151,6 +132,19 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "boostThresholdPercent",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "boostUnstake",
     "inputs": [
       {
@@ -166,35 +160,6 @@ export const pondermasterchefAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "calculateBoostMultiplier",
-    "inputs": [
-      {
-        "name": "ponderStaked",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "lpAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxBoost",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -226,19 +191,6 @@ export const pondermasterchefAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "factory",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IPonderFactory"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -279,27 +231,46 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
-    "name": "massUpdatePools",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "owner",
+    "name": "maxAllocPoint",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
-    "name": "pendingOwner",
+    "name": "maxExtraBoostPercent",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "minBoostMultiplier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "owner",
     "inputs": [],
     "outputs": [
       {
@@ -327,22 +298,9 @@ export const pondermasterchefAbi = [
     ],
     "outputs": [
       {
-        "name": "pending",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "ponder",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract PonderToken"
       }
     ],
     "stateMutability": "view"
@@ -356,60 +314,6 @@ export const pondermasterchefAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "poolInfo",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "lpToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "allocPoint",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "lastRewardTime",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "accPonderPerShare",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "totalStaked",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "totalWeightedShares",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "depositFeeBP",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "boostMultiplier",
-        "type": "uint16",
-        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"
@@ -484,7 +388,7 @@ export const pondermasterchefAbi = [
     "name": "setPonderPerSecond",
     "inputs": [
       {
-        "name": "_ponderPerSecond",
+        "name": "_newPonderPerSecond",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -497,7 +401,7 @@ export const pondermasterchefAbi = [
     "name": "setTeamReserve",
     "inputs": [
       {
-        "name": "_teamReserve",
+        "name": "_newTeamReserve",
         "type": "address",
         "internalType": "address"
       }
@@ -546,6 +450,19 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "updatePool",
     "inputs": [
       {
@@ -562,12 +479,12 @@ export const pondermasterchefAbi = [
     "name": "userInfo",
     "inputs": [
       {
-        "name": "",
+        "name": "_pid",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "_user",
         "type": "address",
         "internalType": "address"
       }
@@ -710,6 +627,44 @@ export const pondermasterchefAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferInitiated",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -913,6 +868,16 @@ export const pondermasterchefAbi = [
   {
     "type": "error",
     "name": "InvalidPool",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoTokensTransferred",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
   {

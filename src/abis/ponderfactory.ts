@@ -3,17 +3,17 @@ export const ponderfactoryAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_feeToSetter",
+        "name": "feeToSetter_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_launcher",
+        "name": "launcher_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_ponder",
+        "name": "ponder_",
         "type": "address",
         "internalType": "address"
       }
@@ -22,36 +22,10 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "function",
-    "name": "INIT_CODE_PAIR_HASH",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "LAUNCHER_TIMELOCK",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "allPairs",
     "inputs": [
       {
-        "name": "",
+        "name": "index",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -140,12 +114,12 @@ export const ponderfactoryAbi = [
     "name": "getPair",
     "inputs": [
       {
-        "name": "",
+        "name": "tokenA",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "tokenB",
         "type": "address",
         "internalType": "address"
       }
@@ -187,19 +161,6 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "function",
-    "name": "migrator",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "pendingLauncher",
     "inputs": [],
     "outputs": [
@@ -229,7 +190,7 @@ export const ponderfactoryAbi = [
     "name": "setFeeTo",
     "inputs": [
       {
-        "name": "_feeTo",
+        "name": "newFeeTo",
         "type": "address",
         "internalType": "address"
       }
@@ -242,7 +203,7 @@ export const ponderfactoryAbi = [
     "name": "setFeeToSetter",
     "inputs": [
       {
-        "name": "_feeToSetter",
+        "name": "newFeeToSetter",
         "type": "address",
         "internalType": "address"
       }
@@ -255,20 +216,7 @@ export const ponderfactoryAbi = [
     "name": "setLauncher",
     "inputs": [
       {
-        "name": "_launcher",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setMigrator",
-    "inputs": [
-      {
-        "name": "_migrator",
+        "name": "newLauncher",
         "type": "address",
         "internalType": "address"
       }
@@ -281,13 +229,32 @@ export const ponderfactoryAbi = [
     "name": "setPonder",
     "inputs": [
       {
-        "name": "_ponder",
+        "name": "newPonder",
         "type": "address",
         "internalType": "address"
       }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "FeeToSetterUpdated",
+    "inputs": [
+      {
+        "name": "oldFeeToSetter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newFeeToSetter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -350,7 +317,7 @@ export const ponderfactoryAbi = [
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "pairIndex",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

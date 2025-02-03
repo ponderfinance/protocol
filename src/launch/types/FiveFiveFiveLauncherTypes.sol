@@ -70,6 +70,8 @@ library FiveFiveFiveLauncherTypes {
     error InsufficientBalance();
     error NoContributionToRefund();
     error RefundFailed();
+    error ContributorTokensOverflow();
+    error LPTokensOverflow();
 
     /*//////////////////////////////////////////////////////////////
                             STRUCTS

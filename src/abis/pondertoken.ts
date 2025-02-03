@@ -3,61 +3,22 @@ export const pondertokenAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_teamReserve",
+        "name": "teamReserveAddr",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_marketing",
+        "name": "marketingAddr",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_launcher",
+        "name": "launcherAddr",
         "type": "address",
         "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "DOMAIN_SEPARATOR",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAXIMUM_SUPPLY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MINTING_END",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -68,32 +29,6 @@ export const pondertokenAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "TEAM_ALLOCATION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "VESTING_DURATION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -220,6 +155,19 @@ export const pondertokenAbi = [
   },
   {
     "type": "function",
+    "name": "domainSeparator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getReservedForTeam",
     "inputs": [],
     "outputs": [
@@ -259,6 +207,19 @@ export const pondertokenAbi = [
   },
   {
     "type": "function",
+    "name": "maximumSupply",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "mint",
     "inputs": [
       {
@@ -287,6 +248,19 @@ export const pondertokenAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "mintingEnd",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -394,7 +368,7 @@ export const pondertokenAbi = [
     "name": "setLauncher",
     "inputs": [
       {
-        "name": "_launcher",
+        "name": "launcher_",
         "type": "address",
         "internalType": "address"
       }
@@ -407,7 +381,7 @@ export const pondertokenAbi = [
     "name": "setMinter",
     "inputs": [
       {
-        "name": "_minter",
+        "name": "minter_",
         "type": "address",
         "internalType": "address"
       }
@@ -427,6 +401,19 @@ export const pondertokenAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "teamAllocation",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -558,6 +545,19 @@ export const pondertokenAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "vestingDuration",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "event",
@@ -847,6 +847,16 @@ export const pondertokenAbi = [
   },
   {
     "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MintingDisabled",
     "inputs": []
   },
@@ -862,12 +872,12 @@ export const pondertokenAbi = [
   },
   {
     "type": "error",
-    "name": "SupplyExceeded",
+    "name": "PermitExpired",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "VestingNotEnded",
+    "name": "SupplyExceeded",
     "inputs": []
   },
   {

@@ -3,7 +3,7 @@ export const kkubunwrapperAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_KKUB",
+        "name": "_kkub",
         "type": "address",
         "internalType": "address"
       }
@@ -23,45 +23,6 @@ export const kkubunwrapperAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_WITHDRAWAL_AMOUNT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "REQUIRED_KYC_LEVEL",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "WITHDRAWAL_DELAY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -89,6 +50,19 @@ export const kkubunwrapperAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "kkub",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -307,6 +281,28 @@ export const kkubunwrapperAbi = [
   },
   {
     "type": "error",
+    "name": "AddressEmptyCode",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AddressInsufficientBalance",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "BlacklistedAddress",
     "inputs": []
   },
@@ -322,24 +318,8 @@ export const kkubunwrapperAbi = [
   },
   {
     "type": "error",
-    "name": "FailedCall",
+    "name": "FailedInnerCall",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientBalance",
-    "inputs": [
-      {
-        "name": "balance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "needed",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
   },
   {
     "type": "error",
@@ -349,6 +329,11 @@ export const kkubunwrapperAbi = [
   {
     "type": "error",
     "name": "InsufficientKYCLevel",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidNewOwner",
     "inputs": []
   },
   {
@@ -397,6 +382,11 @@ export const kkubunwrapperAbi = [
   {
     "type": "error",
     "name": "WithdrawalTooFrequent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddressNotAllowed",
     "inputs": []
   },
   {

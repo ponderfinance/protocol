@@ -22,7 +22,13 @@ library LiquidityLib {
 
     event PonderPoolSkipped(uint256 indexed launchId, uint256 ponderAmount, uint256 ponderValueInKub);
     event PonderBurned(uint256 indexed launchId, uint256 amount);
-    event DualPoolsCreated(uint256 indexed launchId, address memeKubPair, address memePonderPair, uint256 kubLiquidity, uint256 ponderLiquidity);
+    event DualPoolsCreated(
+        uint256 indexed launchId,
+        address memeKubPair,
+        address memePonderPair,
+        uint256 kubLiquidity,
+        uint256 ponderLiquidity
+    );
     event LaunchCompleted(uint256 indexed launchId, uint256 kubRaised, uint256 ponderRaised);
 
     /// @notice Finalizes a launch by creating pools and enabling trading

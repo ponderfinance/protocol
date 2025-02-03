@@ -196,9 +196,9 @@ library SetupLib {
         uint256 lpTokens = (totalSupply * FiveFiveFiveLauncherTypes.LP_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
-        // Verify the values fit in uint128 before casting
-        require(contributorTokens <= type(uint128).max, "Contributor tokens overflow");
-        require(lpTokens <= type(uint128).max, "LP tokens overflow");
+        // Instead of require() with a string, we use custom errors
+        if (contributorTokens > type(uint128).max) revert FiveFiveFiveLauncherTypes.ContributorTokensOverflow();
+        if (lpTokens > type(uint128).max) revert FiveFiveFiveLauncherTypes.LPTokensOverflow();
 
         // Set the packed values
         launch.allocation.tokensForContributors = uint128(contributorTokens);

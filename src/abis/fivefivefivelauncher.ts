@@ -36,221 +36,52 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "function",
-    "name": "BASIS_POINTS",
+    "name": "FACTORY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract IPonderFactory"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "CONTRIBUTOR_PERCENT",
+    "name": "PONDER",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract PonderToken"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "CREATOR_PERCENT",
+    "name": "PRICE_ORACLE",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract PonderPriceOracle"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "KUB_TO_MEME_KUB_LP",
+    "name": "ROUTER",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "KUB_TO_MEME_PONDER_LP",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "KUB_TO_PONDER_KUB_LP",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "LAUNCH_DURATION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "LP_LOCK_PERIOD",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "LP_PERCENT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_PONDER_PERCENT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_KUB_CONTRIBUTION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_PONDER_CONTRIBUTION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_POOL_LIQUIDITY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PONDER_TO_BURN",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PONDER_TO_MEME_PONDER",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PRICE_STALENESS_THRESHOLD",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "TARGET_RAISE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract IPonderRouter"
       }
     ],
     "stateMutability": "view"
@@ -319,7 +150,7 @@ export const fivefivefivelauncherAbi = [
       {
         "name": "params",
         "type": "tuple",
-        "internalType": "struct FiveFiveFiveLauncher.LaunchParams",
+        "internalType": "struct FiveFiveFiveLauncherTypes.LaunchParams",
         "components": [
           {
             "name": "name",
@@ -347,19 +178,6 @@ export const fivefivefivelauncherAbi = [
       }
     ],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "factory",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IPonderFactory"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -599,12 +417,42 @@ export const fivefivefivelauncherAbi = [
       {
         "name": "base",
         "type": "tuple",
-        "internalType": "struct FiveFiveFiveLauncher.LaunchBaseInfo",
+        "internalType": "struct FiveFiveFiveLauncherTypes.LaunchBaseInfo",
         "components": [
           {
             "name": "tokenAddress",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "creator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "lpUnlockTime",
+            "type": "uint40",
+            "internalType": "uint40"
+          },
+          {
+            "name": "launchDeadline",
+            "type": "uint40",
+            "internalType": "uint40"
+          },
+          {
+            "name": "launched",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "cancelled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "isFinalizingLaunch",
+            "type": "bool",
+            "internalType": "bool"
           },
           {
             "name": "name",
@@ -620,43 +468,13 @@ export const fivefivefivelauncherAbi = [
             "name": "imageURI",
             "type": "string",
             "internalType": "string"
-          },
-          {
-            "name": "launched",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "creator",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "lpUnlockTime",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "launchDeadline",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "cancelled",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "isFinalizingLaunch",
-            "type": "bool",
-            "internalType": "bool"
           }
         ]
       },
       {
         "name": "contributions",
         "type": "tuple",
-        "internalType": "struct FiveFiveFiveLauncher.ContributionState",
+        "internalType": "struct FiveFiveFiveLauncherTypes.ContributionState",
         "components": [
           {
             "name": "kubCollected",
@@ -683,24 +501,24 @@ export const fivefivefivelauncherAbi = [
       {
         "name": "allocation",
         "type": "tuple",
-        "internalType": "struct FiveFiveFiveLauncher.TokenAllocation",
+        "internalType": "struct FiveFiveFiveLauncherTypes.TokenAllocation",
         "components": [
           {
             "name": "tokensForContributors",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint128",
+            "internalType": "uint128"
           },
           {
             "name": "tokensForLP",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint128",
+            "internalType": "uint128"
           }
         ]
       },
       {
         "name": "pools",
         "type": "tuple",
-        "internalType": "struct FiveFiveFiveLauncher.PoolInfo",
+        "internalType": "struct FiveFiveFiveLauncherTypes.PoolInfo",
         "components": [
           {
             "name": "memeKubPair",
@@ -726,45 +544,6 @@ export const fivefivefivelauncherAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "ponder",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract PonderToken"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "priceOracle",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract PonderPriceOracle"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "router",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IPonderRouter"
       }
     ],
     "stateMutability": "view"
@@ -899,7 +678,7 @@ export const fivefivefivelauncherAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "timestamp",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1127,157 +906,12 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
-    "name": "AlreadyLaunched",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ContributionFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ContributionTooSmall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EthTransferFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExcessiveContribution",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExcessivePonderContribution",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExcessivePriceDeviation",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ImageRequired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientLPTokens",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientLiquidity",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientPoolLiquidity",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientPriceHistory",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidAmount",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidPayment",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidTokenParams",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LPStillLocked",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LaunchBeingFinalized",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LaunchDeadlinePassed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LaunchDoesNotExist",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LaunchExpired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LaunchNotCancellable",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "LaunchNotFound",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NoContributionToRefund",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PoolCreationFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PriceOutOfBounds",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "RefundFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "StalePrice",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TokenNameExists",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TokenSymbolExists",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "Unauthorized",
+    "name": "ZeroAddress",
     "inputs": []
   }
 ] as const;

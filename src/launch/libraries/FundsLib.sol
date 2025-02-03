@@ -22,7 +22,12 @@ library FundsLib {
     event KUBContributed(uint256 indexed launchId, address contributor, uint256 amount);
     event PonderContributed(uint256 indexed launchId, address contributor, uint256 amount, uint256 kubValue);
     event RefundProcessed(address indexed user, uint256 kubAmount, uint256 ponderAmount, uint256 tokenAmount);
-    event LaunchCancelled(uint256 indexed launchId, address indexed creator, uint256 kubCollected, uint256 ponderCollected);
+    event LaunchCancelled(
+        uint256 indexed launchId,
+        address indexed creator,
+        uint256 kubCollected,
+        uint256 ponderCollected
+    );
     event LPTokensWithdrawn(uint256 indexed launchId, address indexed creator, uint256 timestamp);
 
     /// @notice Processes KUB contribution with packed storage handling

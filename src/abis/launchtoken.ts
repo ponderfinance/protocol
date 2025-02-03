@@ -37,26 +37,13 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "DOMAIN_SEPARATOR",
+    "name": "FACTORY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_CLAIM_INTERVAL",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract IPonderFactory"
       }
     ],
     "stateMutability": "view"
@@ -76,39 +63,26 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "TOTAL_SUPPLY",
+    "name": "PONDER",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract PonderToken"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "TRADING_RESTRICTION_PERIOD",
+    "name": "ROUTER",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "VESTING_DURATION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract IPonderRouter"
       }
     ],
     "stateMutability": "view"
@@ -222,23 +196,23 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "enableTransfers",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "factory",
+    "name": "domainSeparator",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "contract IPonderFactory"
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "enableTransfers",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -441,19 +415,6 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "ponder",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract PonderToken"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "ponderPair",
     "inputs": [],
     "outputs": [
@@ -467,23 +428,10 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
-    "name": "router",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IPonderRouter"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "setMaxTxAmount",
     "inputs": [
       {
-        "name": "_maxTxAmount",
+        "name": "maxTxAmount_",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -496,12 +444,12 @@ export const launchtokenAbi = [
     "name": "setPairs",
     "inputs": [
       {
-        "name": "_kubPair",
+        "name": "kubPair_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_ponderPair",
+        "name": "ponderPair_",
         "type": "address",
         "internalType": "address"
       }
@@ -699,6 +647,19 @@ export const launchtokenAbi = [
   },
   {
     "type": "function",
+    "name": "vestingInitialized",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "vestingStart",
     "inputs": [],
     "outputs": [
@@ -750,6 +711,25 @@ export const launchtokenAbi = [
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MaxTxAmountUpdated",
+    "inputs": [
+      {
+        "name": "oldMaxTxAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newMaxTxAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1003,11 +983,6 @@ export const launchtokenAbi = [
   },
   {
     "type": "error",
-    "name": "InsufficientAllowance",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "InsufficientLauncherBalance",
     "inputs": []
   },
@@ -1019,6 +994,11 @@ export const launchtokenAbi = [
   {
     "type": "error",
     "name": "InvalidCreator",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignature",
     "inputs": []
   },
   {
@@ -1039,6 +1019,11 @@ export const launchtokenAbi = [
   {
     "type": "error",
     "name": "PairAlreadySet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PermitExpired",
     "inputs": []
   },
   {

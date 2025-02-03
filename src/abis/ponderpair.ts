@@ -6,32 +6,6 @@ export const ponderpairAbi = [
   },
   {
     "type": "function",
-    "name": "DOMAIN_SEPARATOR",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MINIMUM_LIQUIDITY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "PERMIT_TYPEHASH",
     "inputs": [],
     "outputs": [
@@ -149,6 +123,19 @@ export const ponderpairAbi = [
   },
   {
     "type": "function",
+    "name": "domainSeparator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "factory",
     "inputs": [],
     "outputs": [
@@ -166,17 +153,17 @@ export const ponderpairAbi = [
     "inputs": [],
     "outputs": [
       {
-        "name": "_reserve0",
+        "name": "reserve0_",
         "type": "uint112",
         "internalType": "uint112"
       },
       {
-        "name": "_reserve1",
+        "name": "reserve1_",
         "type": "uint112",
         "internalType": "uint112"
       },
       {
-        "name": "_blockTimestampLast",
+        "name": "blockTimestampLast_",
         "type": "uint32",
         "internalType": "uint32"
       }
@@ -188,12 +175,12 @@ export const ponderpairAbi = [
     "name": "initialize",
     "inputs": [
       {
-        "name": "_token0",
+        "name": "token0_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_token1",
+        "name": "token1_",
         "type": "address",
         "internalType": "address"
       }
@@ -226,6 +213,19 @@ export const ponderpairAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "minimumLiquidity",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -683,6 +683,28 @@ export const ponderpairAbi = [
   },
   {
     "type": "error",
+    "name": "AddressEmptyCode",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AddressInsufficientBalance",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ECDSAInvalidSignature",
     "inputs": []
   },
@@ -796,91 +818,88 @@ export const ponderpairAbi = [
   },
   {
     "type": "error",
-    "name": "FeeTooHigh",
+    "name": "FailedInnerCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Forbidden",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientInitialLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientInputAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLiquidityBurned",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLiquidityMinted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientOutputAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidToAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "KValueCheckFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Overflow",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PermitExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
     "inputs": [
       {
-        "name": "totalFeeAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "amountIn",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },
   {
     "type": "error",
-    "name": "InsufficientInputCalculated",
-    "inputs": [
-      {
-        "name": "amount0In",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "amount1In",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "balance0",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "balance1",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "KValueValidationFailed",
-    "inputs": [
-      {
-        "name": "balance0Adjusted",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "balance1Adjusted",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "reserveProduct",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ReserveCalculationFailed",
-    "inputs": [
-      {
-        "name": "balance0",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "balance1",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "reserve0",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "reserve1",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
+    "name": "ZeroAddress",
+    "inputs": []
   }
 ] as const;

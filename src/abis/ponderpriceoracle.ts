@@ -22,39 +22,39 @@ export const ponderpriceoracleAbi = [
   },
   {
     "type": "function",
-    "name": "MIN_UPDATE_DELAY",
+    "name": "BASE_TOKEN",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "OBSERVATION_CARDINALITY",
+    "name": "FACTORY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "PERIOD",
+    "name": "STABLECOIN",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -108,25 +108,6 @@ export const ponderpriceoracleAbi = [
   },
   {
     "type": "function",
-    "name": "currentIndex",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "factory",
     "inputs": [],
     "outputs": [
@@ -172,11 +153,6 @@ export const ponderpriceoracleAbi = [
     "name": "getPriceInStablecoin",
     "inputs": [
       {
-        "name": "pair",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "tokenIn",
         "type": "address",
         "internalType": "address"
@@ -198,10 +174,42 @@ export const ponderpriceoracleAbi = [
   },
   {
     "type": "function",
+    "name": "initializePair",
+    "inputs": [
+      {
+        "name": "pair",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isPairInitialized",
+    "inputs": [
+      {
+        "name": "pair",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lastUpdateTime",
     "inputs": [
       {
-        "name": "",
+        "name": "pair",
         "type": "address",
         "internalType": "address"
       }
@@ -239,12 +247,12 @@ export const ponderpriceoracleAbi = [
     "name": "observations",
     "inputs": [
       {
-        "name": "",
+        "name": "pair",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "index",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -270,7 +278,7 @@ export const ponderpriceoracleAbi = [
   },
   {
     "type": "function",
-    "name": "stablecoin",
+    "name": "stableCoin",
     "inputs": [],
     "outputs": [
       {
@@ -326,6 +334,35 @@ export const ponderpriceoracleAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "PairInitialized",
+    "inputs": [
+      {
+        "name": "pair",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyInitialized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ElapsedTimeZero",
+    "inputs": []
+  },
+  {
     "type": "error",
     "name": "InsufficientData",
     "inputs": []
@@ -342,7 +379,17 @@ export const ponderpriceoracleAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidTimeElapsed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidToken",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitialized",
     "inputs": []
   },
   {
@@ -353,6 +400,11 @@ export const ponderpriceoracleAbi = [
   {
     "type": "error",
     "name": "UpdateTooFrequent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
     "inputs": []
   }
 ] as const;
