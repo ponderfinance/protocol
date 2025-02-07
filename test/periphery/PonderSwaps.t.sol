@@ -10,15 +10,15 @@ import "../mocks/WETH9.sol";
 import "forge-std/Test.sol";
 
 contract MockKKUBUnwrapper {
-    address public immutable WETH;
+    address public immutable KKUB;
 
     constructor(address _weth) {
-        WETH = _weth;
+        KKUB = _weth;
     }
 
     function unwrapKKUB(uint256 amount, address recipient) external returns (bool) {
-        require(IERC20(WETH).transferFrom(msg.sender, address(this), amount), "Transfer failed");
-        IWETH(WETH).withdraw(amount);
+        require(IERC20(KKUB).transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        IKKUB(KKUB).withdraw(amount);
         (bool success,) = recipient.call{value: amount}("");
         require(success, "ETH transfer failed");
         return true;
@@ -86,7 +86,7 @@ contract PonderRouterTest is Test {
             (token0, token1) = (token1, token0);
         }
 
-        // Deploy WETH and PONDER
+        // Deploy KKUB and PONDER
         weth = new WETH9();
         ponder = new PonderToken(treasury, treasury, ponderLauncher);
 
@@ -400,7 +400,7 @@ contract PonderRouterTest is Test {
     }
 
     function testMultiHopPriceManipulation() public {
-        // Setup initial liquidity for a multi-hop path (token0 -> token1 -> WETH)
+        // Setup initial liquidity for a multi-hop path (token0 -> token1 -> KKUB)
         vm.startPrank(alice);
 
         // Add liquidity to first pair (token0/token1)
@@ -415,7 +415,7 @@ contract PonderRouterTest is Test {
             block.timestamp + 1
         );
 
-        // Add liquidity to second pair (token1/WETH)
+        // Add liquidity to second pair (token1/KKUB)
         router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
             address(token1),
             INITIAL_LIQUIDITY_AMOUNT,

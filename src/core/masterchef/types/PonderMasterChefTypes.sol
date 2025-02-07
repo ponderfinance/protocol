@@ -1,80 +1,150 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title PonderMasterChefTypes
- * @notice Type definitions for the Ponder MasterChef contract
- * @dev Contains all shared constants, custom errors, and structs used in the MasterChef system
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER MASTERCHEF TYPES
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderMasterChefTypes
+/// @author taayyohh
+/// @notice Type definitions for Ponder protocol's farming rewards system
+/// @dev Library containing all shared types, constants, and errors used in the MasterChef system
 library PonderMasterChefTypes {
-    /**
-     * @notice User staking information including boost mechanics
-     * @param amount Amount of LP tokens staked
-     * @param rewardDebt Bookkeeping value for reward calculations
-     * @param ponderStaked Amount of PONDER tokens staked for boosting
-     * @param weightedShares User's boosted share amount
-     */
+    /*//////////////////////////////////////////////////////////////
+                            USER POSITIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice User staking position information
+    /// @dev Tracks individual user's staking data and boost mechanics
     struct UserInfo {
+        /// @notice User's staked LP token amount
+        /// @dev Raw amount of LP tokens deposited by user
         uint256 amount;
+
+        /// @notice Reward tracking for accurate distribution
+        /// @dev Bookkeeping variable used to track entitled rewards
         uint256 rewardDebt;
+
+        /// @notice PONDER tokens staked for boost
+        /// @dev Amount of PONDER tokens locked for multiplier boost
         uint256 ponderStaked;
+
+        /// @notice User's boosted share calculation
+        /// @dev Amount of shares after applying boost multiplier
         uint256 weightedShares;
     }
 
-    /**
-     * @notice Pool information including rewards and boost settings
-     * @param lpToken Address of the LP token for this pool
-     * @param allocPoint Pool's share of PONDER emissions
-     * @param lastRewardTime Last timestamp when rewards were distributed
-     * @param accPonderPerShare Accumulated PONDER per share, scaled by 1e12
-     * @param totalStaked Total LP tokens staked in this pool
-     * @param totalWeightedShares Total boosted shares in this pool
-     * @param depositFeeBP Deposit fee in basis points (1 BP = 0.01%)
-     * @param boostMultiplier Maximum boost multiplier for this pool
-     */
+    /*//////////////////////////////////////////////////////////////
+                            POOL SETTINGS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Farming pool configuration and state
+    /// @dev Contains all settings and current state for a farming pool
     struct PoolInfo {
+        /// @notice Address of pool's LP token
+        /// @dev Token that users stake to earn rewards
         address lpToken;
+
+        /// @notice Pool's reward allocation weight
+        /// @dev Determines pool's share of PONDER emissions
         uint256 allocPoint;
+
+        /// @notice Last reward distribution timestamp
+        /// @dev Used to calculate accumulated rewards
         uint256 lastRewardTime;
+
+        /// @notice Accumulated rewards per share
+        /// @dev Tracked with 1e12 precision for accurate reward calculation
         uint256 accPonderPerShare;
+
+        /// @notice Total LP tokens in pool
+        /// @dev Sum of all user deposits
         uint256 totalStaked;
+
+        /// @notice Total boosted shares in pool
+        /// @dev Sum of all user shares after boost
         uint256 totalWeightedShares;
+
+        /// @notice Deposit fee rate
+        /// @dev Fee charged on deposits in basis points (1 BP = 0.01%)
         uint16 depositFeeBP;
+
+        /// @notice Maximum boost multiplier
+        /// @dev Caps the boost multiplier for this pool
         uint16 boostMultiplier;
     }
 
-    // Custom Errors
+    /*//////////////////////////////////////////////////////////////
+                            CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Invalid boost multiplier configuration
     error InvalidBoostMultiplier();
+
+    /// @notice Deposit fee exceeds maximum allowed
     error ExcessiveDepositFee();
+
+    /// @notice Unauthorized access attempt
     error Forbidden();
+
+    /// @notice Invalid pool ID or reference
     error InvalidPool();
+
+    /// @notice Invalid LP token pair
     error InvalidPair();
+
+    /// @notice Invalid input amount
     error InvalidAmount();
+
+    /// @notice Zero amount provided
     error ZeroAmount();
+
+    /// @notice Zero address provided
     error ZeroAddress();
+
+    /// @notice Insufficient token amount
     error InsufficientAmount();
+
+    /// @notice Boost multiplier exceeds maximum
     error BoostTooHigh();
+
+    /// @notice Token transfer operation failed
     error TransferFailed();
+
+    /// @notice Pool allocation exceeds maximum
     error ExcessiveAllocation();
+
+    /// @notice Attempted to add duplicate pool
     error DuplicatePool();
+
+    /// @notice No tokens were transferred
     error NoTokensTransferred();
 
-    // Constants
-    /// @notice Base for percentage calculations (100% = 10000)
+    /*//////////////////////////////////////////////////////////////
+                            CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Base for percentage calculations
+    /// @dev 100% = 10000 basis points
     uint256 public constant BASIS_POINTS = 10000;
 
-    /// @notice Base multiplier for boost calculations (1x = 10000)
+    /// @notice Base multiplier for boost calculations
+    /// @dev 1x = 10000
     uint256 public constant BASE_MULTIPLIER = 10000;
 
-    /// @notice Minimum boost multiplier (2x = 20000)
+    /// @notice Minimum boost multiplier
+    /// @dev 2x = 20000
     uint256 public constant MIN_BOOST_MULTIPLIER = 20000;
 
-    /// @notice Required PONDER stake relative to LP value (10%)
+    /// @notice Required PONDER stake relative to LP value
+    /// @dev 10% = 1000 basis points
     uint256 public constant BOOST_THRESHOLD_PERCENT = 1000;
 
-    /// @notice Maximum additional boost percentage (100%)
+    /// @notice Maximum additional boost percentage
+    /// @dev 100% = 10000 basis points
     uint256 public constant MAX_EXTRA_BOOST_PERCENT = 10000;
 
-    /// @notice Maximum allocation points per pool to prevent manipulation
+    /// @notice Maximum allocation points per pool
+    /// @dev Prevents pool reward manipulation
     uint256 public constant MAX_ALLOC_POINT = 10000;
 }

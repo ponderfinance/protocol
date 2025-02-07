@@ -6,20 +6,26 @@ import { PonderFactoryStorage } from "./storage/PonderFactoryStorage.sol";
 import { PonderFactoryTypes } from "./types/PonderFactoryTypes.sol";
 import { PonderPair } from "../pair/PonderPair.sol";
 
-/**
- * @title PonderFactory
- * @notice Factory contract for creating and managing Ponder trading pairs
- * @dev Handles pair creation, fee settings, and protocol admin functions
- */
+/*//////////////////////////////////////////////////////////////
+                        PONDER FACTORY
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderFactory
+/// @author taayyohh
+/// @notice Factory contract for deploying and managing Ponder trading pairs
+/// @dev Implements pair creation logic, protocol configuration, and admin functions
 contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     using PonderFactoryTypes for *;
 
-    /**
-     * @notice Initializes the factory with administrative addresses
-     * @param feeToSetter_ Address allowed to change fee related parameters
-     * @param launcher_ Initial launcher address
-     * @param ponder_ Initial Ponder token address
-     */
+    /*//////////////////////////////////////////////////////////////
+                            CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initializes the factory with core protocol addresses
+    /// @dev Sets up initial administrative configuration
+    /// @param feeToSetter_ Address authorized to modify fee parameters
+    /// @param launcher_ Initial pair deployment controller
+    /// @param ponder_ Protocol governance token address
     constructor(
         address feeToSetter_,
         address launcher_,
@@ -33,96 +39,85 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         _ponder = ponder_;
     }
 
-    /**
-     * @notice Returns the address that receives protocol fees
-     * @return Address of the fee receiver
-     */
+    /*//////////////////////////////////////////////////////////////
+                            VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Retrieves current protocol fee recipient
+    /// @dev Address where protocol fees are collected
+    /// @return Current fee collection address
     function feeTo() external view returns (address) {
         return _feeTo;
     }
 
-    /**
-     * @notice Returns the address that can modify fee settings
-     * @return Address of the fee setter
-     */
+    /// @notice Retrieves current fee configuration admin
+    /// @dev Address authorized to modify fee-related parameters
+    /// @return Current fee setter address
     function feeToSetter() external view returns (address) {
         return _feeToSetter;
     }
 
-    /**
-     * @notice Returns the current launcher address
-     * @return Address of the launcher
-     */
+    /// @notice Retrieves current pair deployment controller
+    /// @dev Address authorized to deploy new trading pairs
+    /// @return Current launcher address
     function launcher() external view returns (address) {
         return _launcher;
     }
 
-    /**
-     * @notice Returns the Ponder token address
-     * @return Address of the Ponder token
-     */
+    /// @notice Retrieves protocol governance token
+    /// @dev Core token of the Ponder protocol
+    /// @return PONDER token address
     function ponder() external view returns (address) {
         return _ponder;
     }
 
-
-    /**
-     * @notice Returns the pending launcher address
-     * @return Address of the pending launcher
-     */
+    /// @notice Retrieves pending launcher during timelock
+    /// @dev Part of launcher update safety mechanism
+    /// @return Address queued to become new launcher
     function pendingLauncher() external view returns (address) {
         return _pendingLauncher;
     }
 
-    /**
-     * @notice Returns the timestamp when launcher change can be applied
-     * @return Timestamp of launcher delay
-     */
+    /// @notice Retrieves launcher update timelock expiry
+    /// @dev Timestamp when launcher can be updated
+    /// @return Unix timestamp of timelock expiration
     function launcherDelay() external view returns (uint256) {
         return _launcherDelay;
     }
 
-    /**
-     * @notice Returns the address of the pair for given token addresses
-     * @param tokenA First token address
-     * @param tokenB Second token address
-     * @return Address of the pair
-     */
+    /// @notice Retrieves pair address for given tokens
+    /// @dev Returns zero address if pair doesn't exist
+    /// @param tokenA First token address
+    /// @param tokenB Second token address
+    /// @return Address of the trading pair
     function getPair(address tokenA, address tokenB) external view returns (address) {
         return _getPair[tokenA][tokenB];
     }
 
-    /**
-     * @notice Returns the address of a pair by its index
-     * @param index Index in the allPairs array
-     * @return Address of the pair
-     */
+    /// @notice Retrieves pair address by index
+    /// @dev For pair enumeration and iteration
+    /// @param index Position in pairs array
+    /// @return Address of the indexed pair
     function allPairs(uint256 index) external view returns (address) {
         return _allPairs[index];
     }
 
-    /**
-     * @notice Returns the total number of pairs created
-     * @return Number of pairs created
-     */
+    /// @notice Retrieves total number of created pairs
+    /// @dev Length of allPairs array
+    /// @return Total count of deployed pairs
     function allPairsLength() external view returns (uint256) {
         return _allPairs.length;
     }
 
-    /**
-     * @notice Modifier to restrict function access to fee setter
-     */
-    modifier onlyFeeToSetter() {
-        if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
-        _;
-    }
+    /*//////////////////////////////////////////////////////////////
+                            PAIR CREATION
+    //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Creates a new pair for two tokens
-     * @param tokenA First token address
-     * @param tokenB Second token address
-     * @return pair Address of the created pair
-     */
+    /// @notice Deploys new trading pair for provided tokens
+    /// @dev Uses CREATE2 for deterministic pair addresses
+    /// @param tokenA First token in the pair
+    /// @param tokenB Second token in the pair
+    /// @return pair Address of the newly created pair
     function createPair(address tokenA, address tokenB) external returns (address pair) {
         // Checks
         if (tokenA == tokenB) revert PonderFactoryTypes.IdenticalAddresses();
@@ -143,10 +138,13 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit PairCreated(token0, token1, pair, _allPairs.length);
     }
 
-    /**
-     * @notice Sets the fee receiving address
-     * @param newFeeTo New fee receiver address
-     */
+    /*//////////////////////////////////////////////////////////////
+                        ADMIN CONFIGURATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Updates protocol fee recipient
+    /// @dev Restricted to feeToSetter
+    /// @param newFeeTo New fee collection address
     function setFeeTo(address newFeeTo) external onlyFeeToSetter {
         if (newFeeTo == address(0)) revert PonderFactoryTypes.InvalidFeeReceiver();
         address oldFeeTo = _feeTo;
@@ -154,10 +152,9 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit FeeToUpdated(oldFeeTo, newFeeTo);
     }
 
-    /**
-     * @notice Changes the fee setter address
-     * @param newFeeToSetter New fee setter address
-     */
+    /// @notice Updates fee configuration admin
+    /// @dev Restricted to current feeToSetter
+    /// @param newFeeToSetter New fee admin address
     function setFeeToSetter(address newFeeToSetter) external onlyFeeToSetter {
         if (newFeeToSetter == address(0)) revert PonderFactoryTypes.ZeroAddress();
         address oldFeeToSetter = _feeToSetter;
@@ -166,11 +163,9 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit FeeToSetterUpdated(oldFeeToSetter, newFeeToSetter);
     }
 
-
-    /**
-     * @notice Initiates or completes launcher address change
-     * @param newLauncher New launcher address
-     */
+    /// @notice Initiates launcher update process
+    /// @dev Starts timelock period for launcher change
+    /// @param newLauncher Proposed new launcher address
     function setLauncher(address newLauncher) external onlyFeeToSetter {
         if (newLauncher == address(0)) revert PonderFactoryTypes.InvalidLauncher();
 
@@ -184,9 +179,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         }
     }
 
-    /**
-     * @notice Applies pending launcher change after timelock
-     */
+    /// @notice Completes launcher update after timelock
+    /// @dev Can only execute after timelock expires
     function applyLauncher() external onlyFeeToSetter {
         // - Used for timelock functionality with long duration
         // - Timestamp manipulation window (900s) is negligible compared to typical timelock periods
@@ -203,15 +197,25 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit LauncherUpdated(oldLauncher, _launcher);
     }
 
-    /**
-     * @notice Updates the Ponder token address
-     * @param newPonder New Ponder token address
-     */
+    /// @notice Updates protocol token address
+    /// @dev Restricted to feeToSetter
+    /// @param newPonder New PONDER token address
     function setPonder(address newPonder) external onlyFeeToSetter {
         if (newPonder == address(0)) revert PonderFactoryTypes.ZeroAddress();
 
         address oldPonder = _ponder;
         _ponder = newPonder;
         emit LauncherUpdated(oldPonder, newPonder);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Restricts function access to fee setter
+    /// @dev Reverts if caller is not the current fee setter
+    modifier onlyFeeToSetter() {
+        if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
+        _;
     }
 }

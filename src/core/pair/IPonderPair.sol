@@ -3,31 +3,37 @@ pragma solidity 0.8.24;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/**
- * @title IPonderPair
- * @notice Interface for the PonderPair AMM contract
- * @dev Extends IERC20 for LP token functionality
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER PAIR INTERFACE
+//////////////////////////////////////////////////////////////*/
+
+/// @title IPonderPair
+/// @author taayyohh
+/// @notice Core interface for Ponder's automated market maker pairs
+/// @dev Extends IERC20 to support LP token functionality
+/// @dev Implements constant product AMM with fee collection
 interface IPonderPair is IERC20 {
-    /**
-     * @notice Emitted when liquidity is added to the pair
-     * @param sender Address of the liquidity provider
-     * @param amount0 Amount of token0 added
-     * @param amount1 Amount of token1 added
-     */
+    /*//////////////////////////////////////////////////////////////
+                            EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when liquidity is added to the pair
+    /// @dev Triggered during successful mint operations
+    /// @param sender Address initiating the liquidity provision
+    /// @param amount0 Quantity of token0 deposited
+    /// @param amount1 Quantity of token1 deposited
     event Mint(
         address indexed sender,
         uint256 amount0,
         uint256 amount1
     );
 
-    /**
-     * @notice Emitted when liquidity is removed from the pair
-     * @param sender Address triggering the liquidity removal
-     * @param amount0 Amount of token0 removed
-     * @param amount1 Amount of token1 removed
-     * @param to Address receiving the withdrawn tokens
-     */
+    /// @notice Emitted when liquidity is removed from the pair
+    /// @dev Triggered during successful burn operations
+    /// @param sender Address initiating the liquidity withdrawal
+    /// @param amount0 Quantity of token0 withdrawn
+    /// @param amount1 Quantity of token1 withdrawn
+    /// @param to Recipient of the withdrawn tokens
     event Burn(
         address indexed sender,
         uint256 amount0,
@@ -35,15 +41,14 @@ interface IPonderPair is IERC20 {
         address indexed to
     );
 
-    /**
-     * @notice Emitted when a swap occurs on the pair
-     * @param sender Address initiating the swap
-     * @param amount0In Amount of token0 being sold
-     * @param amount1In Amount of token1 being sold
-     * @param amount0Out Amount of token0 being bought
-     * @param amount1Out Amount of token1 being bought
-     * @param to Address receiving the bought tokens
-     */
+    /// @notice Emitted when tokens are swapped
+    /// @dev Contains all swap parameters for off-chain tracking
+    /// @param sender Address initiating the swap
+    /// @param amount0In Quantity of token0 being sold
+    /// @param amount1In Quantity of token1 being sold
+    /// @param amount0Out Quantity of token0 being bought
+    /// @param amount1Out Quantity of token1 being bought
+    /// @param to Recipient of the bought tokens
     event Swap(
         address indexed sender,
         uint256 amount0In,
@@ -53,92 +58,88 @@ interface IPonderPair is IERC20 {
         address indexed to
     );
 
-    /**
-     * @notice Emitted when reserves are synchronized
-     * @param reserve0 Current reserve of token0
-     * @param reserve1 Current reserve of token1
-     */
+    /// @notice Emitted when reserves are updated
+    /// @dev Used for tracking pool state and TWAP updates
+    /// @param reserve0 Updated reserve of token0
+    /// @param reserve1 Updated reserve of token1
     event Sync(
         uint112 reserve0,
         uint112 reserve1
     );
 
-    /**
-     * @notice Returns minimum liquidity required for pool initialization
-     * @return Minimum liquidity amount
-     */
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Minimum liquidity required for pool initialization
+    /// @dev This amount is burned on first mint to prevent pool draining
+    /// @return Minimum liquidity threshold
     function minimumLiquidity() external pure returns (uint256);
 
-    /**
-     * @notice Returns the factory contract address
-     * @return Address of the factory contract
-     */
+    /// @notice Address of the factory that created this pair
+    /// @dev Immutable after initialization
+    /// @return Factory contract address
     function factory() external view returns (address);
 
-    /**
-     * @notice Returns the address of the first token in the pair
-     * @return Address of token0
-     */
+    /// @notice First token of the pair by address sort order
+    /// @dev Immutable after initialization
+    /// @return Address of token0
     function token0() external view returns (address);
 
-    /**
-     * @notice Returns the address of the second token in the pair
-     * @return Address of token1
-     */
+    /// @notice Second token of the pair by address sort order
+    /// @dev Immutable after initialization
+    /// @return Address of token1
     function token1() external view returns (address);
 
-    /**
-     * @notice Returns the current reserves and last updated timestamp
-     * @return _reserve0 Current reserve of token0
-     * @return _reserve1 Current reserve of token1
-     * @return _blockTimestampLast Timestamp of last reserve update
-     */
+    /// @notice Current reserves and last update timestamp
+    /// @dev Values are packed for gas efficiency
+    /// @return _reserve0 Current reserve of token0
+    /// @return _reserve1 Current reserve of token1
+    /// @return _blockTimestampLast Block timestamp of last reserve update
     function getReserves() external view returns (
         uint112 _reserve0,
         uint112 _reserve1,
         uint32 _blockTimestampLast
     );
 
-    /**
-     * @notice Returns the cumulative price of token0 in terms of token1
-     * @return Cumulative price value
-     */
+    /// @notice Accumulated price oracle data for token0
+    /// @dev Used for TWAP calculations
+    /// @return Cumulative price of token0 in terms of token1
     function price0CumulativeLast() external view returns (uint256);
 
-    /**
-     * @notice Returns the cumulative price of token1 in terms of token0
-     * @return Cumulative price value
-     */
+    /// @notice Accumulated price oracle data for token1
+    /// @dev Used for TWAP calculations
+    /// @return Cumulative price of token1 in terms of token0
     function price1CumulativeLast() external view returns (uint256);
 
-    /**
-     * @notice Returns the last recorded K value (product of reserves)
-     * @return Last K value
-     */
+    /// @notice Last recorded reserve product (K value)
+    /// @dev Used for fee calculations
+    /// @return Product of last recorded reserves
     function kLast() external view returns (uint256);
 
-    /**
-     * @notice Adds liquidity to the pair
-     * @param to Address receiving the LP tokens
-     * @return liquidity Amount of LP tokens minted
-     */
+    /*//////////////////////////////////////////////////////////////
+                        STATE-CHANGING FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Adds liquidity to the pair
+    /// @dev Requires prior token approval
+    /// @param to Recipient of the liquidity tokens
+    /// @return liquidity Amount of LP tokens minted
     function mint(address to) external returns (uint256 liquidity);
 
-    /**
-     * @notice Removes liquidity from the pair
-     * @param to Address receiving the withdrawn tokens
-     * @return amount0 Amount of token0 withdrawn
-     * @return amount1 Amount of token1 withdrawn
-     */
+    /// @notice Removes liquidity from the pair
+    /// @dev Requires prior LP token approval
+    /// @param to Recipient of the withdrawn tokens
+    /// @return amount0 Amount of token0 returned
+    /// @return amount1 Amount of token1 returned
     function burn(address to) external returns (uint256 amount0, uint256 amount1);
 
-    /**
-     * @notice Executes a token swap
-     * @param amount0Out Amount of token0 to receive
-     * @param amount1Out Amount of token1 to receive
-     * @param to Address receiving the output tokens
-     * @param data Additional data for flash loan functionality
-     */
+    /// @notice Swaps tokens using the pair
+    /// @dev Supports flash swaps when data parameter is populated
+    /// @param amount0Out Quantity of token0 to receive
+    /// @param amount1Out Quantity of token1 to receive
+    /// @param to Recipient of output tokens
+    /// @param data Optional data for flash swap callback
     function swap(
         uint256 amount0Out,
         uint256 amount1Out,
@@ -146,24 +147,23 @@ interface IPonderPair is IERC20 {
         bytes calldata data
     ) external;
 
-    /**
-     * @notice Force balances to match reserves
-     * @param to Address receiving the excess tokens
-     */
+    /// @notice Forces balances to match reserves
+    /// @dev Sends excess tokens to specified recipient
+    /// @param to Address receiving excess tokens
     function skim(address to) external;
 
-    /**
-     * @notice Force reserves to match balances
-     */
+    /// @notice Forces reserves to match balances
+    /// @dev Updates reserves without moving tokens
     function sync() external;
 
+    /*//////////////////////////////////////////////////////////////
+                        INITIALIZATION
+    //////////////////////////////////////////////////////////////*/
 
-    /**
-        * @dev Initialize function uses underscore suffix naming convention
-     * to explicitly avoid shadowing while maintaining clear parameter names
-     * @notice Initializes the pair with token addresses
-     * @param token0_ Address of the first token
-     * @param token1_ Address of the second token
-     */
+    /// @notice Initializes the pair with token addresses
+    /// @dev Can only be called once by factory
+    /// @dev Parameters use underscore suffix to avoid shadowing
+    /// @param token0_ Address of first token (lower sort order)
+    /// @param token1_ Address of second token (higher sort order)
     function initialize(address token0_, address token1_) external;
 }

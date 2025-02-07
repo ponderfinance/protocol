@@ -1,93 +1,124 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title PonderTokenTypes
- * @notice Library containing all constants, custom errors, and events for the PonderToken system
- * @dev This library is used by PonderToken and related contracts
- */
-library PonderTokenTypes {
-    // ============ Constants ============
+/*//////////////////////////////////////////////////////////////
+                   PONDER TOKEN TYPES
+//////////////////////////////////////////////////////////////*/
 
-    /// @notice Total cap on token supply (1 billion PONDER)
-    /// @dev Used to enforce maximum token supply limit
+/// @title PonderTokenTypes
+/// @author taayyohh
+/// @notice Type definitions and constants for Ponder token system
+/// @dev Library containing protocol configuration, errors and events
+///      Used by PonderToken and related contracts
+library PonderTokenTypes {
+    /*//////////////////////////////////////////////////////////////
+                        TOKEN CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Maximum total token supply cap
+    /// @dev Hard cap of 1 billion PONDER tokens
+    /// @dev Value includes 18 decimal places
     uint256 public constant MAXIMUM_SUPPLY = 1_000_000_000e18;
 
-    /// @notice Time after which minting is disabled forever (4 years in seconds)
-    /// @dev Used to enforce end of minting period
+    /// @notice Duration of token minting period
+    /// @dev Minting disabled after 4 years from deployment
+    /// @dev Used to enforce controlled supply expansion
     uint256 public constant MINTING_END = 4 * 365 days;
 
-    /// @notice Total amount allocated for team vesting (25% of total supply)
-    /// @dev Used to track and manage team token allocation
+    /// @notice Team token allocation amount
+    /// @dev 25% of total supply (250M PONDER)
+    /// @dev Subject to linear vesting schedule
     uint256 public constant TEAM_ALLOCATION = 250_000_000e18;
 
-    /// @notice Vesting duration for team allocation (1 year)
-    /// @dev Used to calculate vesting schedule for team tokens
+    /// @notice Team tokens vesting duration
+    /// @dev Linear vesting over 1 year period
+    /// @dev Used to calculate claimable amounts
     uint256 public constant VESTING_DURATION = 365 days;
 
-    // ============ Custom Errors ============
+    /*//////////////////////////////////////////////////////////////
+                        ERROR DEFINITIONS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when a caller doesn't have required permissions
+    /// @notice Unauthorized access attempt
+    /// @dev Thrown when caller lacks required role
     error Forbidden();
 
-    /// @notice Thrown when trying to mint after minting period has ended
+    /// @notice Minting period has concluded
+    /// @dev Thrown after MINTING_END timestamp
     error MintingDisabled();
 
-    /// @notice Thrown when an operation would exceed maximum supply
+    /// @notice Total supply cap reached
+    /// @dev Thrown when mint would exceed MAXIMUM_SUPPLY
     error SupplyExceeded();
 
-    /// @notice Thrown when a required address parameter is zero
+    /// @notice Invalid zero address provided
+    /// @dev Thrown when address parameter is zero
     error ZeroAddress();
 
-    /// @notice Thrown when trying to claim tokens before vesting starts
+    /// @notice Vesting period not yet started
+    /// @dev Thrown when claiming before vesting begins
     error VestingNotStarted();
 
-    /// @notice Thrown when no tokens are available for claiming
+    /// @notice No tokens available to claim
+    /// @dev Thrown when vested amount is zero
     error NoTokensAvailable();
 
-    /// @notice Thrown when trying to perform operation before vesting ends
+    /// @notice Vesting period still active
+    /// @dev Thrown for operations requiring complete vesting
     error VestingNotEnded();
 
-    /// @notice Thrown when non-launcher/owner tries to perform restricted operation
+    /// @notice Restricted launcher/owner operation
+    /// @dev Thrown when unauthorized caller
     error OnlyLauncherOrOwner();
 
-    /// @notice Thrown when burn amount is below minimum threshold
+    /// @notice Burn amount below minimum
+    /// @dev Thrown for dust burn attempts
     error BurnAmountTooSmall();
 
-    /// @notice Thrown when burn amount exceeds maximum allowed
+    /// @notice Burn amount above maximum
+    /// @dev Thrown to prevent excessive burns
     error BurnAmountTooLarge();
 
-    /// @notice Thrown when account has insufficient balance for operation
+    /// @notice Insufficient token balance
+    /// @dev Thrown when balance < required amount
     error InsufficientBalance();
 
-    // ============ Events ============
+    /*//////////////////////////////////////////////////////////////
+                            EVENTS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted when the minter address is updated
-    /// @param previousMinter Address of the previous minter
-    /// @param newMinter Address of the new minter
+    /// @notice Records minter role transfer
+    /// @dev Emitted when owner updates minter address
+    /// @param previousMinter Address of outgoing minter
+    /// @param newMinter Address of incoming minter
     event MinterUpdated(address indexed previousMinter, address indexed newMinter);
 
-    /// @notice Emitted when ownership transfer is initiated
-    /// @param previousOwner Address of the current owner
-    /// @param newOwner Address of the proposed new owner
+    /// @notice Records initiation of ownership transfer
+    /// @dev First step of two-step ownership transfer
+    /// @param previousOwner Current owner initiating transfer
+    /// @param newOwner Proposed new owner address
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
-    /// @notice Emitted when ownership transfer is completed
-    /// @param previousOwner Address of the previous owner
-    /// @param newOwner Address of the new owner
+    /// @notice Records completion of ownership transfer
+    /// @dev Final step of ownership transfer process
+    /// @param previousOwner Address of previous owner
+    /// @param newOwner Address of new owner
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
-    /// @notice Emitted when team tokens are claimed
-    /// @param amount Amount of tokens claimed
+    /// @notice Records team token claim
+    /// @dev Emitted when team claims vested tokens
+    /// @param amount Number of tokens claimed
     event TeamTokensClaimed(uint256 amount);
 
-    /// @notice Emitted when launcher address is updated
-    /// @param oldLauncher Address of the previous launcher
-    /// @param newLauncher Address of the new launcher
+    /// @notice Records launcher address update
+    /// @dev Emitted when owner updates launcher
+    /// @param oldLauncher Previous launcher address
+    /// @param newLauncher New launcher address
     event LauncherUpdated(address indexed oldLauncher, address indexed newLauncher);
 
-    /// @notice Emitted when tokens are burned
-    /// @param burner Address that initiated the burn
-    /// @param amount Amount of tokens burned
+    /// @notice Records token burn
+    /// @dev Emitted when tokens are permanently removed
+    /// @param burner Address that initiated burn
+    /// @param amount Number of tokens burned
     event TokensBurned(address indexed burner, uint256 amount);
 }

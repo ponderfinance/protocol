@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "../../src/periphery/unwrapper/IWETH.sol";
+import "../../src/periphery/unwrapper/IKKUB.sol";
 
 contract MockKKUBUnwrapper {
     error TransferFailed();
     error BlacklistedAddress();
 
-    IWETH public immutable WETH;
+    IKKUB public immutable KKUB;
     mapping(address => bool) public blacklist;
 
     event UnwrappedKKUB(address indexed recipient, uint256 amount);
 
     constructor(address _weth) {
-        WETH = IWETH(_weth);
+        KKUB = IKKUB(_weth);
     }
 
     // Mock function to set blacklist status
@@ -27,11 +27,11 @@ contract MockKKUBUnwrapper {
             revert BlacklistedAddress();
         }
 
-        // Transfer WETH to this contract
-        require(WETH.transferFrom(msg.sender, address(this), amount), "WETH transfer failed");
+        // Transfer KKUB to this contract
+        require(KKUB.transferFrom(msg.sender, address(this), amount), "KKUB transfer failed");
 
         // Withdraw ETH
-        WETH.withdraw(amount);
+        KKUB.withdraw(amount);
 
         // Transfer ETH to recipient
         (bool success,) = payable(recipient).call{value: amount}("");

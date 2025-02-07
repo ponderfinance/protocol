@@ -5,15 +5,28 @@ import { PonderRouterTypes } from "../types/PonderRouterTypes.sol";
 import { IPonderFactory } from "../../../core/factory/IPonderFactory.sol";
 import { PonderRouterSwapLib } from "./PonderRouterSwapLib.sol";
 
-/// @title Ponder Router Math Library
-/// @notice Library for mathematical calculations in the Ponder Router
-/// @dev Contains core pricing and amount calculations
+/*//////////////////////////////////////////////////////////////
+                    ROUTER MATH OPERATIONS
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderRouterMathLib
+/// @author taayyohh
+/// @notice Library for DEX mathematical calculations and pricing
+/// @dev Implements core AMM mathematics with precision handling
+///      Uses constant product formula: x * y = k
+///      Includes 0.3% swap fee in calculations
 library PonderRouterMathLib {
-    /// @notice Calculates amounts out for exact input swap
-    /// @param amountIn Input amount
-    /// @param reserveIn Input reserve
-    /// @param reserveOut Output reserve
-    /// @return Amount of output tokens
+    /*//////////////////////////////////////////////////////////////
+                        EXACT INPUT CALCULATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates output amount for single-hop exact input swap
+    /// @dev Uses constant product formula with 0.3% fee
+    ///      Formula: dx * 0.997 * y / (x + dx * 0.997)
+    /// @param amountIn Amount of input tokens
+    /// @param reserveIn Current reserve of input token
+    /// @param reserveOut Current reserve of output token
+    /// @return Amount of output tokens to receive
     function getAmountsOut(
         uint256 amountIn,
         uint256 reserveIn,
@@ -28,11 +41,13 @@ library PonderRouterMathLib {
         return numerator / denominator;
     }
 
-    /// @notice Calculates amounts for a sequence of swaps
+    /// @notice Calculates output amounts for multi-hop exact input swap
+    /// @dev Iteratively calculates amounts through the entire path
+    ///      Handles arbitrary-length paths
     /// @param amountIn Initial input amount
-    /// @param path Array of token addresses in swap path
-    /// @param factory Factory for looking up pairs
-    /// @return amounts Array of amounts for entire path
+    /// @param path Array of token addresses defining swap route
+    /// @param factory Factory interface for pair lookups
+    /// @return amounts Array of amounts at each hop in the path
     function getAmountsOutMultiHop(
         uint256 amountIn,
         address[] memory path,
@@ -50,10 +65,16 @@ library PonderRouterMathLib {
         }
     }
 
-    /// @notice Calculates amounts in for exact output swap
+    /*//////////////////////////////////////////////////////////////
+                         EXACT OUTPUT CALCULATIONS
+     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates input amount needed for exact output swap
+    /// @dev Reverse calculation of getAmountsOut with 0.3% fee
+    ///      Formula: x * dy * 1000 / ((y - dy) * 997)
     /// @param amountOut Desired output amount
-    /// @param reserveIn Input reserve
-    /// @param reserveOut Output reserve
+    /// @param reserveIn Current reserve of input token
+    /// @param reserveOut Current reserve of output token
     /// @return Amount of input tokens needed
     function getAmountsIn(
         uint256 amountOut,
@@ -68,11 +89,13 @@ library PonderRouterMathLib {
         return (numerator / denominator) + 1;
     }
 
-    /// @notice Calculates amounts for a sequence of exact output swaps
-    /// @param amountOut Desired output amount
-    /// @param path Array of token addresses in swap path
-    /// @param factory Factory for looking up pairs
-    /// @return amounts Array of amounts for entire path
+    /// @notice Calculates input amounts for multi-hop exact output swap
+    /// @dev Iteratively calculates amounts backward through the path
+    ///      Handles arbitrary-length paths
+    /// @param amountOut Desired final output amount
+    /// @param path Array of token addresses defining swap route
+    /// @param factory Factory interface for pair lookups
+    /// @return amounts Array of amounts at each hop in the path
     function getAmountsInMultiHop(
         uint256 amountOut,
         address[] memory path,
@@ -90,10 +113,16 @@ library PonderRouterMathLib {
         }
     }
 
-    /// @notice Quotes the equivalent amount of tokens based on reserves
+    /*//////////////////////////////////////////////////////////////
+                         LIQUIDITY CALCULATIONS
+     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates equivalent token amounts based on reserves
+    /// @dev Uses basic ratio calculation: amountB = amountA * reserveB / reserveA
+    ///      Used for liquidity provision calculations
     /// @param amountA Amount of token A
-    /// @param reserveA Reserve of token A
-    /// @param reserveB Reserve of token B
+    /// @param reserveA Current reserve of token A
+    /// @param reserveB Current reserve of token B
     /// @return amountB Equivalent amount of token B
     function quote(
         uint256 amountA,

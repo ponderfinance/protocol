@@ -12,16 +12,41 @@ import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { LaunchTokenTypes } from "../types/LaunchTokenTypes.sol";
 
+/*//////////////////////////////////////////////////////////////
+                        LIQUIDITY MANAGEMENT
+//////////////////////////////////////////////////////////////*/
+
 /// @title LiquidityLib
 /// @author taayyohh
-/// @notice Library for liquidity management and view operations
-/// @dev Optimized for storage operations and gas efficiency
+/// @notice Library for handling liquidity pool creation and management
+/// @dev Optimized for gas efficiency with careful storage packing
+///      Includes dual pool system and token launch management
+///      Uses unchecked blocks for gas optimization where safe
 library LiquidityLib {
     using SafeERC20 for PonderERC20;
     using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
+    /*//////////////////////////////////////////////////////////////
+                          EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when PONDER pool creation is skipped due to insufficient value
+    /// @param launchId Identifier of the launch
+    /// @param ponderAmount Amount of PONDER tokens that would have been used
+    /// @param ponderValueInKub KUB value of the PONDER tokens at current price
     event PonderPoolSkipped(uint256 indexed launchId, uint256 ponderAmount, uint256 ponderValueInKub);
+
+    /// @notice Emitted when PONDER tokens are burned during launch process
+    /// @param launchId Identifier of the launch
+    /// @param amount Number of PONDER tokens burned
     event PonderBurned(uint256 indexed launchId, uint256 amount);
+
+    /// @notice Emitted when both KUB and PONDER liquidity pools are successfully created
+    /// @param launchId Identifier of the launch
+    /// @param memeKubPair Address of the token-KUB pair contract
+    /// @param memePonderPair Address of the token-PONDER pair contract
+    /// @param kubLiquidity Amount of KUB added as liquidity
+    /// @param ponderLiquidity Amount of PONDER added as liquidity
     event DualPoolsCreated(
         uint256 indexed launchId,
         address memeKubPair,
@@ -29,10 +54,27 @@ library LiquidityLib {
         uint256 kubLiquidity,
         uint256 ponderLiquidity
     );
+
+    /// @notice Emitted when a launch is successfully completed
+    /// @param launchId Identifier of the launch
+    /// @param kubRaised Total KUB raised during the launch
+    /// @param ponderRaised Total PONDER raised during the launch
     event LaunchCompleted(uint256 indexed launchId, uint256 kubRaised, uint256 ponderRaised);
 
-    /// @notice Finalizes a launch by creating pools and enabling trading
-    /// @dev Uses packed storage values and optimized operations
+
+    /*//////////////////////////////////////////////////////////////
+                        EXTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Finalizes a token launch by creating liquidity pools and enabling trading
+    /// @dev Implements reentrancy protection and validates distribution amounts
+    ///      Creates KUB pool and optionally PONDER pool if value threshold is met
+    /// @param launch Storage reference to launch information
+    /// @param launchId Unique identifier for the launch
+    /// @param factory Interface for pool creation
+    /// @param router Interface for liquidity addition
+    /// @param ponder PONDER token contract
+    /// @param priceOracle Oracle for PONDER price calculations
     function finalizeLaunch(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -70,7 +112,14 @@ library LiquidityLib {
         _enableTrading(launch, launchId);
     }
 
-    /// @notice Gets contributor information using packed values
+    /// @notice Retrieves detailed information about a specific contributor
+    /// @dev Returns unpacked uint128 values as uint256 for external compatibility
+    /// @param launch Storage reference to launch information
+    /// @param contributor Address of the contributor to query
+    /// @return kubContributed Amount of KUB contributed
+    /// @return ponderContributed Amount of PONDER contributed
+    /// @return ponderValue Value of PONDER contribution in KUB terms
+    /// @return tokensReceived Amount of launch tokens received
     function getContributorInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address contributor
@@ -90,7 +139,13 @@ library LiquidityLib {
         );
     }
 
-    /// @notice Gets overall contribution information
+    /// @notice Retrieves overall contribution information for the launch
+    /// @dev Calculates total value combining KUB and PONDER contributions
+    /// @param launch Storage reference to launch information
+    /// @return kubCollected Total KUB collected
+    /// @return ponderCollected Total PONDER collected
+    /// @return ponderValueCollected Total value of PONDER in KUB terms
+    /// @return totalValue Combined value of all contributions
     function getContributionInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view returns (
@@ -109,7 +164,12 @@ library LiquidityLib {
         }
     }
 
-    /// @notice Gets pool information and checks pool state
+    /// @notice Retrieves information about created liquidity pools
+    /// @dev Returns zero address for PONDER pair if not created
+    /// @param launch Storage reference to launch information
+    /// @return memeKubPair Address of the token-KUB pair
+    /// @return memePonderPair Address of the token-PONDER pair
+    /// @return hasSecondaryPool Boolean indicating if PONDER pool exists
     function getPoolInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view returns (
@@ -124,7 +184,16 @@ library LiquidityLib {
         );
     }
 
-    /// @notice Gets basic launch information with packed values
+    /// @notice Retrieves basic information about the launch
+    /// @dev Unpacks uint40 timestamp to uint256 for external compatibility
+    /// @param launch Storage reference to launch information
+    /// @return tokenAddress Address of the launched token contract
+    /// @return name Name of the launched token
+    /// @return symbol Symbol of the launched token
+    /// @return imageURI URI for token image
+    /// @return kubRaised Total KUB raised
+    /// @return launched Whether the token has been launched
+    /// @return lpUnlockTime Timestamp when LP tokens can be withdrawn
     function getLaunchInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view returns (
@@ -147,7 +216,11 @@ library LiquidityLib {
         );
     }
 
-    /// @notice Gets minimum requirements
+    /// @notice Returns the minimum requirements for contributions and liquidity
+    /// @dev Values are defined in FiveFiveFiveLauncherTypes
+    /// @return minKub Minimum KUB contribution allowed
+    /// @return minPonder Minimum PONDER contribution allowed
+    /// @return minPoolLiquidity Minimum liquidity required for pool creation
     function getMinimumRequirements() external pure returns (
         uint256 minKub,
         uint256 minPonder,
@@ -161,6 +234,10 @@ library LiquidityLib {
     }
 
     /// @notice Calculates remaining amounts that can be raised
+    /// @dev Accounts for maximum PONDER percentage and total raise target
+    /// @param launch Storage reference to launch information
+    /// @return remainingTotal Total value that can still be raised
+    /// @return remainingPonderValue Maximum additional PONDER value allowed
     function getRemainingToRaise(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view returns (
@@ -168,7 +245,7 @@ library LiquidityLib {
         uint256 remainingPonderValue
     ) {
         unchecked {
-        // Safe math: contributions are limited by TARGET_RAISE
+            // Safe math: contributions are limited by TARGET_RAISE
             uint256 total = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
             remainingTotal = total >= FiveFiveFiveLauncherTypes.TARGET_RAISE ?
                 0 : FiveFiveFiveLauncherTypes.TARGET_RAISE - total;
@@ -186,7 +263,13 @@ library LiquidityLib {
         );
     }
 
-    /// @dev Calculates amounts for pool creation using packed values
+    /*//////////////////////////////////////////////////////////////
+                       INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Calculates token amounts for pool creation using packed values
+    /// @param launch Storage reference to launch information
+    /// @return pools Struct containing calculated pool amounts
     function calculatePoolAmounts(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) internal view returns (FiveFiveFiveLauncherTypes.PoolConfig memory pools) {
@@ -201,14 +284,18 @@ library LiquidityLib {
         return pools;
     }
 
-    /// @dev Creates KUB pool with optimized operations
+    /// @dev Creates KUB pool with slippage protection
+    /// @param launch Storage reference to launch information
+    /// @param pools Pool configuration struct
+    /// @param factory Interface for pool creation
+    /// @param router Interface for liquidity addition
     function _createKubPool(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.PoolConfig memory pools,
         IPonderFactory factory,
         IPonderRouter router
     ) private {
-        address pair = _createOrGetPair(factory, launch.base.tokenAddress, router.weth());
+        address pair = _createOrGetPair(factory, launch.base.tokenAddress, router.kkub());
         _validatePairState(pair);
         launch.pools.memeKubPair = pair;
 
@@ -228,7 +315,14 @@ library LiquidityLib {
         );
     }
 
-    /// @dev Handles PONDER pool creation with optimized value handling
+    /// @dev Handles PONDER pool creation or token burning
+    /// @param launch Storage reference to launch information
+    /// @param launchId Identifier of the launch
+    /// @param pools Pool configuration struct
+    /// @param factory Interface for pool creation
+    /// @param router Interface for liquidity addition
+    /// @param ponder PONDER token contract
+    /// @param priceOracle Oracle for price calculations
     function _handlePonderPool(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -258,7 +352,12 @@ library LiquidityLib {
         }
     }
 
-    /// @dev Creates PONDER pool with optimized operations
+    /// @dev Creates PONDER pool and handles token burning
+    /// @param launch Storage reference to launch information
+    /// @param pools Pool configuration struct
+    /// @param factory Interface for pool creation
+    /// @param router Interface for liquidity addition
+    /// @param ponder PONDER token contract
     function _createPonderPool(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.PoolConfig memory pools,
@@ -298,7 +397,11 @@ library LiquidityLib {
         ponder.burn(ponderToBurn);
     }
 
-    /// @dev Creates or retrieves a pair from factory
+    /// @dev Creates new pair or returns existing one
+    /// @param factory Interface for pool creation
+    /// @param tokenA First token in the pair
+    /// @param tokenB Second token in the pair
+    /// @return Address of the created or existing pair
     function _createOrGetPair(
         IPonderFactory factory,
         address tokenA,
@@ -308,19 +411,23 @@ library LiquidityLib {
         return pair == address(0) ? factory.createPair(tokenA, tokenB) : pair;
     }
 
-    /// @dev Validates pair state
+    /// @dev Validates pair state to prevent price manipulation
+    /// @param pair Address of the pair to validate
     function _validatePairState(address pair) private view {
         (uint112 r0, uint112 r1,) = PonderPair(pair).getReserves();
         if (r0 != 0 || r1 != 0) revert FiveFiveFiveLauncherTypes.PriceOutOfBounds();
     }
 
-    /// @dev Validates minimum liquidity requirements
+    /// @dev Ensures minimum liquidity requirements are met
+    /// @param amount Amount of liquidity to validate
     function _validatePoolLiquidity(uint256 amount) private pure {
         if (amount < FiveFiveFiveLauncherTypes.MIN_POOL_LIQUIDITY)
             revert FiveFiveFiveLauncherTypes.InsufficientPoolLiquidity();
     }
 
-    /// @dev Enables trading with optimized timestamp handling
+    /// @dev Enables trading and sets LP lock period
+    /// @param launch Storage reference to launch information
+    /// @param launchId Identifier of the launch
     function _enableTrading(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId
@@ -341,7 +448,13 @@ library LiquidityLib {
         );
     }
 
-    /// @dev Gets KUB value of PONDER amount
+    /// @dev Calculates KUB value of PONDER amount using oracle
+    /// @param amount Amount of PONDER to value
+    /// @param factory Interface for accessing pairs
+    /// @param router Interface for KUB address
+    /// @param ponder PONDER token contract
+    /// @param priceOracle Oracle for price calculations
+    /// @return KUB value of the PONDER amount
     function _getPonderValue(
         uint256 amount,
         IPonderFactory factory,
@@ -349,7 +462,7 @@ library LiquidityLib {
         PonderToken ponder,
         PonderPriceOracle priceOracle
     ) private view returns (uint256) {
-        address ponderKubPair = factory.getPair(address(ponder), router.weth());
+        address ponderKubPair = factory.getPair(address(ponder), router.kkub());
         return priceOracle.getCurrentPrice(
             ponderKubPair,
             address(ponder),
@@ -358,6 +471,7 @@ library LiquidityLib {
     }
 
     /// @notice Withdraws LP tokens from a specific pair
+    /// @dev Returns 0 if pair address is zero or no LP tokens exist
     /// @param pair The pair address to withdraw from
     /// @param recipient Address to receive the LP tokens
     /// @return amount Amount of LP tokens withdrawn

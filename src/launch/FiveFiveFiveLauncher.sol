@@ -314,7 +314,7 @@ contract FiveFiveFiveLauncher is
     /// @return KUB value of PONDER amount
     /// @dev Uses price oracle with validation checks
     function _getPonderValue(uint256 amount) internal view returns (uint256) {
-        address ponderKubPair = FACTORY.getPair(address(PONDER), ROUTER.weth());
+        address ponderKubPair = FACTORY.getPair(address(PONDER), ROUTER.kkub());
         return SetupLib.validatePonderPrice(
             ponderKubPair,
             PRICE_ORACLE,

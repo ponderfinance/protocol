@@ -1,42 +1,79 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title PonderOracleTypes
- * @notice Type definitions for the Ponder Oracle system
- * @dev Contains all shared constants, custom errors, and structs used in the Oracle
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER ORACLE TYPES
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderOracleTypes
+/// @author taayyohh
+/// @notice Type definitions for Ponder protocol's price oracle system
+/// @dev Library containing all shared types, constants, and errors for the Oracle
 library PonderOracleTypes {
-    /**
-     * @notice Price observation data point
-     * @param timestamp Block timestamp of the observation
-     * @param price0Cumulative Cumulative price for token0
-     * @param price1Cumulative Cumulative price for token1
-     */
+    /*//////////////////////////////////////////////////////////////
+                        OBSERVATION DATA
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Price observation data structure
+    /// @dev Packed into 32 bytes for gas efficiency
     struct Observation {
+        /// @notice Timestamp of observation
+        /// @dev Unix timestamp truncated to uint32
         uint32 timestamp;
+
+        /// @notice Token0 cumulative price
+        /// @dev Accumulated price scaled to uint224
         uint224 price0Cumulative;
+
+        /// @notice Token1 cumulative price
+        /// @dev Accumulated price scaled to uint224
         uint224 price1Cumulative;
     }
 
-    // Custom Errors
+    /*//////////////////////////////////////////////////////////////
+                        CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Invalid trading pair address
     error InvalidPair();
+
+    /// @notice Invalid token in trading pair
     error InvalidToken();
+
+    /// @notice Update attempted too soon
     error UpdateTooFrequent();
+
+    /// @notice Price data has expired
     error StalePrice();
+
+    /// @notice Not enough observations recorded
     error InsufficientData();
+
+    /// @notice Invalid time period requested
     error InvalidPeriod();
+
+    /// @notice Pair already initialized
     error AlreadyInitialized();
+
+    /// @notice Pair not yet initialized
     error NotInitialized();
+
+    /// @notice Zero address provided
     error ZeroAddress();
 
-    // Constants
-    /// @notice Standard observation period
+    /*//////////////////////////////////////////////////////////////
+                            CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Standard observation timeframe
+    /// @dev Default period for price calculations
     uint256 public constant PERIOD = 24 hours;
 
-    /// @notice Minimum time between price updates
+    /// @notice Update frequency limit
+    /// @dev Minimum delay between price updates
     uint256 public constant MIN_UPDATE_DELAY = 5 minutes;
 
-    /// @notice Number of observations to store (2 hours of 5-min updates)
+    /// @notice Observation buffer size
+    /// @dev Stores 24 observations (2 hours at 5-min updates)
     uint16 public constant OBSERVATION_CARDINALITY = 24;
 }

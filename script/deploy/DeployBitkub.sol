@@ -16,7 +16,6 @@ import { IPonderRouter } from "../../src/periphery/router/IPonderRouter.sol";
 import { FiveFiveFiveLauncher } from "../../src/launch/FiveFiveFiveLauncher.sol";
 
 contract DeployBitkubScript is Script {
-    address constant public USDT = 0x7d984C24d2499D840eB3b7016077164e15E5faA6;
     address constant public KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
     uint256 constant public INITIAL_PONDER_PER_SECOND = 3168000000000000000;
     uint256 constant public INITIAL_KUB_AMOUNT = 1000 ether;
@@ -79,7 +78,7 @@ contract DeployBitkubScript is Script {
         state.core.router = address(new PonderRouter(state.core.factory, KKUB, state.core.kkubUnwrapper));
         emit ContractDeployed("Router", state.core.router);
 
-        state.core.oracle = address(new PonderPriceOracle(state.core.factory, KKUB, USDT));
+        state.core.oracle = address(new PonderPriceOracle(state.core.factory, KKUB));
         emit ContractDeployed("Oracle", state.core.oracle);
 
         state.core.staking = address(new PonderStaking(state.core.ponder, state.core.router, state.core.factory));
@@ -123,6 +122,7 @@ contract DeployBitkubScript is Script {
         console.log("MasterChef:", state.core.masterChef);
         console.log("FeeDistributor:", state.core.feeDistributor);
         console.log("Launcher:", state.core.launcher);
+        console.log("KKUBUnwrapper", state.core.kkubUnwrapper);
         console.log("PONDER-KUB Pair:", state.core.ponderKubPair);
     }
 

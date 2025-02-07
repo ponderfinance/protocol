@@ -8,49 +8,54 @@ import { PonderOracleLibrary } from "./PonderOracleLibrary.sol";
 import { IPonderPair } from "../pair/IPonderPair.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
 
-/**
- * @title PonderPriceOracle
- * @notice Price oracle for Ponder pairs with TWAP support and fallback mechanisms
- */
+
+/*//////////////////////////////////////////////////////////////
+                    PONDER PRICE ORACLE
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderPriceOracle
+/// @author taayyohh
+/// @notice Price oracle system for Ponder protocol's trading pairs
+/// @dev Implements TWAP calculations with manipulation resistance and fallback mechanisms
 contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     using PonderOracleTypes for *;
 
-    // Immutable state variables
-    address public immutable FACTORY;
-    address public immutable BASE_TOKEN;
-    address public immutable STABLECOIN;
+    /*//////////////////////////////////////////////////////////////
+                       IMMUTABLE STATE
+   //////////////////////////////////////////////////////////////*/
 
-    constructor(address _factory, address _baseToken, address _stablecoin) {
+    /// @notice Factory contract reference
+    /// @dev Used to validate pairs and find routes
+    address public immutable FACTORY;
+
+    /// @notice Base routing token
+    /// @dev Used for indirect price calculations
+    address public immutable BASE_TOKEN;
+
+    /*//////////////////////////////////////////////////////////////
+                        INITIALIZATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initialize oracle with core contracts
+    /// @dev Sets immutable protocol references
+    /// @param _factory Address of pair factory
+    /// @param _baseToken Address of base routing token
+    constructor(address _factory, address _baseToken) {
         if (_factory == address(0)) revert PonderOracleTypes.ZeroAddress();
         if (_baseToken == address(0)) revert PonderOracleTypes.ZeroAddress();
-        if (_stablecoin == address(0)) revert PonderOracleTypes.ZeroAddress();
-
 
         FACTORY = _factory;
         BASE_TOKEN = _baseToken;
-        STABLECOIN = _stablecoin;
     }
 
-    /// @inheritdoc IPonderPriceOracle
-    function factory() external view returns (address) {
-        return FACTORY;
-    }
 
-    /// @inheritdoc IPonderPriceOracle
-    function baseToken() external view returns (address) {
-        return BASE_TOKEN;
-    }
+    /*//////////////////////////////////////////////////////////////
+                       PAIR MANAGEMENT
+   //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc IPonderPriceOracle
-    function stableCoin() external view returns (address) {
-        return STABLECOIN;
-    }
-
-    /// @inheritdoc IPonderPriceOracle
-    function observationLength(address pair) external view returns (uint256) {
-        return _observations[pair].length;
-    }
-
+    /// @notice Set up new trading pair
+    /// @dev Creates initial observation array
+    /// @param pair Address of pair to initialize
     function initializePair(address pair) public {
         if (pair == address(0)) revert PonderOracleTypes.ZeroAddress();
         if (!_isValidPair(pair)) revert PonderOracleTypes.InvalidPair();
@@ -78,7 +83,9 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     }
 
 
-    /// @inheritdoc IPonderPriceOracle
+    /// @notice Record new price observation
+    /// @dev Updates circular buffer with latest prices
+    /// @param pair Address of pair to update
     function update(address pair) external override {
         // - Used for TWAP calculation with built-in manipulation resistance
         // - Multiple price points are used to calculate average
@@ -112,7 +119,17 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     }
 
 
-    /// @inheritdoc IPonderPriceOracle
+    /*//////////////////////////////////////////////////////////////
+                       PRICE CALCULATIONS
+   //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculate TWAP for pair
+    /// @dev Uses historical observations over period
+    /// @param pair Address of trading pair
+    /// @param tokenIn Token being priced
+    /// @param amountIn Amount to price
+    /// @param period Time period for TWAP
+    /// @return amountOut Equivalent output amount
     function consult(
         address pair,
         address tokenIn,
@@ -169,7 +186,12 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         revert PonderOracleTypes.InvalidToken();
     }
 
-    /// @inheritdoc IPonderPriceOracle
+    /// @notice Get current spot price
+    /// @dev Uses current reserves without TWAP
+    /// @param pair Address of trading pair
+    /// @param tokenIn Token being priced
+    /// @param amountIn Amount to price
+    /// @return amountOut Equivalent output amount
     function getCurrentPrice(
         address pair,
         address tokenIn,
@@ -207,30 +229,17 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         return quote;
     }
 
-    /// @inheritdoc IPonderPriceOracle
-    function getPriceInStablecoin(
-        address tokenIn,
-        uint256 amountIn
-    ) external view returns (uint256 amountOut) {
-        if (amountIn == 0) return 0;
+    /*//////////////////////////////////////////////////////////////
+                       INTERNAL HELPERS
+   //////////////////////////////////////////////////////////////*/
 
-        // Try direct stablecoin pair first
-        address stablePair = IPonderFactory(FACTORY).getPair(tokenIn, STABLECOIN);
-        if (stablePair != address(0)) {
-            return getCurrentPrice(stablePair, tokenIn, amountIn);
-        }
-
-        return 0;
-    }
-
-    /**
-     * @notice Get historical cumulative prices for a pair
-     * @param pair Address of the pair
-     * @param targetTimestamp Target timestamp to find prices for
-     * @return price0Cumulative Historical cumulative price for token0
-     * @return price1Cumulative Historical cumulative price for token1
-     * @return timestamp Timestamp of the observation
-     */
+    /// @notice Find historical price point
+    /// @dev Searches observation array for timestamp
+    /// @param pair Address of trading pair
+    /// @param targetTimestamp Desired observation time
+    /// @return price0Cumulative Historical price0 accumulator
+    /// @return price1Cumulative Historical price1 accumulator
+    /// @return timestamp Actual observation timestamp
     function _getHistoricalPrices(
         address pair,
         uint256 targetTimestamp
@@ -259,12 +268,40 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         );
     }
 
-    /// @inheritdoc IPonderPriceOracle
-    function lastUpdateTime(address pair) external view returns (uint256) {
-        return _lastUpdateTime[pair];
+    /// @notice Validate pair exists
+    /// @dev Checks pair in factory
+    /// @param pair Address to validate
+    /// @return True if pair is valid
+    function _isValidPair(address pair) internal view returns (bool) {
+        if (pair == address(0)) return false;
+
+        return IPonderFactory(FACTORY).getPair(
+            IPonderPair(pair).token0(),
+            IPonderPair(pair).token1()
+        ) == pair;
     }
 
-    /// @inheritdoc IPonderPriceOracle
+
+
+    /*//////////////////////////////////////////////////////////////
+                            VIEWS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Get initialization status
+    /// @dev Checks if pair is ready for queries
+    /// @param pair Address to check
+    /// @return True if pair is initialized
+    function isPairInitialized(address pair) external view returns (bool) {
+        return _initializedPairs[pair];
+    }
+
+    /// @notice Get specific observation
+    /// @dev Returns stored price point
+    /// @param pair Address of pair
+    /// @param index Position in buffer
+    /// @return timestamp Observation time
+    /// @return price0Cumulative Token0 accumulator
+    /// @return price1Cumulative Token1 accumulator
     function observations(address pair, uint256 index) external view returns (
         uint32 timestamp,
         uint224 price0Cumulative,
@@ -278,24 +315,31 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         );
     }
 
-    /**
-     * @notice Check if a pair exists in the factory
-     * @param pair Address to check
-     * @return bool True if pair is valid
-     */
-    function _isValidPair(address pair) internal view returns (bool) {
-        if (pair == address(0)) return false;
-
-        return IPonderFactory(FACTORY).getPair(
-            IPonderPair(pair).token0(),
-            IPonderPair(pair).token1()
-        ) == pair;
+    /// @notice Get observation count
+    /// @dev Returns buffer size for pair
+    /// @param pair Address to check
+    /// @return Number of observations
+    function observationLength(address pair) external view returns (uint256) {
+        return _observations[pair].length;
     }
 
-    /// @notice Check if a pair has been initialized
-    /// @param pair Address of the pair to check
-    /// @return bool True if the pair has been initialized
-    function isPairInitialized(address pair) external view returns (bool) {
-        return _initializedPairs[pair];
+    /// @notice Get last update time
+    /// @dev Returns timestamp of latest price
+    /// @param pair Address to check
+    /// @return Last update timestamp
+    function lastUpdateTime(address pair) external view returns (uint256) {
+        return _lastUpdateTime[pair];
+    }
+
+    /// @notice Get factory address
+    /// @return Factory contract address
+    function factory() external view returns (address) {
+        return FACTORY;
+    }
+
+    /// @notice Get base token address
+    /// @return Base routing token address
+    function baseToken() external view returns (address) {
+        return BASE_TOKEN;
     }
 }

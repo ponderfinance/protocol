@@ -1,62 +1,94 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title PonderTokenStorage
- * @notice Abstract contract containing all storage variables for the PonderToken system
- * @dev Storage variables are ordered by type and grouped by functionality to optimize gas usage
- */
-abstract contract PonderTokenStorage {
-    // ============ Role Storage ============
+/*//////////////////////////////////////////////////////////////
+                    PONDER TOKEN STORAGE
+//////////////////////////////////////////////////////////////*/
 
-    /// @notice Address with minting privileges for farming rewards
-    /// @dev Can mint new tokens until MINTING_END
+/// @title PonderTokenStorage
+/// @author taayyohh
+/// @notice Storage layout for Ponder protocol's token system
+/// @dev Abstract contract defining state variables for token implementation
+///      Storage slots are carefully ordered to optimize gas costs
+///      Includes storage gap for future upgrades
+abstract contract PonderTokenStorage {
+    /*//////////////////////////////////////////////////////////////
+                        ACCESS CONTROL
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Address authorized to mint farming rewards
+    /// @dev Has time-limited minting privileges
+    /// @dev Can only mint until MINTING_END timestamp
     address internal _minter;
 
-    /// @notice Address that can set the minter
-    /// @dev Has administrative privileges
+    /// @notice Address with administrative privileges
+    /// @dev Can update protocol parameters and roles
+    /// @dev Transferable through two-step process
     address internal _owner;
 
-    /// @notice Future owner in 2-step transfer
-    /// @dev Part of secure ownership transfer pattern
+    /// @notice Address proposed in ownership transfer
+    /// @dev Part of two-step ownership transfer pattern
+    /// @dev Must accept ownership to become effective owner
     address internal _pendingOwner;
 
-    /// @notice Team/Reserve address
-    /// @dev Receives vested team allocation
+    /*//////////////////////////////////////////////////////////////
+                        ALLOCATION ADDRESSES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Address for team and reserve allocations
+    /// @dev Receives vested team tokens over time
+    /// @dev Subject to vesting schedule defined by _teamVestingStart and _teamVestingEnd
     address internal _teamReserve;
 
-    /// @notice Marketing address
-    /// @dev Receives marketing allocation
+    /// @notice Address for marketing operations
+    /// @dev Receives allocation for marketing activities
+    /// @dev Not subject to vesting restrictions
     address internal _marketing;
 
-    /// @notice 555 Launcher address
-    /// @dev Has special privileges for certain operations
+    /// @notice Special purpose launcher address
+    /// @dev Has privileged access to specific operations
+    /// @dev Used for initial token distribution
     address internal _launcher;
 
-    // ============ Token Accounting Storage ============
+    /*//////////////////////////////////////////////////////////////
+                        TOKEN ACCOUNTING
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Track total burned PONDER
-    /// @dev Increases when tokens are burned
+    /// @notice Cumulative amount of PONDER tokens burned
+    /// @dev Increases with each burn operation
+    /// @dev Used for supply tracking and analytics
     uint256 internal _totalBurned;
 
-    /// @notice Amount of team tokens claimed
-    /// @dev Tracks claimed portion of TEAM_ALLOCATION
+    /// @notice Amount of team allocation tokens claimed
+    /// @dev Tracks vested tokens claimed by team
+    /// @dev Cannot exceed TEAM_ALLOCATION constant
     uint256 internal _teamTokensClaimed;
 
-    /// @notice Track unvested team allocation
-    /// @dev Decreases as team tokens are claimed
+    /// @notice Remaining unvested team allocation
+    /// @dev Decreases as team claims vested tokens
+    /// @dev Initially set to total team allocation
     uint256 internal _reservedForTeam;
 
-    // ============ Timestamp Storage ============
+    /*//////////////////////////////////////////////////////////////
+                        VESTING PARAMETERS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Team vesting end timestamp
-    /// @dev Calculated from deployment time
+    /// @notice Timestamp when team token vesting completes
+    /// @dev All team tokens become available after this time
+    /// @dev Calculated relative to deployment or vesting start
     uint256 internal _teamVestingEnd;
 
-    /// @notice Vesting start timestamp for team allocation
-    /// @dev Can be delayed from deployment time if needed
+    /// @notice Timestamp when team token vesting begins
+    /// @dev No team tokens can be claimed before this time
+    /// @dev Can be set after deployment for flexible start
     uint256 internal _teamVestingStart;
 
-    /// @dev Gap for future storage variables
+    /*//////////////////////////////////////////////////////////////
+                        UPGRADE GAP
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Gap for future storage variables
+    /// @dev Reserved storage slots for future versions
+    /// @dev Prevents storage collision in upgrades
     uint256[50] private __gap;
 }

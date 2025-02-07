@@ -7,19 +7,34 @@ import { IPonderPair } from "../../../core/pair/IPonderPair.sol";
 import { PonderRouterTypes } from "../types/PonderRouterTypes.sol";
 import { PonderRouterMathLib } from "./PonderRouterMathLib.sol";
 
-/// @title Ponder Router Swap Library
-/// @notice Library for handling token swap operations in the Ponder Router
-/// @dev Contains core swap logic for both regular and fee-on-transfer tokens
+/*//////////////////////////////////////////////////////////////
+                    ROUTER SWAP OPERATIONS
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderRouterSwapLib
+/// @author taayyohh
+/// @notice Library for executing token swaps in the Ponder Router
+/// @dev Implements core swap logic with support for:
+///      - Regular ERC20 tokens
+///      - Fee-on-transfer tokens
+///      - Multi-hop swaps
 library PonderRouterSwapLib {
     using PonderRouterTypes for *;
     using PonderRouterMathLib for *;
 
-    /// @notice Executes a token swap through one or more pairs
-    /// @param amounts Array of input/output amounts for each swap
-    /// @param path Array of token addresses defining the swap path
-    /// @param to Address to receive the output tokens
-    /// @param supportingFee Whether the swap should handle fee-on-transfer tokens
-    /// @param factory PonderFactory reference for pair lookups
+    /*//////////////////////////////////////////////////////////////
+                        CORE SWAP FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Executes a token swap through a specified path
+    /// @dev Handles both regular and fee-on-transfer token swaps
+    ///      Supports multi-hop swaps through multiple pairs
+    ///      Uses unchecked math for gas optimization where safe
+    /// @param amounts Array of amounts for each hop in the path
+    /// @param path Array of token addresses defining the swap route
+    /// @param to Address to receive the final output tokens
+    /// @param supportingFee Whether to handle fee-on-transfer tokens
+    /// @param factory Interface for pair lookups
     function executeSwap(
         uint256[] memory amounts,
         address[] memory path,
@@ -50,7 +65,16 @@ library PonderRouterSwapLib {
         }
     }
 
-    /// @dev Parameters for swap operations to reduce stack usage
+    /*//////////////////////////////////////////////////////////////
+                      INTERNAL STRUCTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Parameters for swap execution to avoid stack too deep
+    /// @param input Address of input token
+    /// @param output Address of output token
+    /// @param amountOut Expected output amount (0 for fee-on-transfer)
+    /// @param recipient Address to receive output tokens
+    /// @param supportingFee Whether handling fee-on-transfer tokens
     struct SwapParams {
         address input;
         address output;
@@ -59,7 +83,14 @@ library PonderRouterSwapLib {
         bool supportingFee;
     }
 
-    /// @dev Unified swap handler for both regular and fee-on-transfer tokens
+    /*//////////////////////////////////////////////////////////////
+                    INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Core swap execution logic
+    /// @dev Handles both regular and fee-on-transfer token swaps
+    /// @param pair Address of the pair contract
+    /// @param params Struct containing swap parameters
     function _handleSwap(
         IPonderPair pair,
         SwapParams memory params
@@ -93,7 +124,12 @@ library PonderRouterSwapLib {
         pair.swap(amount0Out, amount1Out, params.recipient, new bytes(0));
     }
 
-    /// @notice Sorts two token addresses
+    /*//////////////////////////////////////////////////////////////
+                        HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Sorts two token addresses for consistent ordering
+    /// @dev Ensures deterministic pair addressing
     /// @param tokenA First token address
     /// @param tokenB Second token address
     /// @return token0 Lower token address
@@ -107,10 +143,11 @@ library PonderRouterSwapLib {
         if (token0 == address(0)) revert PonderRouterTypes.ZeroAddress();
     }
 
-    /// @notice Gets reserves for a token pair
+    /// @notice Retrieves current reserves for a token pair
+    /// @dev Sorts tokens and handles reserve ordering
     /// @param tokenA First token address
     /// @param tokenB Second token address
-    /// @param factory PonderFactory reference
+    /// @param factory Interface for pair lookups
     /// @return reserveA Reserve of first token
     /// @return reserveB Reserve of second token
     function getReserves(

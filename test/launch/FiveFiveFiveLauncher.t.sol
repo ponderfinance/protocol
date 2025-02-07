@@ -120,8 +120,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         oracle = new PonderPriceOracle(
             address(factory),
-            ponderWethPair,
-            address(weth)
+            ponderWethPair
         );
 
         _initializeOracleHistory();
@@ -513,7 +512,7 @@ contract FiveFiveFiveLauncherTest is Test {
         (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
 
         // Create pairs manually before launch is completed
-        address wethAddr = router.weth();
+        address wethAddr = router.kkub();
         factory.createPair(tokenAddress, wethAddr);  // Create MEME/KUB pair
         factory.createPair(tokenAddress, address(ponder));  // Create MEME/PONDER pair
 
@@ -548,7 +547,7 @@ contract FiveFiveFiveLauncherTest is Test {
         (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
 
         // Only create MEME/KUB pair manually
-        address wethAddr = router.weth();
+        address wethAddr = router.kkub();
         factory.createPair(tokenAddress, wethAddr);
 
         // Contribute enough to complete the launch
@@ -579,7 +578,7 @@ contract FiveFiveFiveLauncherTest is Test {
         (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
 
         // Create both pairs manually
-        factory.createPair(tokenAddress, router.weth());
+        factory.createPair(tokenAddress, router.kkub());
         factory.createPair(tokenAddress, address(ponder));
 
         // Complete launch with only KUB
@@ -1708,7 +1707,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.warp(block.timestamp + 3 minutes);
 
         (address tokenAddress,,,,,, ) = launcher.getLaunchInfo(launchId);
-        address pair = factory.getPair(tokenAddress, router.weth());
+        address pair = factory.getPair(tokenAddress, router.kkub());
 
         vm.startPrank(attacker);
         vm.expectRevert(); // Should fail due to deadline

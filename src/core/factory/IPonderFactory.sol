@@ -1,146 +1,152 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title IPonderFactory
- * @notice Interface for the Ponder protocol's pair factory
- * @dev Handles creation and management of Ponder trading pairs
- */
-interface IPonderFactory {
-    /**
-    * @dev Parameter shadowing is intentional and safe in this context as:
-     * 1. Parameters are scoped to function
-     * 2. Interface functions have no implementation
-     * 3. Parameter naming matches convention for clarity
-     */
+/*//////////////////////////////////////////////////////////////
+                    PONDER FACTORY INTERFACE
+//////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Returns the address authorized to set fee collection address
-     * @return Address of the fee setter
-     */
+/// @title IPonderFactory
+/// @author taayyohh
+/// @notice Interface for managing Ponder protocol's trading pair lifecycle
+/// @dev Defines core functionality for pair creation and protocol configuration
+interface IPonderFactory {
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when a new trading pair is created
+    /// @dev Includes sorted token addresses and pair indexing information
+    /// @param token0 Address of the first token (lower address value)
+    /// @param token1 Address of the second token (higher address value)
+    /// @param pair Address of the newly created pair contract
+    /// @param pairIndex Sequential index of the pair in allPairs array
+    event PairCreated(
+        address indexed token0,
+        address indexed token1,
+        address pair,
+        uint256 pairIndex
+    );
+
+    /// @notice Emitted when protocol fee recipient is changed
+    /// @dev Tracks changes in fee collection address
+    /// @param oldFeeTo Previous address receiving protocol fees
+    /// @param newFeeTo New address to receive protocol fees
+    event FeeToUpdated(
+        address indexed oldFeeTo,
+        address indexed newFeeTo
+    );
+
+    /// @notice Emitted when protocol launcher address is updated
+    /// @dev Tracks changes in pair deployment permissions
+    /// @param oldLauncher Previous launcher contract address
+    /// @param newLauncher New launcher contract address
+    event LauncherUpdated(
+        address indexed oldLauncher,
+        address indexed newLauncher
+    );
+
+    /// @notice Emitted when fee configuration admin is changed
+    /// @dev Tracks changes in fee management permissions
+    /// @param oldFeeToSetter Previous admin address
+    /// @param newFeeToSetter New admin address
+    event FeeToSetterUpdated(
+        address indexed oldFeeToSetter,
+        address indexed newFeeToSetter
+    );
+
+    /*//////////////////////////////////////////////////////////////
+                            VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Returns current fee management admin
+    /// @dev This address can update fee-related parameters
+    /// @return Address with fee configuration permissions
     function feeToSetter() external view returns (address);
 
-    /**
-     * @notice Returns the address that collects protocol fees
-     * @return Address where protocol fees are sent
-     */
+    /// @notice Returns current protocol fee recipient
+    /// @dev Address where protocol fees are collected
+    /// @return Address receiving protocol fees
     function feeTo() external view returns (address);
 
-    /**
-     * @notice Returns the address of the protocol's launcher contract
-     * @return Address of the launcher contract
-     */
+    /// @notice Returns current protocol launcher
+    /// @dev Address authorized to deploy new pairs
+    /// @return Address of the launcher contract
     function launcher() external view returns (address);
 
-    /**
-     * @notice Returns the address of the PONDER token
-     * @return Address of the PONDER token contract
-     */
+    /// @notice Returns protocol governance token
+    /// @dev Core token of the Ponder protocol
+    /// @return Address of the PONDER token contract
     function ponder() external view returns (address);
 
-    /**
-     * @notice Returns the pending launcher address during timelock period
-     * @return Address of the pending launcher
-     */
+    /// @notice Returns pending launcher during timelock
+    /// @dev Part of launcher update safety mechanism
+    /// @return Address queued to become new launcher
     function pendingLauncher() external view returns (address);
 
-    /**
-     * @notice Returns the timestamp when launcher can be updated
-     * @return Timestamp when the launcher update timelock expires
-     */
+    /// @notice Returns launcher update timelock expiry
+    /// @dev Timestamp when launcher can be updated
+    /// @return Unix timestamp of timelock expiration
     function launcherDelay() external view returns (uint256);
 
-    /**
-     * @notice Creates a new trading pair for two tokens
-     * @dev Pair creation uses CREATE2 for deterministic addresses
-     * @param tokenA Address of the first token
-     * @param tokenB Address of the second token
-     * @return pair Address of the newly created pair contract
-     */
-    function createPair(address tokenA, address tokenB) external returns (address pair);
+    /*//////////////////////////////////////////////////////////////
+                            PAIR MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Fetches the address of the pair for two tokens
-     * @param tokenA Address of the first token
-     * @param tokenB Address of the second token
-     * @return pair Address of the pair contract, or zero address if it doesn't exist
-     */
-    function getPair(address tokenA, address tokenB) external view returns (address pair);
+    /// @notice Creates new trading pair for provided tokens
+    /// @dev Deploys pair contract using CREATE2 for address determinism
+    /// @param tokenA First token address
+    /// @param tokenB Second token address
+    /// @return pair Address of the created pair contract
+    function createPair(
+        address tokenA,
+        address tokenB
+    ) external returns (address pair);
 
-    /**
-     * @notice Returns the address of a pair by its index
-     * @return pair Address of the pair contract at the specified index
-     */
-    function allPairs(uint256 index) external view returns (address pair);
+    /// @notice Retrieves pair address for given tokens
+    /// @dev Returns zero address if pair doesn't exist
+    /// @param tokenA First token address
+    /// @param tokenB Second token address
+    /// @return pair Address of the pair contract
+    function getPair(
+        address tokenA,
+        address tokenB
+    ) external view returns (address pair);
 
-    /**
-     * @notice Returns the total number of pairs created through the factory
-     * @return Number of pairs created
-     */
+    /// @notice Gets pair address by index
+    /// @dev For pair enumeration and iteration
+    /// @return pair Address of the indexed pair
+    function allPairs(uint256) external view returns (address pair);
+
+    /// @notice Returns total number of created pairs
+    /// @dev Length of allPairs array
+    /// @return Total count of deployed pairs
     function allPairsLength() external view returns (uint256);
 
-    /**
-     * @notice Updates the address that receives protocol fees
-     * @dev Can only be called by feeToSetter
-     * @param feeTo New address to receive protocol fees
-     */
+    /*//////////////////////////////////////////////////////////////
+                        ADMIN CONFIGURATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Updates protocol fee recipient
+    /// @dev Restricted to feeToSetter
+    /// @param feeTo New fee collection address
     function setFeeTo(address feeTo) external;
 
-    /**
-     * @notice Updates the address authorized to change the fee receiver
-     * @dev Can only be called by current feeToSetter
-     * @param feeToSetter New address authorized to set fee receiver
-     */
+    /// @notice Updates fee management admin
+    /// @dev Restricted to current feeToSetter
+    /// @param feeToSetter New fee admin address
     function setFeeToSetter(address feeToSetter) external;
 
-    /**
-     * @notice Initiates the launcher update process with timelock
-     * @dev Can only be called by feeToSetter
-     * @param launcher Address of the new launcher contract
-     */
+    /// @notice Initiates launcher update process
+    /// @dev Starts timelock period for launcher change
+    /// @param launcher Proposed new launcher address
     function setLauncher(address launcher) external;
 
-    /**
-     * @notice Completes the launcher update after timelock period
-     * @dev Can only be called by feeToSetter after timelock expires
-     */
+    /// @notice Completes launcher update
+    /// @dev Can only execute after timelock expires
     function applyLauncher() external;
 
-    /**
-     * @notice Updates the PONDER token address
-     * @dev Can only be called by feeToSetter
-     * @param ponder New PONDER token address
-     */
+    /// @notice Updates protocol token address
+    /// @dev Restricted to feeToSetter
+    /// @param ponder New PONDER token address
     function setPonder(address ponder) external;
-
-    /**
-     * @notice Emitted when a new pair is created
-     * @param token0 Address of the first token in the pair (sorted by address)
-     * @param token1 Address of the second token in the pair (sorted by address)
-     * @param pair Address of the created pair contract
-     * @param pairIndex Index of the pair in allPairs array
-     */
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint256 pairIndex);
-
-    /**
-     * @notice Emitted when the fee receiver address is updated
-     * @param oldFeeTo Previous fee receiver address
-     * @param newFeeTo New fee receiver address
-     */
-    event FeeToUpdated(address indexed oldFeeTo, address indexed newFeeTo);
-
-    /**
-     * @notice Emitted when the launcher address is updated
-     * @param oldLauncher Previous launcher address
-     * @param newLauncher New launcher address
-     */
-    event LauncherUpdated(address indexed oldLauncher, address indexed newLauncher);
-
-    /**
-     * @notice Emitted when the fee setter address is updated
-     * @dev This event is emitted when the address authorized to modify fee-related parameters is changed
-     * @param oldFeeToSetter The previous address authorized to change fee parameters
-     * @param newFeeToSetter The new address authorized to change fee parameters
-     */
-    event FeeToSetterUpdated(address indexed oldFeeToSetter, address indexed newFeeToSetter);
 }

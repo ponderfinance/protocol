@@ -59,8 +59,7 @@ contract PonderPriceOracleTest is Test {
         // Deploy oracle
         oracle = new PonderPriceOracle(
             address(factory),
-            address(baseToken),
-            address(stablecoin)
+            address(baseToken)
         );
 
         // Initialize timestamp
@@ -131,32 +130,6 @@ contract PonderPriceOracleTest is Test {
         assertEq(amountOut, 1e18, "Initial price should be 1:1");
     }
 
-    function testPriceInStablecoin() public {
-        // Initial update to populate oracle data
-        oracle.update(address(baseStablePair));
-
-        // Get reserves to verify setup
-        (uint112 reserve0, uint112 reserve1,) = baseStablePair.getReserves();
-        console.log("Base Token Reserve:", reserve0);
-        console.log("Stablecoin Reserve:", reserve1);
-
-        // Need to wait minimum update delay
-        vm.warp(block.timestamp + MIN_UPDATE_DELAY);
-        oracle.update(address(baseStablePair));
-
-        // Test direct stablecoin pair - convert 1 KUB (18 decimals) to USDT (6 decimals)
-        uint256 baseTokenPrice = oracle.getPriceInStablecoin(
-            address(baseToken),
-            1e18
-        );
-        console.log("Base Token Price:", baseTokenPrice);
-
-        // Get current price directly to compare
-        uint256 directPrice = oracle.getCurrentPrice(address(baseStablePair), address(baseToken), 1e18);
-        console.log("Direct Price:", directPrice);
-
-        assertEq(baseTokenPrice, 30e6, "Base token price should be 30 USDT");
-    }
 
     function testPriceManipulationResistance() public {
         // Initial update

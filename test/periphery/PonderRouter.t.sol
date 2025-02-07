@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/periphery/unwrapper/IWETH.sol";
+import "../../src/periphery/unwrapper/IKKUB.sol";
 import "../../src/periphery/router/PonderRouter.sol";
 import "../mocks/ERC20Mint.sol";
 import "../mocks/MockKKUBUnwrapper.sol";
@@ -16,7 +16,7 @@ contract PonderRouterTest is Test {
     ERC20Mint tokenA;
     ERC20Mint tokenB;
     ERC20Mint tokenC;
-    IWETH weth;
+    IKKUB kkub;
 
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
@@ -33,9 +33,9 @@ contract PonderRouterTest is Test {
 
         // Deploy core contracts
         factory = new PonderFactory(address(this), address(1), address(2));
-        weth = IWETH(address(new WETH9()));
-        MockKKUBUnwrapper unwrapper = new MockKKUBUnwrapper(address(weth));
-        router = new PonderRouter(address(factory), address(weth), address(unwrapper));
+        kkub = IKKUB(address(new WETH9()));
+        MockKKUBUnwrapper unwrapper = new MockKKUBUnwrapper(address(kkub));
+        router = new PonderRouter(address(factory), address(kkub), address(unwrapper));
 
         // Deploy test tokens
         tokenA = new ERC20Mint("Token A", "TKNA");
@@ -85,7 +85,7 @@ contract PonderRouterTest is Test {
         vm.startPrank(alice);
 
         // Create WETH pair
-        address pairAddress = factory.createPair(address(tokenA), address(weth));
+        address pairAddress = factory.createPair(address(tokenA), address(kkub));
         tokenA.approve(address(router), INITIAL_LIQUIDITY);
 
         // Add liquidity with ETH
@@ -228,7 +228,7 @@ contract PonderRouterTest is Test {
 
         // Setup swap parameters
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
 
         // Calculate expected amounts
@@ -273,7 +273,7 @@ contract PonderRouterTest is Test {
         // Setup swap parameters
         uint256 outputDesired = 0.1e18;
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
 
         // Calculate required input amount
@@ -324,7 +324,7 @@ contract PonderRouterTest is Test {
         // Setup swap parameters
         address[] memory path = new address[](2);
         path[0] = address(tokenA);
-        path[1] = address(weth);
+        path[1] = address(kkub);
 
         // Calculate expected amounts
         uint256[] memory expectedAmounts = router.getAmountsOut(SWAP_AMOUNT, path);
@@ -371,7 +371,7 @@ contract PonderRouterTest is Test {
         uint256 maxTokens = 1e18;
         address[] memory path = new address[](2);
         path[0] = address(tokenA);
-        path[1] = address(weth);
+        path[1] = address(kkub);
 
         // Calculate expected amounts
         uint256[] memory expectedAmounts = router.getAmountsIn(ethOutputDesired, path);
@@ -603,15 +603,15 @@ contract PonderRouterTest is Test {
         vm.startPrank(alice);
 
         // First deposit ETH to get WETH tokens
-        weth.deposit{value: INITIAL_LIQUIDITY}();
+        kkub.deposit{value: INITIAL_LIQUIDITY}();
 
         // Add liquidity to KKUB-TokenA pair
         tokenA.approve(address(router), INITIAL_LIQUIDITY);
-        IERC20(address(weth)).approve(address(router), INITIAL_LIQUIDITY);
+        IERC20(address(kkub)).approve(address(router), INITIAL_LIQUIDITY);
 
         router.addLiquidity(
             address(tokenA),
-            address(weth),  // KKUB
+            address(kkub),  // KKUB
             INITIAL_LIQUIDITY,
             INITIAL_LIQUIDITY,
             0,
@@ -623,9 +623,9 @@ contract PonderRouterTest is Test {
         // Setup swap parameters
         address[] memory path = new address[](2);
         path[0] = address(tokenA);
-        path[1] = address(weth);  // KKUB
+        path[1] = address(kkub);  // KKUB
 
-        uint256 kkubBalanceBefore = IERC20(address(weth)).balanceOf(alice);
+        uint256 kkubBalanceBefore = IERC20(address(kkub)).balanceOf(alice);
 
         // Calculate expected output
         uint256[] memory expectedAmounts = router.getAmountsOut(SWAP_AMOUNT, path);
@@ -640,7 +640,7 @@ contract PonderRouterTest is Test {
             deadline
         );
 
-        uint256 kkubBalanceAfter = IERC20(address(weth)).balanceOf(alice);
+        uint256 kkubBalanceAfter = IERC20(address(kkub)).balanceOf(alice);
 
         // Assert KKUB was received directly
         assertEq(
@@ -675,7 +675,7 @@ contract PonderRouterTest is Test {
         // Setup test parameters
         uint256 outputAmount = 1 ether;
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
         uint256 deadline = block.timestamp + 1;
 
@@ -712,7 +712,7 @@ contract PonderRouterTest is Test {
         // Setup test parameters
         uint256 outputAmount = 1 ether;
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
         uint256 deadline = block.timestamp;
 
@@ -733,7 +733,7 @@ contract PonderRouterTest is Test {
         uint256 outputAmount = 1 ether;
         address[] memory path = new address[](2);
         path[0] = address(tokenA);  // Should be WETH
-        path[1] = address(weth);
+        path[1] = address(kkub);
         uint256 deadline = block.timestamp + 1;
 
         vm.expectRevert(PonderRouterTypes.InvalidPath.selector);
@@ -765,7 +765,7 @@ contract PonderRouterTest is Test {
         // Setup test parameters
         uint256 outputAmount = 1 ether;
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
         uint256 deadline = block.timestamp + 1;
 
@@ -808,7 +808,7 @@ contract PonderRouterTest is Test {
 
         uint256 outputAmount = 1 ether;
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
 
         uint256[] memory amounts = router.getAmountsIn(outputAmount, path);
@@ -850,7 +850,7 @@ contract PonderRouterTest is Test {
         );
 
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
 
         // Use the router's error selector
@@ -882,7 +882,7 @@ contract PonderRouterTest is Test {
         );
 
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
 
         // Try to get exactly the amount in the pool (should fail as we need to leave some liquidity)
@@ -916,7 +916,7 @@ contract PonderRouterTest is Test {
         );
 
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(tokenA);
 
         uint256 outputAmount = 1 ether;

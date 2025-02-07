@@ -1,13 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @title Ponder Router Interface
-/// @notice Interface for the PonderRouter contract that handles swaps and liquidity
-/// @dev Defines all external functions and events for the router
+/*//////////////////////////////////////////////////////////////
+                    ROUTER INTERFACE
+//////////////////////////////////////////////////////////////*/
+
+/// @title IPonderRouter
+/// @author taayyohh
+/// @notice Interface for the Ponder protocol's router contract
+/// @dev Provides functionality for:
+///      - Liquidity provision and removal
+///      - Token swaps with various input/output configurations
+///      - ETH/Token pair operations
+///      - Fee-on-transfer token support
 interface IPonderRouter {
-    /// @notice Emitted when liquidity is added with ETH
-    /// @param token The token paired with ETH
-    /// @param to Address receiving LP tokens
+    /*//////////////////////////////////////////////////////////////
+                            EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when liquidity is added to an ETH pair
+    /// @param token Token address paired with ETH
+    /// @param to Recipient of LP tokens
     /// @param amountToken Amount of token added
     /// @param amountETH Amount of ETH added
     /// @param liquidity Amount of LP tokens minted
@@ -21,10 +34,10 @@ interface IPonderRouter {
 
     /// @notice Emitted when ETH is swapped for exact tokens
     /// @param sender Address initiating the swap
-    /// @param ethAmount Amount of ETH used
+    /// @param ethAmount Amount of ETH spent
     /// @param tokenAmount Amount of tokens received
-    /// @param path Token path used for swap
-    /// @param to Address receiving tokens
+    /// @param path Array of addresses defining swap route
+    /// @param to Recipient of output tokens
     event SwapETHForExactTokens(
         address indexed sender,
         uint256 ethAmount,
@@ -33,8 +46,8 @@ interface IPonderRouter {
         address indexed to
     );
 
-    /// @notice Emitted when excess ETH is refunded
-    /// @param to Address receiving refund
+    /// @notice Emitted when excess ETH is returned
+    /// @param to Recipient of refund
     /// @param amount Amount of ETH refunded
     event ETHRefunded(
         address indexed to,
@@ -43,27 +56,27 @@ interface IPonderRouter {
 
     /// @notice Emitted when ETH refund fails
     /// @param recipient Intended refund recipient
-    /// @param amount Amount that failed to refund
-    /// @param reason Failure reason
+    /// @param amount Failed refund amount
+    /// @param reason Failure details
     event ETHRefundFailed(
         address indexed recipient,
         uint256 amount,
         bytes reason
     );
 
-    /// @notice Emitted when a swap with high price impact occurs
+    /// @notice Emitted for swaps with significant price impact
     /// @param inputAmount Amount of input tokens
     /// @param outputAmount Amount of output tokens
-    /// @param priceImpact Calculated price impact in basis points
+    /// @param priceImpact Impact in basis points
     event PriceImpactWarning(
         uint256 inputAmount,
         uint256 outputAmount,
         uint256 priceImpact
     );
 
-    /// @notice Emitted when ETH for exact tokens swap starts
-    /// @param sender Address initiating the swap
-    /// @param ethValue Amount of ETH sent
+    /// @notice Emitted when ETH for exact tokens swap begins
+    /// @param sender Swap initiator
+    /// @param ethValue ETH amount sent
     /// @param expectedOutput Expected token output
     /// @param deadline Transaction deadline
     event SwapETHForExactTokensStarted(
@@ -73,15 +86,23 @@ interface IPonderRouter {
         uint256 deadline
     );
 
-    /// @notice Add liquidity to a token pair
+    /*//////////////////////////////////////////////////////////////
+                        LIQUIDITY FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Adds liquidity to a token pair
+    /// @dev Calculates optimal amounts based on current reserves
     /// @param tokenA First token address
     /// @param tokenB Second token address
-    /// @param amountADesired Desired amount of tokenA
-    /// @param amountBDesired Desired amount of tokenB
-    /// @param amountAMin Minimum amount of tokenA
-    /// @param amountBMin Minimum amount of tokenB
-    /// @param to Address to receive LP tokens
+    /// @param amountADesired Desired amount of first token
+    /// @param amountBDesired Desired amount of second token
+    /// @param amountAMin Minimum acceptable first token amount
+    /// @param amountBMin Minimum acceptable second token amount
+    /// @param to Recipient of LP tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amountA Actual amount of first token used
+    /// @return amountB Actual amount of second token used
+    /// @return liquidity Amount of LP tokens minted
     function addLiquidity(
         address tokenA,
         address tokenB,
@@ -93,13 +114,17 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 
-    /// @notice Add liquidity to an ETH pair
+    /// @notice Adds liquidity to an ETH pair
+    /// @dev Handles ETH wrapping and optimal amount calculation
     /// @param token Token to pair with ETH
-    /// @param amountTokenDesired Desired amount of token
-    /// @param amountTokenMin Minimum amount of token
-    /// @param amountETHMin Minimum amount of ETH
-    /// @param to Address to receive LP tokens
+    /// @param amountTokenDesired Desired token amount
+    /// @param amountTokenMin Minimum token amount
+    /// @param amountETHMin Minimum ETH amount
+    /// @param to Recipient of LP tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amountToken Actual token amount used
+    /// @return amountETH Actual ETH amount used
+    /// @return liquidity Amount of LP tokens minted
     function addLiquidityETH(
         address token,
         uint256 amountTokenDesired,
@@ -109,14 +134,17 @@ interface IPonderRouter {
         uint256 deadline
     ) external payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 
-    /// @notice Remove liquidity from a pair
+    /// @notice Removes liquidity from a token pair
+    /// @dev Burns LP tokens and returns underlying assets
     /// @param tokenA First token address
     /// @param tokenB Second token address
     /// @param liquidity Amount of LP tokens to burn
-    /// @param amountAMin Minimum amount of tokenA
-    /// @param amountBMin Minimum amount of tokenB
-    /// @param to Address to receive tokens
+    /// @param amountAMin Minimum acceptable first token amount
+    /// @param amountBMin Minimum acceptable second token amount
+    /// @param to Recipient of underlying tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amountA Amount of first token returned
+    /// @return amountB Amount of second token returned
     function removeLiquidity(
         address tokenA,
         address tokenB,
@@ -127,13 +155,16 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256 amountA, uint256 amountB);
 
-    /// @notice Remove liquidity from an ETH pair
+    /// @notice Removes liquidity from an ETH pair
+    /// @dev Burns LP tokens and handles ETH unwrapping
     /// @param token Token paired with ETH
     /// @param liquidity Amount of LP tokens to burn
-    /// @param amountTokenMin Minimum amount of token
-    /// @param amountETHMin Minimum amount of ETH
-    /// @param to Address to receive tokens and ETH
+    /// @param amountTokenMin Minimum token amount
+    /// @param amountETHMin Minimum ETH amount
+    /// @param to Recipient of token and ETH
     /// @param deadline Maximum timestamp for execution
+    /// @return amountToken Amount of token returned
+    /// @return amountETH Amount of ETH returned
     function removeLiquidityETH(
         address token,
         uint256 liquidity,
@@ -143,13 +174,15 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256 amountToken, uint256 amountETH);
 
-    /// @notice Remove liquidity from an ETH pair supporting fee-on-transfer tokens
+    /// @notice Removes liquidity from ETH pair with fee-on-transfer support
+    /// @dev Handles tokens that take fees on transfers
     /// @param token Token paired with ETH
     /// @param liquidity Amount of LP tokens to burn
-    /// @param amountTokenMin Minimum amount of token
-    /// @param amountETHMin Minimum amount of ETH
-    /// @param to Address to receive tokens and ETH
+    /// @param amountTokenMin Minimum token amount
+    /// @param amountETHMin Minimum ETH amount
+    /// @param to Recipient of token and ETH
     /// @param deadline Maximum timestamp for execution
+    /// @return amountETH Amount of ETH returned
     function removeLiquidityETHSupportingFeeOnTransferTokens(
         address token,
         uint256 liquidity,
@@ -159,12 +192,18 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256 amountETH);
 
-    /// @notice Swap exact tokens for tokens
-    /// @param amountIn Amount of input tokens
-    /// @param amountOutMin Minimum amount of output tokens
-    /// @param path Array of token addresses in swap path
-    /// @param to Address to receive output tokens
+    /*//////////////////////////////////////////////////////////////
+                        SWAP FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Swaps exact input tokens for output tokens
+    /// @dev Multiple pairs can be used for routing
+    /// @param amountIn Exact amount to swap
+    /// @param amountOutMin Minimum output required
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of output tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amounts Array of input/output amounts for path
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -173,12 +212,14 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
-    /// @notice Swap tokens for exact tokens
-    /// @param amountOut Exact amount of output tokens
-    /// @param amountInMax Maximum amount of input tokens
-    /// @param path Array of token addresses in swap path
-    /// @param to Address to receive tokens
+    /// @notice Swaps tokens for exact output tokens
+    /// @dev Calculates required input amount
+    /// @param amountOut Exact output amount desired
+    /// @param amountInMax Maximum input amount
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of output tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amounts Array of input/output amounts for path
     function swapTokensForExactTokens(
         uint256 amountOut,
         uint256 amountInMax,
@@ -187,11 +228,13 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
-    /// @notice Swap exact ETH for tokens
-    /// @param amountOutMin Minimum amount of tokens
-    /// @param path Array of token addresses in swap path
-    /// @param to Address to receive tokens
+    /// @notice Swaps exact ETH for tokens
+    /// @dev Handles ETH wrapping
+    /// @param amountOutMin Minimum tokens required
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amounts Array of input/output amounts for path
     function swapExactETHForTokens(
         uint256 amountOutMin,
         address[] calldata path,
@@ -199,12 +242,14 @@ interface IPonderRouter {
         uint256 deadline
     ) external payable returns (uint256[] memory amounts);
 
-    /// @notice Swap tokens for exact ETH
-    /// @param amountOut Exact amount of ETH to receive
-    /// @param amountInMax Maximum amount of input tokens
-    /// @param path Array of token addresses in swap path
-    /// @param to Address to receive ETH
+    /// @notice Swaps tokens for exact ETH
+    /// @dev Handles ETH unwrapping
+    /// @param amountOut Exact ETH amount desired
+    /// @param amountInMax Maximum input tokens
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of ETH
     /// @param deadline Maximum timestamp for execution
+    /// @return amounts Array of input/output amounts for path
     function swapTokensForExactETH(
         uint256 amountOut,
         uint256 amountInMax,
@@ -213,12 +258,14 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
-    /// @notice Swap exact tokens for ETH
-    /// @param amountIn Amount of input tokens
-    /// @param amountOutMin Minimum amount of ETH
-    /// @param path Array of token addresses in swap path
-    /// @param to Address to receive ETH
+    /// @notice Swaps exact tokens for ETH
+    /// @dev Handles ETH unwrapping
+    /// @param amountIn Exact input token amount
+    /// @param amountOutMin Minimum ETH required
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of ETH
     /// @param deadline Maximum timestamp for execution
+    /// @return amounts Array of input/output amounts for path
     function swapExactTokensForETH(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -227,11 +274,13 @@ interface IPonderRouter {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
-    /// @notice Swap ETH for exact tokens
-    /// @param amountOut Exact amount of tokens to receive
-    /// @param path Array of token addresses in swap path
-    /// @param to Address to receive tokens
+    /// @notice Swaps ETH for exact tokens
+    /// @dev Handles ETH wrapping and refunds excess
+    /// @param amountOut Exact token amount desired
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of tokens
     /// @param deadline Maximum timestamp for execution
+    /// @return amounts Array of input/output amounts for path
     function swapETHForExactTokens(
         uint256 amountOut,
         address[] calldata path,
@@ -239,7 +288,17 @@ interface IPonderRouter {
         uint256 deadline
     ) external payable returns (uint256[] memory amounts);
 
-    /// @notice Support for fee-on-transfer tokens
+    /*//////////////////////////////////////////////////////////////
+                    FEE-ON-TRANSFER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Swap exact tokens supporting fee-on-transfer
+    /// @dev Handles tokens that take fees on transfers
+    /// @param amountIn Exact input amount
+    /// @param amountOutMin Minimum output required
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of tokens
+    /// @param deadline Maximum timestamp for execution
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -248,7 +307,12 @@ interface IPonderRouter {
         uint256 deadline
     ) external;
 
-    /// @notice Support for fee-on-transfer tokens with ETH
+    /// @notice Swap exact ETH supporting fee-on-transfer
+    /// @dev Handles ETH wrapping and fee-on-transfer tokens
+    /// @param amountOutMin Minimum tokens required
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of tokens
+    /// @param deadline Maximum timestamp for execution
     function swapExactETHForTokensSupportingFeeOnTransferTokens(
         uint256 amountOutMin,
         address[] calldata path,
@@ -256,7 +320,13 @@ interface IPonderRouter {
         uint256 deadline
     ) external payable;
 
-    /// @notice Support for fee-on-transfer tokens to ETH
+    /// @notice Swap exact tokens for ETH supporting fee-on-transfer
+    /// @dev Handles ETH unwrapping and fee-on-transfer tokens
+    /// @param amountIn Exact token amount
+    /// @param amountOutMin Minimum ETH required
+    /// @param path Array of token addresses for routing
+    /// @param to Recipient of ETH
+    /// @param deadline Maximum timestamp for execution
     function swapExactTokensForETHSupportingFeeOnTransferTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -265,47 +335,55 @@ interface IPonderRouter {
         uint256 deadline
     ) external;
 
-    /// @notice Get amounts out for a trade
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates output amounts for a path
+    /// @dev Simulates swap without execution
     /// @param amountIn Input amount
     /// @param path Array of token addresses
-    /// @return amounts Array of amounts
+    /// @return amounts Array of amounts for each hop
     function getAmountsOut(
         uint256 amountIn,
         address[] memory path
     ) external view returns (uint256[] memory amounts);
 
-    /// @notice Get amounts in for a trade
-    /// @param amountOut Output amount
+    /// @notice Calculates input amounts for a path
+    /// @dev Simulates swap without execution
+    /// @param amountOut Desired output amount
     /// @param path Array of token addresses
-    /// @return amounts Array of amounts
+    /// @return amounts Array of amounts for each hop
     function getAmountsIn(
         uint256 amountOut,
         address[] memory path
     ) external view returns (uint256[] memory amounts);
 
-
-    /// @notice Get reserves for a pair
+    /// @notice Gets reserves for a token pair
+    /// @dev Used for price calculations
     /// @param tokenA First token address
     /// @param tokenB Second token address
-    /// @return reserveA Reserve of tokenA
-    /// @return reserveB Reserve of tokenB
+    /// @return reserveA Reserve of first token
+    /// @return reserveB Reserve of second token
     function getReserves(
         address tokenA,
         address tokenB
     ) external view returns (uint256 reserveA, uint256 reserveB);
 
-    /// @notice Quote swap amount
+    /// @notice Calculates equivalent token amount
+    /// @dev Based on constant product formula
     /// @param amountA Amount of first token
     /// @param reserveA Reserve of first token
     /// @param reserveB Reserve of second token
-    /// @return amountB Quoted amount of second token
+    /// @return amountB Equivalent amount of second token
     function quote(
         uint256 amountA,
         uint256 reserveA,
         uint256 reserveB
     ) external pure returns (uint256 amountB);
 
-    /// @notice Get the WETH address
-    /// @return Address of the WETH contract
-    function weth() external view returns (address);
+    /// @notice Gets wrapped native token address
+    /// @dev Used for ETH<>Token operations
+    /// @return KKUB contract address
+    function kkub() external view returns (address);
 }

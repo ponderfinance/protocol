@@ -7,20 +7,46 @@ import { FeeDistributorTypes } from "./types/FeeDistributorTypes.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IPonderPair } from "../pair/IPonderPair.sol";
+import { IPonderFactory } from "../factory/IPonderFactory.sol";
+import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
+import { IPonderStaking } from "../staking/IPonderStaking.sol";
+
+/*//////////////////////////////////////////////////////////////
+                        FEE DISTRIBUTOR
+//////////////////////////////////////////////////////////////*/
 
 /// @title FeeDistributor
-/// @notice Implementation of fee collection and distribution
+/// @author taayyohh
+/// @notice Manages the collection, conversion, and distribution of protocol fees
+/// @dev Implements core fee management logic with reentrancy protection
 contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGuard {
     using FeeDistributorTypes for *;
 
+    /*//////////////////////////////////////////////////////////////
+                           CONSTRUCTOR
+   //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initializes the fee distributor with core protocol settings
+    /// @dev Sets up initial state and approves router for token conversions
+    /// @param _factory Address of the protocol factory contract
+    /// @param _router Address of the protocol router contract
+    /// @param _ponder Address of the PONDER token contract
+    /// @param _staking Address of the protocol staking contract
+    /// @param _team Address of the team wallet for fee distribution
     constructor(
         address _factory,
         address _router,
         address _ponder,
         address _staking,
         address _team
-    ) FeeDistributorStorage(_factory, _router, _ponder, _staking) {
+    ) {
         if (_team == address(0)) revert FeeDistributorTypes.ZeroAddress();
+
+        FACTORY = IPonderFactory(_factory);
+        ROUTER = IPonderRouter(_router);
+        PONDER = _ponder;
+        STAKING = IPonderStaking(_staking);
+
         team = _team;
         owner = msg.sender;
 
@@ -30,34 +56,32 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /**
-     * @notice Collects fees from a specific pair using CEI pattern
-     * @param pair Address of the pair to collect fees from
-     */
+
+    /*//////////////////////////////////////////////////////////////
+                        CORE FEE OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Collects fees from a specific trading pair
+    /// @param pair Address of the trading pair to collect fees from
     function collectFeesFromPair(address pair) public nonReentrant {
-        // CHECKS
         if (pair == address(0)) revert FeeDistributorTypes.InvalidPairAddress();
 
         IPonderPair pairContract = IPonderPair(pair);
         address token0 = pairContract.token0();
         address token1 = pairContract.token1();
 
-        // Cache initial balances
         uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
         uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
 
-        // INTERACTIONS - Performed last
         pairContract.sync();
         pairContract.skim(address(this));
 
-        // CHECKS - Verify collection success
         uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
         uint256 finalBalance1 = IERC20(token1).balanceOf(address(this));
 
         uint256 collected0 = finalBalance0 - initialBalance0;
         uint256 collected1 = finalBalance1 - initialBalance1;
 
-        // Emit events after all state changes and interactions
         if (collected0 > 0) {
             emit FeesCollected(token0, collected0);
         }
@@ -66,10 +90,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /**
-     * @notice Converts collected fees to PONDER
-     * @param token Address of the token to convert
-     */
+    /// @notice Converts collected token fees into PONDER tokens
+    /// @dev Includes slippage protection and minimum output verification
+    /// @param token Address of the token to convert to PONDER
     function convertFees(address token) external nonReentrant {
         if (token == PONDER) return;
 
@@ -103,14 +126,14 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /**
-     * @notice Distributes converted fees to stakeholders
-     */
-// External distribute function that users call
+    /// @notice Distributes accumulated PONDER tokens to stakeholders
+    /// @dev Triggers the internal distribution mechanism
     function distribute() external nonReentrant {
         _distribute();
     }
 
+    /// @notice Internal distribution logic for accumulated PONDER tokens
+    /// @dev Splits tokens between staking rewards and team wallet based on ratios
     function _distribute() internal {
         // - Only used for rate limiting fee distributions
         // - Small timestamp manipulation doesn't significantly impact distribution mechanics
@@ -150,8 +173,12 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         emit FeesDistributed(totalAmount, stakingAmount, teamAmount);
     }
 
-    /// @notice Validates an array of pairs for fee distribution
-    /// @dev Checks for array length, zero addresses, duplicate processing, and distribution cooldown
+    /*//////////////////////////////////////////////////////////////
+                     BATCH OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Validates an array of pairs for batch fee distribution
+    /// @dev Checks array bounds, addresses, and distribution cooldowns
     /// @param pairs Array of pair addresses to validate
     function validatePairs(address[] calldata pairs) internal view {
         if (pairs.length == 0 || pairs.length > FeeDistributorTypes.MAX_PAIRS_PER_DISTRIBUTION)
@@ -167,11 +194,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-
-
-    /// @notice Marks pairs as being processed and updates their last distribution timestamp
-    /// @dev Sets processedPairs mapping to true and updates lastPairDistribution timestamp
-    /// @param pairs Array of pair addresses to mark for processing
+    /// @notice Marks pairs as being processed in current distribution cycle
+    /// @dev Updates processing state and distribution timestamps
+    /// @param pairs Array of pair addresses to mark
     function markPairsForProcessing(address[] calldata pairs) internal {
         for (uint256 i = 0; i < pairs.length; i++) {
             processedPairs[pairs[i]] = true;
@@ -179,9 +204,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /// @notice Collects fees from multiple pairs and handles any collection failures
-    /// @dev Attempts to collect fees from each pair, catching and handling any failures
-    /// @param pairs Array of pair addresses to collect fees from
+    /// @notice Processes fee collection for multiple pairs
+    /// @dev Handles individual pair failures without reverting entire batch
+    /// @param pairs Array of pair addresses to collect from
     function collectFeesFromPairs(address[] calldata pairs) internal {
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
@@ -194,11 +219,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /// @notice Converts collected fees from various tokens to PONDER tokens
-    /// @dev Calculates minimum output amounts and performs conversions with slippage protection
+    /// @notice Converts collected fees from multiple tokens to PONDER
+    /// @dev Returns pre and post conversion balances for verification
     /// @param uniqueTokens Array of unique token addresses to convert
-    /// @return preBalance The PONDER balance before conversions
-    /// @return postBalance The PONDER balance after all conversions
+    /// @return preBalance PONDER balance before conversions
+    /// @return postBalance PONDER balance after conversions
     function convertCollectedFees(address[] memory uniqueTokens)
         internal
         returns
@@ -218,10 +243,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         postBalance = IERC20(PONDER).balanceOf(address(this));
     }
 
-    /**
-    * @notice Distributes fees from specific pairs
-     * @param pairs Array of pair addresses to collect and distribute fees from
-     */
+    /// @notice Processes complete fee distribution cycle for multiple pairs
+    /// @dev Coordinates validation, collection, conversion, and distribution
+    /// @param pairs Array of pair addresses to process
     function distributePairFees(address[] calldata pairs) external nonReentrant {
         // Step 1: Validate pairs
         validatePairs(pairs);
@@ -245,10 +269,17 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             _distribute();
         }
     }
-    /**
-     * @notice Calculates minimum PONDER output for a given token input with 0.5% max slippage
-     */
 
+
+    /*//////////////////////////////////////////////////////////////
+                        CALCULATION HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates minimum PONDER output for token conversion
+    /// @dev Includes 0.5% slippage tolerance and reserve checks
+    /// @param token Address of input token
+    /// @param amountIn Amount of input token
+    /// @return minOut Minimum acceptable PONDER output
     function _calculateMinimumPonderOut(
         address token,
         uint256 amountIn
@@ -281,9 +312,12 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         return (amountOut * 995) / 1000;
     }
 
-    /**
-     * @notice Helper to create path array for swaps
-     */
+
+    /// @notice Creates token swap path for router
+    /// @dev Generates direct path from input token to PONDER
+    /// @param tokenIn Address of input token
+    /// @param tokenOut Address of output token (PONDER)
+    /// @return path Array containing swap path
     function _getPath(address tokenIn, address tokenOut)
     internal
     pure
@@ -294,9 +328,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         path[1] = tokenOut;
     }
 
-    /**
-     * @notice Helper function to convert fees with slippage protection
-     */
+    /// @notice Executes fee conversion with slippage protection
+    /// @dev Handles approvals and executes swap via router
+    /// @param token Address of token to convert
+    /// @param amountIn Amount of input token
+    /// @param minOutAmount Minimum acceptable PONDER output
     function _convertFeesWithSlippage(
         address token,
         uint256 amountIn,
@@ -332,9 +368,14 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /**
-     * @notice Updates fee distribution ratios
-     */
+    /*//////////////////////////////////////////////////////////////
+                      ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Updates fee distribution ratio between staking and team
+    /// @dev Requires ratios sum to BASIS_POINTS (100%)
+    /// @param _stakingRatio New ratio for staking rewards
+    /// @param _teamRatio New ratio for team allocation
     function updateDistributionRatios(
         uint256 _stakingRatio,
         uint256 _teamRatio
@@ -349,9 +390,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         emit DistributionRatiosUpdated(_stakingRatio, _teamRatio);
     }
 
-    /**
-     * @notice Gets unique tokens from pairs for conversion
-     */
+    /// @notice Extracts unique tokens from a set of pairs
+    /// @dev Filters out PONDER token and duplicates
+    /// @param pairs Array of pair addresses to process
+    /// @return tokens Array of unique token addresses
     function _getUniqueTokens(address[] calldata pairs) internal view returns (address[] memory tokens) {
         address[] memory tempTokens = new address[](pairs.length * 2);
         uint256 count = 0;
@@ -382,9 +424,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /**
-     * @notice Emergency function to rescue tokens
-     */
+    /// @notice Emergency function to recover stuck tokens
+    /// @dev Allows owner to rescue tokens in case of contract issues
+    /// @param token Address of token to recover
+    /// @param to Address to send recovered tokens to
+    /// @param amount Amount of tokens to recover
     function emergencyTokenRecover(
         address token,
         address to,
@@ -399,9 +443,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         emit EmergencyTokenRecovered(token, to, amount);
     }
 
-    /**
-     * @notice Returns current distribution ratios
-     */
+    /// @notice Retrieves current fee distribution ratios
+    /// @dev Returns both staking and team ratios
+    /// @return _stakingRatio Current staking ratio
+    /// @return _teamRatio Current team ratio
     function getDistributionRatios() external view returns (
         uint256 _stakingRatio,
         uint256 _teamRatio
@@ -409,36 +454,52 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         return (stakingRatio, teamRatio);
     }
 
-    /**
-     * @notice Updates team address
-     */
+    /// @notice Updates team wallet address
+    /// @dev Ensures new address is not zero
+    /// @param _team New team wallet address
     function setTeam(address _team) external onlyOwner {
         if (_team == address(0)) revert FeeDistributorTypes.ZeroAddress();
         team = _team;
     }
 
-    /**
-     * @notice Initiates ownership transfer
-     */
+    /*//////////////////////////////////////////////////////////////
+                        OWNERSHIP MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initiates transfer of contract ownership
+    /// @dev First step of two-step ownership transfer
+    /// @param newOwner Address of proposed new owner
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert FeeDistributorTypes.ZeroAddress();
         pendingOwner = newOwner;
     }
 
-    /**
-     * @notice Completes ownership transfer
-     */
+    /// @notice Completes ownership transfer process
+    /// @dev Can only be called by pending owner
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert FeeDistributorTypes.NotPendingOwner();
         owner = pendingOwner;
         pendingOwner = address(0);
     }
 
+
+    /*//////////////////////////////////////////////////////////////
+                            VIEWS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Returns minimum amount required for operations
+    /// @dev Used for validating transaction viability
+    /// @return Minimum amount threshold
     function minimumAmount() external pure returns (uint256) {
         return FeeDistributorTypes.MINIMUM_AMOUNT;
     }
 
-    /// @notice Modifier for owner-only functions
+    /*//////////////////////////////////////////////////////////////
+                        MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Restricts function access to contract owner
+    /// @dev Reverts if caller is not the current owner
     modifier onlyOwner() {
         if (msg.sender != owner) revert FeeDistributorTypes.NotOwner();
         _;

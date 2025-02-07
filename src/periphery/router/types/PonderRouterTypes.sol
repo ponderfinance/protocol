@@ -1,23 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @title Ponder Router Types Library
-/// @notice Library containing types, constants, and errors for the Ponder Router
-/// @dev Consolidates all type definitions used in the PonderRouter system
+/*//////////////////////////////////////////////////////////////
+                   ROUTER TYPE DEFINITIONS
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderRouterTypes
+/// @author taayyohh
+/// @notice Type definitions and error handling for Ponder Router
+/// @dev Consolidates constants, structs, and custom errors
+///      Used across router implementation and libraries
 library PonderRouterTypes {
-    /// @notice Maximum number of token pairs in a swap path
-    /// @dev Limits the complexity and gas cost of multi-hop swaps
+    /*//////////////////////////////////////////////////////////////
+                            CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Maximum allowed length of swap path
+    /// @dev Limits gas costs and complexity of multi-hop swaps
+    /// @dev Set to 4 to allow up to 3-hop trades
     uint256 public constant MAX_PATH_LENGTH = 4;
 
-    /// @notice Minimum required liquidity for valid price quotes
-    /// @dev Prevents manipulation through low liquidity pools
-    uint256 public constant MIN_VIABLE_LIQUIDITY = 1000; // 1000 wei
+    /// @notice Minimum liquidity threshold for valid operations
+    /// @dev Prevents price manipulation in low liquidity pools
+    /// @dev Set to 1000 wei as absolute minimum
+    uint256 public constant MIN_VIABLE_LIQUIDITY = 1000;
 
-    /// @notice Parameters for swap operations
-    /// @param amountIn Amount of input tokens for the swap
-    /// @param minAmountsOut Minimum amounts of tokens to receive at each step
-    /// @param path Array of token addresses defining the swap path
-    /// @param to Address to receive the output tokens
+    /*//////////////////////////////////////////////////////////////
+                            STRUCTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Parameters for executing token swaps
+    /// @dev Packed structure to minimize calldata cost
+    /// @param amountIn Amount of input tokens to swap
+    /// @param minAmountsOut Minimum acceptable output at each hop
+    /// @param path Array of token addresses defining swap route
+    /// @param to Recipient of output tokens
     /// @param deadline Maximum timestamp for execution
     struct SwapParams {
         uint256 amountIn;
@@ -27,78 +44,66 @@ library PonderRouterTypes {
         uint256 deadline;
     }
 
-    // Custom Errors
+    /*//////////////////////////////////////////////////////////////
+                            TRANSACTION ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when transaction deadline has passed
-    error ExpiredDeadline();
+    /// @notice Timing and deadline errors
+    error ExpiredDeadline();              /// @dev Transaction exceeded time limit
+    error Locked();                       /// @dev Reentrancy guard triggered
 
-    /// @notice Thrown when output amount is less than minimum required
-    error InsufficientOutputAmount();
+    /*//////////////////////////////////////////////////////////////
+                            AMOUNT ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when tokenA amount is less than minimum required
-    error InsufficientAAmount();
+    /// @notice Amount validation errors
+    error InsufficientOutputAmount();     /// @dev Output below minimum
+    error InsufficientAAmount();          /// @dev First token amount too low
+    error InsufficientBAmount();          /// @dev Second token amount too low
+    error InsufficientAmount();           /// @dev Generic amount too low
+    error InsufficientInputAmount();      /// @dev Input amount too low
+    error ExcessiveInputAmount();         /// @dev Input exceeds maximum
+    error InvalidAmount();                /// @dev Amount validation failed
+    error ZeroOutput();                   /// @dev Output calculated as zero
 
-    /// @notice Thrown when tokenB amount is less than minimum required
-    error InsufficientBAmount();
+    /*//////////////////////////////////////////////////////////////
+                            LIQUIDITY ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when pool liquidity is too low for operation
-    error InsufficientLiquidity();
+    /// @notice Pool and liquidity errors
+    error InsufficientLiquidity();        /// @dev Pool liquidity too low
+    error ExcessivePriceImpact(           /// @dev Price impact too high
+        uint256 impact                    /// @dev Impact in basis points
+    );
 
-    /// @notice Thrown when swap path is invalid
-    error InvalidPath();
+    /*//////////////////////////////////////////////////////////////
+                            PATH ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when trying to swap identical tokens
-    error IdenticalAddresses();
+    /// @notice Path validation errors
+    error InvalidPath();                  /// @dev Swap path is invalid
+    error IdenticalAddresses();           /// @dev Attempting same-token swap
+    error PairNonexistent();             /// @dev Trading pair not found
+    error PairCreationFailed();          /// @dev Failed to create pair
 
-    /// @notice Thrown when input amount exceeds maximum allowed
-    error ExcessiveInputAmount();
+    /*//////////////////////////////////////////////////////////////
+                            ETH HANDLING ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when ETH amount is insufficient
-    error InsufficientETH();
+    /// @notice ETH-specific errors
+    error InsufficientETH();             /// @dev Not enough ETH sent
+    error InvalidETHAmount();            /// @dev ETH amount invalid
+    error RefundFailed();                /// @dev ETH refund failed
+    error UnwrapFailed();                /// @dev KKUB unwrap failed
 
-    /// @notice Thrown when address provided is zero address
-    error ZeroAddress();
+    /*//////////////////////////////////////////////////////////////
+                            TOKEN ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when pair does not exist
-    error PairNonexistent();
-
-    /// @notice Thrown when amount specified is invalid
-    error InvalidAmount();
-
-    /// @notice Thrown when ETH amount is invalid
-    error InvalidETHAmount();
-
-    /// @notice Thrown when token transfer fails
-    error TransferFailed();
-
-    /// @notice Thrown when ETH refund fails
-    error RefundFailed();
-
-    /// @notice Thrown when output amount is zero
-    error ZeroOutput();
-
-    /// @notice Thrown when price impact exceeds threshold
-    /// @param impact The calculated price impact in basis points
-    error ExcessivePriceImpact(uint256 impact);
-
-    /// @notice Thrown when contract is locked (reentrancy check)
-    error Locked();
-
-    /// @notice Thrown when WETH balance is insufficient
-    error InsufficientWethBalance();
-
-    /// @notice Thrown when WETH approval fails
-    error WethApprovalFailed();
-
-    /// @notice Thrown when amount is insufficient
-    error InsufficientAmount();
-
-    /// @notice Thrown when input amount is insufficient
-    error InsufficientInputAmount();
-
-    error ApprovalFailed();
-
-    error UnwrapFailed();
-
-    error PairCreationFailed();
+    /// @notice Token operation errors
+    error ZeroAddress();                 /// @dev Invalid zero address
+    error TransferFailed();              /// @dev Token transfer failed
+    error ApprovalFailed();              /// @dev Token approval failed
+    error InsufficientKkubBalance();     /// @dev Not enough KKUB
+    error KKUBApprovalFailure();          /// @dev KKUB approval failed
 }

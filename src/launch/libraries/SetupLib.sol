@@ -10,15 +10,35 @@ import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { PonderPair } from "../../core/pair/PonderPair.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 
+
+/*//////////////////////////////////////////////////////////////
+                    LAUNCH SETUP AND VALIDATION
+//////////////////////////////////////////////////////////////*/
+
 /// @title SetupLib
 /// @author taayyohh
-/// @notice Library for launch initialization and validation
-/// @dev Combines initialization and validation logic with optimized storage access
+/// @notice Library for initializing and validating token launches
+/// @dev Implements gas-optimized storage patterns and comprehensive validation checks
+///      Uses custom errors instead of require statements for gas efficiency
 library SetupLib {
     using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
+    /*//////////////////////////////////////////////////////////////
+                         EXTERNAL FUNCTIONS
+     //////////////////////////////////////////////////////////////*/
+
     /// @notice Initializes a new token launch with validated parameters
-    /// @dev Storage optimized initialization with packed values
+    /// @dev Creates token contract and sets up initial state with optimized storage
+    ///      Uses packed storage values to minimize gas costs
+    ///      Sets up vesting schedule for creator allocation
+    /// @param launch Storage reference to launch information
+    /// @param params Struct containing launch parameters
+    /// @param creator Address of the launch creator
+    /// @param factory Interface for DEX factory
+    /// @param router Interface for DEX router
+    /// @param ponder PONDER token contract
+    /// @param caller Address initiating the launch
+    /// @return token Address of the newly created token contract
     function initializeLaunch(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.LaunchParams calldata params,
@@ -51,8 +71,14 @@ library SetupLib {
         return token;
     }
 
-    /// @notice Validates token parameters and checks for uniqueness
-    /// @dev Uses calldata for string params to save gas
+    /// @notice Validates token name and symbol parameters
+    /// @dev Performs character-by-character validation using calldata
+    ///      Checks for uniqueness against existing names and symbols
+    ///      Enforces length and character set restrictions
+    /// @param name Proposed token name
+    /// @param symbol Proposed token symbol
+    /// @param usedNames Mapping of previously used names
+    /// @param usedSymbols Mapping of previously used symbols
     function validateTokenParams(
         string calldata name,
         string calldata symbol,
@@ -100,8 +126,15 @@ library SetupLib {
         if(usedSymbols[symbol]) revert FiveFiveFiveLauncherTypes.TokenSymbolExists();
     }
 
-    /// @notice Validates PONDER price data from oracle
-    /// @dev Checks price staleness and deviation from TWAP
+    /// @notice Validates PONDER token price data from oracle
+    /// @dev Checks for price staleness and manipulation
+    ///      Compares spot price against TWAP to detect manipulation
+    ///      Enforces maximum price deviation thresholds
+    /// @param ponderKubPair Address of PONDER-KUB pair
+    /// @param priceOracle Oracle contract for price checks
+    /// @param ponder Address of PONDER token
+    /// @param amount Amount of PONDER to price
+    /// @return spotPrice Current spot price of PONDER in KUB
     function validatePonderPrice(
         address ponderKubPair,
         PonderPriceOracle priceOracle,
@@ -145,8 +178,10 @@ library SetupLib {
         return spotPrice;
     }
 
-    /// @notice Validates the current launch state
-    /// @dev Uses packed boolean checks
+    /// @notice Validates the current state of a launch
+    /// @dev Checks for launch existence, completion status, and timing
+    ///      Uses packed boolean values for gas efficiency
+    /// @param launch Storage reference to launch information
     function validateLaunchState(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view {
@@ -156,7 +191,15 @@ library SetupLib {
         if (launch.base.isFinalizingLaunch) revert FiveFiveFiveLauncherTypes.LaunchBeingFinalized();
     }
 
-    /// @dev Sets base info with optimized storage packing
+    /*//////////////////////////////////////////////////////////////
+                        PRIVATE FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Sets base launch information with optimized storage packing
+    /// @param launch Storage reference to launch information
+    /// @param token Address of the launched token
+    /// @param params Launch parameters struct
+    /// @param creator Address of launch creator
     function _setBaseInfo(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address token,
@@ -182,7 +225,10 @@ library SetupLib {
         launch.base.imageURI = params.imageURI;
     }
 
-    /// @dev Sets allocations with proper uint256 calculations and uint128 casting
+    /// @dev Sets token allocations with safe uint256 calculations
+    /// @param launch Storage reference to launch information
+    /// @param launchToken Reference to launched token contract
+    /// @param creator Address of launch creator
     function _setAllocations(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         LaunchToken launchToken,
@@ -210,7 +256,8 @@ library SetupLib {
         launchToken.setupVesting(creator, creatorTokens);
     }
 
-    /// @dev Initializes state with packed values and minimal storage writes
+    /// @dev Initializes launch state with packed zero values
+    /// @param launch Storage reference to launch information
     function _initializeState(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) private {

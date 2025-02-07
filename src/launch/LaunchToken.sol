@@ -120,7 +120,7 @@ contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
                 }
 
                 // Check if this is a pair being created
-                address kubPairCheck = FACTORY.getPair(address(this), address(ROUTER.weth()));
+                address kubPairCheck = FACTORY.getPair(address(this), address(ROUTER.kkub()));
                 address ponderPairCheck = FACTORY.getPair(address(this), address(PONDER));
 
                 if (to != address(ROUTER) &&

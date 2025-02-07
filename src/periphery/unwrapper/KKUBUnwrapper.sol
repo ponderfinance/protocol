@@ -1,18 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { IWETH } from "./IWETH.sol";
 import { IKKUB } from "./IKKUB.sol";
 import { KKUBUnwrapperTypes } from "./types/KKUBUnwrapperTypes.sol";
 import { KKUBUnwrapperStorage } from "./storage/KKUBUnwrapperStorage.sol";
 import { IKKUBUnwrapper } from "./IKKUBUnwrapper.sol";
 
+
+/*//////////////////////////////////////////////////////////////
+                    KKUB UNWRAPPER CONTRACT
+//////////////////////////////////////////////////////////////*/
+
+/// @title KKUBUnwrapper
+/// @author taayyohh
+/// @notice Facilitates unwrapping of KKUB tokens to native KUB
+/// @dev Implements security measures including reentrancy guards,
+///      pausability, and two-step ownership transfer
 contract KKUBUnwrapper is
     IKKUBUnwrapper,
     KKUBUnwrapperStorage,
@@ -20,35 +28,67 @@ contract KKUBUnwrapper is
     Pausable,
     Ownable2Step
 {
+    /*//////////////////////////////////////////////////////////////
+                            DEPENDENCIES
+    //////////////////////////////////////////////////////////////*/
+
     using SafeERC20 for IERC20;
     using Address for address payable;
 
+    /*//////////////////////////////////////////////////////////////
+                            IMMUTABLES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice KKUB token contract address
+    /// @dev Immutable after deployment
+    /// @dev KYC-enabled wrapped KUB token
     address public immutable KKUB;
 
+    /*//////////////////////////////////////////////////////////////
+                        CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initializes the unwrapper contract
+    /// @dev Sets up KKUB reference and ownership
+    /// @param _kkub Address of KKUB token contract
     constructor(address _kkub) Ownable(msg.sender) {
         if (_kkub == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
         KKUB = _kkub;
     }
 
 
-    /// @notice Get the KKUB token address
-    /// @return Address of the KKUB token contract
+    /*//////////////////////////////////////////////////////////////
+                      VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Retrieves KKUB token address
+    /// @return Address of KKUB contract
     function kkub() external view returns (address) {
         return KKUB;
     }
 
-
-    function transferOwnership(address newOwner) public virtual override(Ownable2Step) {
-        if (newOwner == address(0)) revert KKUBUnwrapperTypes.InvalidNewOwner();
-        super.transferOwnership(newOwner);
-    }
-
-    /// @inheritdoc IKKUBUnwrapper
+    /// @notice Gets currently locked balance
+    /// @return Amount of KUB locked in ongoing operations
     function getLockedBalance() external view override returns (uint256) {
         return _lockedBalance;
     }
 
-    /// @inheritdoc IKKUBUnwrapper
+    /*//////////////////////////////////////////////////////////////
+                        UNWRAPPING OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Unwraps KKUB tokens to native KUB
+    /// @dev Enforces KYC requirements and handles token conversions
+    /// @param amount Amount of KKUB to unwrap
+    /// @param recipient Address to receive native KUB
+    /// @return success True if unwrapping succeeds
+    /// @dev Follows CEI pattern and includes multiple security checks
+    /// @dev Reverts if:
+    ///      - Amount is zero
+    ///      - Recipient is zero address
+    ///      - Contract KYC level insufficient
+    ///      - Recipient is blacklisted
+    ///      - Withdrawal from KKUB contract fails
     function unwrapKKUB(
         uint256 amount,
         address recipient
@@ -75,7 +115,7 @@ contract KKUBUnwrapper is
         IERC20(KKUB).safeTransferFrom(msg.sender, address(this), amount);
 
         // 2. Withdraw from KKUB contract
-        IWETH(KKUB).withdraw(amount);
+        IKKUB(KKUB).withdraw(amount);
 
         // Verify withdrawal success
         uint256 ethReceived = address(this).balance - initialBalance;
@@ -96,7 +136,26 @@ contract KKUBUnwrapper is
     }
 
 
-    /// @inheritdoc IKKUBUnwrapper
+    /*//////////////////////////////////////////////////////////////
+                        ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initiates ownership transfer
+    /// @dev Overrides to prevent zero address
+    /// @param newOwner Address of proposed owner
+    function transferOwnership(address newOwner) public virtual override(Ownable2Step) {
+        if (newOwner == address(0)) revert KKUBUnwrapperTypes.InvalidNewOwner();
+        super.transferOwnership(newOwner);
+    }
+
+
+    /// @notice Emergency withdrawal of excess KUB
+    /// @dev Restricted to owner with time and amount limits
+    /// @dev Automatically pauses contract
+    /// @dev Reverts if:
+    ///      - Called too soon after last withdrawal
+    ///      - No balance available
+    ///      - Transfer fails
     function emergencyWithdraw() external override onlyOwner nonReentrant {
         // Checks
         // - Only callable by owner
@@ -127,7 +186,9 @@ contract KKUBUnwrapper is
         emit EmergencyWithdraw(withdrawableAmount, block.timestamp);
     }
 
-    /// @inheritdoc IKKUBUnwrapper
+    /// @notice Resets emergency withdrawal delay
+    /// @dev Only after WITHDRAWAL_DELAY has passed
+    /// @dev Emits WithdrawalLimitReset event
     function resetWithdrawalLimit() external override {
         // - Only resets delay after significant time has passed
         // - No direct economic impact from timing
@@ -139,15 +200,23 @@ contract KKUBUnwrapper is
         }
     }
 
-    /// @inheritdoc IKKUBUnwrapper
+    /// @notice Pauses contract operations
+    /// @dev Only callable by owner
     function pause() external override onlyOwner {
         _pause();
     }
 
-    /// @inheritdoc IKKUBUnwrapper
+    /// @notice Unpauses contract operations
+    /// @dev Only callable by owner
     function unpause() external override onlyOwner {
         _unpause();
     }
 
+    /*//////////////////////////////////////////////////////////////
+                      FALLBACK FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Enables contract to receive KUB
+    /// @dev Required for KKUB unwrapping
     receive() external payable {}
 }

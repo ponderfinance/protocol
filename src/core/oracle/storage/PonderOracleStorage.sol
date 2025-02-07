@@ -3,22 +3,45 @@ pragma solidity 0.8.24;
 
 import { PonderOracleTypes } from "../types/PonderOracleTypes.sol";
 
-/**
- * @title PonderOracleStorage
- * @notice Storage layout for the Ponder Oracle contract
- * @dev Contains all state variables used in the Oracle implementation
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER ORACLE STORAGE
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderOracleStorage
+/// @author taayyohh
+/// @notice Storage layout for Ponder protocol's price oracle system
+/// @dev Abstract contract defining the state variables for the Oracle implementation
+///      Must be inherited by the main implementation contract
 abstract contract PonderOracleStorage {
-    // Complex data structures
-    /// @notice Price observations for each pair
+    /*//////////////////////////////////////////////////////////////
+                        PRICE OBSERVATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Historical price observations for each pair
+    /// @dev Stores circular buffer of price-timestamp observations
+    /// @dev pair address => array of price observations
     mapping(address => PonderOracleTypes.Observation[]) internal _observations;
 
-    /// @notice Current observation index for each pair
+    /// @notice Current observation index in circular buffer
+    /// @dev Tracks position for writing new observations
+    /// @dev pair address => current array index
     mapping(address => uint256) internal _currentIndex;
 
-    /// @notice Last update timestamp for each pair
+    /*//////////////////////////////////////////////////////////////
+                        TIMING STATE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Most recent observation timestamp
+    /// @dev Used to enforce minimum update intervals
+    /// @dev pair address => last update timestamp
     mapping(address => uint256) internal _lastUpdateTime;
 
-    /// @notice Mapping to track initialized pairs
+    /*//////////////////////////////////////////////////////////////
+                    INITIALIZATION STATE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Pair initialization status
+    /// @dev Prevents duplicate initialization of pairs
+    /// @dev pair address => initialization status
     mapping(address => bool) internal _initializedPairs;
 }

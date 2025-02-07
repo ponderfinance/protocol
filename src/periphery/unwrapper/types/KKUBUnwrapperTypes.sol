@@ -1,42 +1,77 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @title KKUBUnwrapper Types Library
-/// @notice Library containing types, constants, and errors for the KKUBUnwrapper
-/// @dev Consolidates all type definitions used in the KKUBUnwrapper system
+/*//////////////////////////////////////////////////////////////
+                    KKUB UNWRAPPER TYPES
+//////////////////////////////////////////////////////////////*/
+
+/// @title KKUBUnwrapperTypes
+/// @author Original author: [Insert author name]
+/// @notice Type definitions and constants for KKUB unwrapping system
+/// @dev Central library for all constants, errors, and type definitions
+///      Used across the KKUB unwrapping protocol
+///      All constants and errors are immutable and cannot be modified
 library KKUBUnwrapperTypes {
-    /// @notice Withdrawal cooldown period
+    /*//////////////////////////////////////////////////////////////
+                            CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Time required between successive withdrawals
+    /// @dev Used to implement rate limiting on withdrawals
+    /// @dev Set to 6 hours to prevent rapid successive withdrawals
     uint256 public constant WITHDRAWAL_DELAY = 6 hours;
 
-    /// @notice Maximum withdrawal amount per period
+    /// @notice Maximum amount that can be withdrawn in a single period
+    /// @dev Caps individual withdrawal size for risk management
+    /// @dev Value is denominated in wei (1e18)
     uint256 public constant MAX_WITHDRAWAL_AMOUNT = 1000 ether;
 
-    /// @notice Required KYC level for KKUB contract
+    /// @notice Minimum KYC verification level required for operations
+    /// @dev Enforced by KKUB token contract
+    /// @dev Level 1 represents basic KYC verification
     uint256 public constant REQUIRED_KYC_LEVEL = 1;
 
-    // Custom Errors
+    /*//////////////////////////////////////////////////////////////
+                        ERROR DEFINITIONS
+    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Thrown when withdrawal attempted too soon after previous withdrawal
+    /// @notice Error for withdrawal timing violations
+    /// @dev Thrown when attempting withdrawal before WITHDRAWAL_DELAY has elapsed
+    /// @dev Check getNextWithdrawalTime() before attempting withdrawal
     error WithdrawalTooFrequent();
 
-    /// @notice Thrown when contract has insufficient balance for operation
+    /// @notice Error for insufficient contract balance
+    /// @dev Thrown when contract lacks ETH to fulfill unwrap request
+    /// @dev Check getLockedBalance() before operations
     error InsufficientBalance();
 
-    /// @notice Thrown when withdrawal operation fails
+    /// @notice Error for failed withdrawal operations
+    /// @dev Thrown when ETH transfer fails during unwrapping
+    /// @dev May indicate recipient contract rejection
     error WithdrawFailed();
 
-    /// @notice Thrown when interacting with blacklisted address
+    /// @notice Error for blacklisted address interactions
+    /// @dev Thrown when interacting with KKUB-blacklisted addresses
+    /// @dev Check address status before interaction
     error BlacklistedAddress();
 
-    /// @notice Thrown when amount specified is zero
+    /// @notice Error for zero-value operations
+    /// @dev Thrown when amount parameter is 0
+    /// @dev All operations must involve positive amounts
     error ZeroAmount();
 
-    /// @notice Thrown when KYC level is insufficient
+    /// @notice Error for KYC verification failures
+    /// @dev Thrown when address lacks required KYC level
+    /// @dev Verify KYC status before attempting operations
     error InsufficientKYCLevel();
 
-    /// @notice Thrown when zero address is provided where not allowed
+    /// @notice Error for zero address inputs
+    /// @dev Thrown when zero address is provided for critical parameters
+    /// @dev Validate addresses before submission
     error ZeroAddressNotAllowed();
 
-    /// @notice Thrown when invalid owner address is provided
+    /// @notice Error for invalid owner address updates
+    /// @dev Thrown during ownership transfer to invalid address
+    /// @dev Ensure new owner meets all requirements
     error InvalidNewOwner();
 }

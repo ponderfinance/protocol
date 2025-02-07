@@ -10,19 +10,19 @@ import "../mocks/WETH9.sol";
 import "forge-std/Test.sol";
 
 contract MockRouter {
-    address public immutable WETH;
+    address public immutable KKUB;
     address public immutable factory;
     address public immutable unwrapper;
 
-    constructor(address _factory, address _weth, address _unwrapper) {
+    constructor(address _factory, address _kkub, address _unwrapper) {
         factory = _factory;
-        WETH = _weth;
+        KKUB = _kkub;
         unwrapper = _unwrapper;
     }
 
     // Add this function
-    function weth() external view returns (address) {
-        return WETH;
+    function kkub() external view returns (address) {
+        return KKUB;
     }
 
     function addLiquidityETH(
@@ -45,7 +45,7 @@ contract MockRouter {
         uint deadline
     ) external payable returns (uint[] memory amounts) {
         require(path.length >= 2, "Invalid path");
-        require(path[0] == WETH, "WETH must be first");
+        require(path[0] == KKUB, "WETH must be first");
 
         // Mock output amounts
         uint[] memory output = new uint[](path.length);
@@ -69,7 +69,7 @@ contract MockRouter {
         uint deadline
     ) external returns (uint[] memory amounts) {
         require(path.length >= 2, "Invalid path");
-        require(path[path.length - 1] == WETH, "Invalid path end");
+        require(path[path.length - 1] == KKUB, "Invalid path end");
 
         // Simulate token transfer
         IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn);
@@ -117,17 +117,17 @@ contract MockRouter {
 }
 
 contract MockKKUBUnwrapper {
-    address public immutable WETH;
+    address public immutable KKUB;
 
-    constructor(address _weth) {
-        WETH = _weth;
+    constructor(address _kkub) {
+        KKUB = _kkub;
     }
 
     function unwrapKKUB(uint256 amount, address recipient) external returns (bool) {
         // Transfer WETH from sender to this contract
-        require(IERC20(WETH).transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(IERC20(KKUB).transferFrom(msg.sender, address(this), amount), "Transfer failed");
         // Unwrap WETH for ETH
-        IWETH(WETH).withdraw(amount);
+        IKKUB(KKUB).withdraw(amount);
         // Send ETH to recipient
         (bool success,) = recipient.call{value: amount}("");
         require(success, "ETH transfer failed");
@@ -171,7 +171,7 @@ contract PonderPairTest is Test {
     ERC20Mint token1;
     LaunchToken launchToken;
     PonderToken ponder;
-    WETH9 weth;
+    WETH9 kkub;
     MockFactory factory;
     MockKKUBUnwrapper unwrapper; // Add unwrapper
     IPonderRouter router;  // Change from PonderRouter to IPonderRouter
@@ -200,17 +200,17 @@ contract PonderPairTest is Test {
         }
 
         // Deploy WETH and PONDER
-        weth = new WETH9();
+        kkub = new WETH9();
         ponder = new PonderToken(treasury, treasury, ponderLauncher);
 
         // Set up mock factory
         factory = new MockFactory(bob, launcher, address(ponder));  // Use launcher instead of address(this)
 
         // Setup unwrapper and router using MockRouter instead of PonderRouter
-        unwrapper = new MockKKUBUnwrapper(address(weth));
+        unwrapper = new MockKKUBUnwrapper(address(kkub));
         MockRouter mockRouter = new MockRouter(
             address(factory),
-            address(weth),
+            address(kkub),
             address(unwrapper)
         );
         router = IPonderRouter(address(mockRouter));
@@ -239,7 +239,7 @@ contract PonderPairTest is Test {
         token0.mint(alice, INITIAL_LIQUIDITY_AMOUNT * 2);
         token1.mint(alice, INITIAL_LIQUIDITY_AMOUNT * 2);
         deal(address(launchToken), alice, INITIAL_LIQUIDITY_AMOUNT * 2);
-        deal(address(weth), alice, INITIAL_LIQUIDITY_AMOUNT * 2);
+        deal(address(kkub), alice, INITIAL_LIQUIDITY_AMOUNT * 2);
         deal(address(ponder), alice, INITIAL_LIQUIDITY_AMOUNT * 2);
 
         vm.startPrank(alice);
@@ -433,7 +433,7 @@ contract PonderPairTest is Test {
 
     function testActualSwapWithFees() public {
         // First create and setup the pairs
-        address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address launchKubPair = factory.createPair(address(launchToken), address(kkub));
         address ponderPair = factory.createPair(address(launchToken), address(ponder));  // Add PONDER pair
 
         vm.startPrank(launcher);
@@ -445,11 +445,11 @@ contract PonderPairTest is Test {
         addInitialLiquidity(
             PonderPair(launchKubPair),
             IERC20(address(launchToken)),
-            IERC20(address(weth)),
+            IERC20(address(kkub)),
             INITIAL_LIQUIDITY_AMOUNT
         );
 
-        uint256 aliceWethBefore = weth.balanceOf(alice);
+        uint256 aliceWethBefore = kkub.balanceOf(alice);
         uint256 protocolBalanceBefore = launchToken.balanceOf(bob);
         uint256 creatorBalanceBefore = launchToken.balanceOf(creator);
 
@@ -459,7 +459,7 @@ contract PonderPairTest is Test {
         PonderPair(launchKubPair).skim(bob);
         vm.stopPrank();
 
-        assertGt(weth.balanceOf(alice), aliceWethBefore, "Should have received WETH");
+        assertGt(kkub.balanceOf(alice), aliceWethBefore, "Should have received WETH");
         assertGt(
             launchToken.balanceOf(bob) - protocolBalanceBefore,
             0,
@@ -474,7 +474,7 @@ contract PonderPairTest is Test {
 
     function testKubPairFees() public {
         // Create and setup pairs
-        address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address launchKubPair = factory.createPair(address(launchToken), address(kkub));
         address ponderPair = factory.createPair(address(launchToken), address(ponder));
 
         vm.startPrank(launcher);
@@ -486,7 +486,7 @@ contract PonderPairTest is Test {
         addInitialLiquidity(
             PonderPair(launchKubPair),
             IERC20(address(launchToken)),
-            IERC20(address(weth)),
+            IERC20(address(kkub)),
             INITIAL_LIQUIDITY_AMOUNT
         );
 
@@ -607,7 +607,7 @@ contract PonderPairTest is Test {
 
     function testPonderToETHSwap() public {
         // Create PONDER/WETH pair
-        address ponderKubPair = factory.createPair(address(ponder), address(weth));
+        address ponderKubPair = factory.createPair(address(ponder), address(kkub));
 
         vm.startPrank(alice);
 
@@ -616,8 +616,8 @@ contract PonderPairTest is Test {
 
         // Fund alice with ETH first instead of funding contract
         vm.deal(alice, INITIAL_LIQUIDITY_AMOUNT);
-        weth.deposit{value: INITIAL_LIQUIDITY_AMOUNT}();
-        weth.transfer(ponderKubPair, INITIAL_LIQUIDITY_AMOUNT);
+        kkub.deposit{value: INITIAL_LIQUIDITY_AMOUNT}();
+        kkub.transfer(ponderKubPair, INITIAL_LIQUIDITY_AMOUNT);
         PonderPair(ponderKubPair).mint(alice);
 
         // Record initial balances
@@ -629,9 +629,9 @@ contract PonderPairTest is Test {
         PonderPair(ponderKubPair).swap(0, SWAP_AMOUNT/2, alice, "");
 
         // Need to withdraw WETH to ETH
-        uint256 wethBalance = weth.balanceOf(alice);
-        vm.deal(address(weth), wethBalance); // Ensure WETH contract has enough ETH
-        weth.withdraw(wethBalance);
+        uint256 kkubBalance = kkub.balanceOf(alice);
+        vm.deal(address(kkub), kkubBalance); // Ensure WETH contract has enough ETH
+        kkub.withdraw(kkubBalance);
 
         vm.stopPrank();
 
@@ -666,7 +666,7 @@ contract PonderPairTest is Test {
         );
 
         // Create pairs and set them
-        address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address launchKubPair = factory.createPair(address(launchToken), address(kkub));
         address launchPonderPair = factory.createPair(address(launchToken), address(ponder));
         PonderPair kubPairContract = PonderPair(launchKubPair);
         PonderPair ponderPairContract = PonderPair(launchPonderPair);
@@ -730,13 +730,13 @@ contract PonderPairTest is Test {
         {
             // Give fresh allocation
             deal(address(launchToken), alice, swapAmount * 4);
-            deal(address(weth), alice, swapAmount * 4);
+            deal(address(kkub), alice, swapAmount * 4);
 
             vm.startPrank(alice);
 
             // Add initial liquidity
             launchToken.transfer(launchKubPair, swapAmount * 2);
-            weth.transfer(launchKubPair, swapAmount * 2);
+            kkub.transfer(launchKubPair, swapAmount * 2);
             PonderPair(launchKubPair).mint(alice);
 
             // Record balances before swap
@@ -772,7 +772,7 @@ contract PonderPairTest is Test {
 
     function testETHToLaunchTokenSwap() public {
         // Create launch token/WETH pair
-        address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address launchKubPair = factory.createPair(address(launchToken), address(kkub));
 
         // Fund alice
         vm.deal(alice, INITIAL_LIQUIDITY_AMOUNT * 2);
@@ -781,8 +781,8 @@ contract PonderPairTest is Test {
         vm.startPrank(alice);
 
         // Add WETH side
-        weth.deposit{value: INITIAL_LIQUIDITY_AMOUNT}();
-        weth.transfer(address(launchKubPair), INITIAL_LIQUIDITY_AMOUNT);
+        kkub.deposit{value: INITIAL_LIQUIDITY_AMOUNT}();
+        kkub.transfer(address(launchKubPair), INITIAL_LIQUIDITY_AMOUNT);
 
         // Add launch token side
         launchToken.transfer(address(launchKubPair), INITIAL_LIQUIDITY_AMOUNT);
@@ -796,8 +796,8 @@ contract PonderPairTest is Test {
         uint256 expectedOutput = (swapAmount * 997) / 1000;
 
         // Perform swap
-        weth.deposit{value: swapAmount}();
-        weth.transfer(address(launchKubPair), swapAmount);
+        kkub.deposit{value: swapAmount}();
+        kkub.transfer(address(launchKubPair), swapAmount);
         PonderPair(launchKubPair).swap(expectedOutput / 2, 0, alice, "");
 
         // Verify swap succeeded
@@ -808,7 +808,7 @@ contract PonderPairTest is Test {
 
     function testETHToLaunchTokenViaRouter() public {
         // Create launch token/WETH pair
-        address launchKubPair = factory.createPair(address(launchToken), address(weth));
+        address launchKubPair = factory.createPair(address(launchToken), address(kkub));
         address ponderPair = factory.createPair(address(launchToken), address(ponder));
 
         // Enable trading first
@@ -841,7 +841,7 @@ contract PonderPairTest is Test {
 
         // Try swap
         address[] memory path = new address[](2);
-        path[0] = address(weth);
+        path[0] = address(kkub);
         path[1] = address(launchToken);
 
         // Mock router needs ETH value exactly half of input for test

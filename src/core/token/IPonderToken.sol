@@ -1,147 +1,133 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title IPonderToken
- * @notice Interface for the PonderToken contract
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER TOKEN INTERFACE
+//////////////////////////////////////////////////////////////*/
+
+/// @title IPonderToken
+/// @author taayyohh
+/// @notice Interface for Ponder protocol's token functionality
+/// @dev Defines core token operations, events, and view functions
+///      Implemented by the main token contract
 interface IPonderToken {
-    /**
-     * @notice Calculate and claim vested team tokens
-     * @dev Only callable by teamReserve address
-     * @dev Emits TeamTokensClaimed event
-     */
+    /*//////////////////////////////////////////////////////////////
+                        CORE OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Claims vested team tokens
+    /// @dev Only callable by teamReserve address
+    /// @dev Linear vesting over VESTING_DURATION
+    /// @dev Amount determined by vesting schedule
     function claimTeamTokens() external;
 
-    /**
-     * @notice Mint new tokens to specified address
-     * @dev Only callable by minter before MINTING_END
-     * @param to Address to receive minted tokens
-     * @param amount Amount of tokens to mint
-     */
+    /// @notice Mints new tokens to specified recipient
+    /// @dev Restricted to minter role before MINTING_END
+    /// @dev Cannot exceed MAXIMUM_SUPPLY
+    /// @param to Recipient of minted tokens
+    /// @param amount Quantity of tokens to mint
     function mint(address to, uint256 amount) external;
 
-    /**
-     * @notice Update minter address
-     * @dev Only callable by owner
-     * @param minter_ New minter address
-     */
-    function setMinter(address minter_) external;
-
-    /**
-     * @notice Update launcher address
-     * @dev Only callable by owner
-     * @param launcher_ New launcher address
-     */
-    function setLauncher(address launcher_) external;
-
-    /**
-     * @notice Initiate ownership transfer
-     * @dev First step of two-step ownership transfer
-     * @param newOwner Address of proposed new owner
-     */
-    function transferOwnership(address newOwner) external;
-
-    /**
-     * @notice Complete ownership transfer
-     * @dev Second step of two-step ownership transfer
-     */
-    function acceptOwnership() external;
-
-    /**
-     * @notice Burn tokens
-     * @dev Only callable by launcher or owner
-     * @param amount Amount of tokens to burn
-     */
+    /// @notice Burns tokens from caller's balance
+    /// @dev Restricted to launcher or owner
+    /// @dev Permanently removes tokens from circulation
+    /// @param amount Quantity of tokens to burn
     function burn(uint256 amount) external;
 
-    /**
-     * @notice Get amount of tokens reserved for team
-     * @return Amount of tokens still reserved for team allocation
-     */
+    /*//////////////////////////////////////////////////////////////
+                        ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Updates address with minting privileges
+    /// @dev Restricted to owner
+    /// @param minter_ New address to receive minting rights
+    function setMinter(address minter_) external;
+
+    /// @notice Updates launcher address
+    /// @dev Restricted to owner
+    /// @param launcher_ New launcher address
+    function setLauncher(address launcher_) external;
+
+    /// @notice Initiates ownership transfer process
+    /// @dev First step of two-step ownership transfer
+    /// @param newOwner Proposed new owner address
+    function transferOwnership(address newOwner) external;
+
+    /// @notice Completes ownership transfer
+    /// @dev Second step of two-step ownership transfer
+    /// @dev Only callable by pending owner
+    function acceptOwnership() external;
+
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS - STATE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Retrieves remaining team allocation
+    /// @dev Decreases as team tokens are claimed
+    /// @return Amount of tokens reserved for team
     function getReservedForTeam() external view returns (uint256);
 
-    /**
-     * @notice View current minter address
-     * @return Address of current minter
-     */
+    /// @notice Current token minter address
+    /// @return Address with minting privileges
     function minter() external view returns (address);
 
-    /**
-     * @notice View current owner address
-     * @return Address of current owner
-     */
+    /// @notice Current contract owner address
+    /// @return Address with admin privileges
     function owner() external view returns (address);
 
-    /**
-     * @notice View pending owner address
-     * @return Address of pending owner
-     */
+    /// @notice Address in ownership transfer
+    /// @return Pending owner awaiting acceptance
     function pendingOwner() external view returns (address);
 
-    /**
-     * @notice View team reserve address
-     * @return Address of team reserve
-     */
+    /// @notice Team allocation recipient
+    /// @return Address receiving vested team tokens
     function teamReserve() external view returns (address);
 
-    /**
-     * @notice View marketing address
-     * @return Address of marketing wallet
-     */
+    /// @notice Marketing allocation recipient
+    /// @return Address for marketing operations
     function marketing() external view returns (address);
 
-    /**
-     * @notice View launcher address
-     * @return Address of launcher contract
-     */
+    /// @notice Protocol launcher address
+    /// @return Address with launcher privileges
     function launcher() external view returns (address);
 
-    /**
-     * @notice View total burned token amount
-     * @return Amount of tokens burned
-     */
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS - ACCOUNTING
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Total tokens removed from circulation
+    /// @return Cumulative amount of burned tokens
     function totalBurned() external view returns (uint256);
 
-    /**
-     * @notice View amount of team tokens claimed
-     * @return Amount of team allocation tokens claimed
-     */
+    /// @notice Vested team tokens distributed
+    /// @return Amount of claimed team allocation
     function teamTokensClaimed() external view returns (uint256);
 
-    /**
-     * @notice Get immutable deployment timestamp
-     * @return Timestamp when contract was deployed
-     */
+    /// @notice Contract deployment timestamp
+    /// @return Block timestamp of deployment
     function deploymentTime() external view returns (uint256);
 
-    /**
-     * @notice View team vesting start timestamp
-     * @return Timestamp when team vesting started
-     */
+    /// @notice Team vesting schedule start
+    /// @return Timestamp when vesting began
     function teamVestingStart() external view returns (uint256);
 
-    /**
-     * @notice Get maximum total supply of tokens
-     * @return Maximum supply cap
-     */
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS - CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Maximum token supply cap
+    /// @return Total supply limit (1B tokens)
     function maximumSupply() external pure returns (uint256);
 
-    /**
-     * @notice Get duration after which minting is disabled
-     * @return Duration in seconds
-     */
+    /// @notice Minting period duration
+    /// @return Time until minting disabled (4 years)
     function mintingEnd() external pure returns (uint256);
 
-    /**
-     * @notice Get total allocation for team
-     * @return Team allocation amount
-     */
+    /// @notice Total team token allocation
+    /// @return Team allocation amount (250M tokens)
     function teamAllocation() external pure returns (uint256);
 
-    /**
-     * @notice Get vesting duration for team allocation
-     * @return Duration in seconds
-     */
+    /// @notice Team vesting schedule length
+    /// @return Vesting duration (1 year)
     function vestingDuration() external pure returns (uint256);
 }

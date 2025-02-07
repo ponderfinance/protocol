@@ -1,69 +1,79 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title PonderPairStorage
- * @notice Abstract contract defining storage layout for PonderPair
- * @dev Pure storage contract that only defines state variables
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER PAIR STORAGE
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderPairStorage
+/// @author taayyohh
+/// @notice Storage layout for Ponder protocol's liquidity pair contracts
+/// @dev Abstract contract defining state variables for pair implementation
+///      Must be inherited by the main implementation contract
 abstract contract PonderPairStorage {
-    /**
-     * @notice Address of the first token in the pair
-     * @dev Token with the lower address value between the two pair tokens
-     */
+    /*//////////////////////////////////////////////////////////////
+                        TOKEN REFERENCES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice First token in trading pair
+    /// @dev Token with lower address value (token0 < token1)
+    /// @dev Immutable after initialization
     address internal _token0;
 
-    /**
-     * @notice Address of the second token in the pair
-     * @dev Token with the higher address value between the two pair tokens
-     */
+    /// @notice Second token in trading pair
+    /// @dev Token with higher address value (token1 > token0)
+    /// @dev Immutable after initialization
     address internal _token1;
 
-    /**
-     * @notice Reserve of token0
-     * @dev Updated on every mint/burn/swap/sync
-     */
+    /*//////////////////////////////////////////////////////////////
+                        POOL RESERVES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Current token0 liquidity
+    /// @dev Updated on every mint/burn/swap/sync
+    /// @dev Packed with _reserve1 and _blockTimestampLast for gas efficiency
     uint112 internal _reserve0;
 
-    /**
-     * @notice Reserve of token1
-     * @dev Updated on every mint/burn/swap/sync
-     */
+    /// @notice Current token1 liquidity
+    /// @dev Updated on every mint/burn/swap/sync
+    /// @dev Packed with _reserve0 and _blockTimestampLast for gas efficiency
     uint112 internal _reserve1;
 
-    /**
-     * @notice Timestamp of the last reserve update
-     * @dev Used for price oracle functionality
-     */
+    /// @notice Last reserve update time
+    /// @dev Used by oracle for price tracking
+    /// @dev Packed with reserves in single storage slot
     uint32 internal _blockTimestampLast;
 
-    /**
-     * @notice Cumulative price of token0 in terms of token1
-     * @dev Used for time-weighted average price (TWAP) calculations
-     */
+    /*//////////////////////////////////////////////////////////////
+                        PRICE TRACKING
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Token0 price accumulator
+    /// @dev Tracks token0 price in terms of token1
+    /// @dev Used for TWAP calculations by oracle
     uint256 internal _price0CumulativeLast;
 
-    /**
-     * @notice Cumulative price of token1 in terms of token0
-     * @dev Used for time-weighted average price (TWAP) calculations
-     */
+    /// @notice Token1 price accumulator
+    /// @dev Tracks token1 price in terms of token0
+    /// @dev Used for TWAP calculations by oracle
     uint256 internal _price1CumulativeLast;
 
-    /**
-     * @notice Last recorded product of reserves (K value)
-     * @dev Used for LP fee calculation when feeTo is set
-     */
+    /*//////////////////////////////////////////////////////////////
+                        PROTOCOL FEES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Last K value
+    /// @dev Used for protocol fee calculation
+    /// @dev K = reserve0 * reserve1
     uint256 internal _kLast;
 
-    /**
-     * @notice Accumulated protocol fees for token0 pending collection
-     * @dev Collected via skim function
-     */
+    /// @notice Pending token0 fees
+    /// @dev Protocol fees awaiting collection
+    /// @dev Retrieved via skim function
     uint256 internal _accumulatedFee0;
 
-    /**
-     * @notice Accumulated protocol fees for token1 pending collection
-     * @dev Collected via skim function
-     */
+    /// @notice Pending token1 fees
+    /// @dev Protocol fees awaiting collection
+    /// @dev Retrieved via skim function
     uint256 internal _accumulatedFee1;
 }

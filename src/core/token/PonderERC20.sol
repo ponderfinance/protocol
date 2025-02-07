@@ -4,45 +4,67 @@ pragma solidity 0.8.24;
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-/**
- * @title PonderERC20
- * @notice Implementation of the ERC20 token standard with EIP-2612 permit functionality
- * @dev Extends OpenZeppelin's ERC20 implementation with gasless approval mechanism
- */
+/*//////////////////////////////////////////////////////////////
+                    PONDER ERC20 TOKEN
+//////////////////////////////////////////////////////////////*/
+
+/// @title PonderERC20
+/// @author taayyohh
+/// @notice ERC20 implementation with gasless approvals (EIP-2612)
+/// @dev Extends OpenZeppelin ERC20 with permit functionality
+///      Used as base contract for PONDER token implementation
 contract PonderERC20 is ERC20 {
-    /// @notice Cached domain separator to optimize gas costs for permit operations
-    /// @dev Immutable value set at construction
+    /*//////////////////////////////////////////////////////////////
+                       EIP-2612 STORAGE
+   //////////////////////////////////////////////////////////////*/
+
+    /// @notice Domain separator for EIP-712 signatures
+    /// @dev Cached on construction for gas optimization
+    /// @dev Recomputed if chain ID or contract address changes
     bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
 
-    /// @notice Cached chain ID to detect when domain separator needs to be recomputed
-    /// @dev Immutable value set at construction
+    /// @notice Chain ID at contract deployment
+    /// @dev Used to detect chain ID changes for domain separator
+    /// @dev Set as immutable for gas optimization
     uint256 private immutable _CACHED_CHAIN_ID;
 
-    /// @notice Cached contract address to detect when domain separator needs to be recomputed
-    /// @dev Immutable value set at construction
+    /// @notice Contract address at deployment
+    /// @dev Used to detect contract address changes
+    /// @dev Set as immutable for gas optimization
     address private immutable _CACHED_THIS;
 
-    /// @notice EIP-2612 permit typehash for creating permit digests
+    /// @notice EIP-2612 permit typehash
     /// @dev keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
+    /// @dev Used in permit signature verification
     bytes32 public constant PERMIT_TYPEHASH =
     0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
 
-    /// @notice Mapping of owner address to their current nonce for permits
-    /// @dev Prevents replay attacks by requiring incrementing nonces
+    /// @notice Permit nonces per address
+    /// @dev Prevents signature replay attacks
+    /// @dev Increments with each successful permit
     mapping(address => uint256) private _nonces;
 
-    /// @notice Error thrown when permit deadline has passed
+
+    /*//////////////////////////////////////////////////////////////
+                            ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Permit timestamp validation failed
+    /// @dev Thrown when permit deadline has passed
     error PermitExpired();
 
-    /// @notice Error thrown when permit signature is invalid
+    /// @notice Permit signature verification failed
+    /// @dev Thrown for invalid or unauthorized signatures
     error InvalidSignature();
 
-    /**
-     * @notice Constructs the PonderERC20 contract
-     * @dev Initializes ERC20 token details and caches domain separator components
-     * @param tokenName The name of the token
-     * @param tokenSymbol The symbol of the token
-     */
+    /*//////////////////////////////////////////////////////////////
+                       CONSTRUCTOR
+   //////////////////////////////////////////////////////////////*/
+
+    /// @notice Initializes token and permit functionality
+    /// @dev Caches domain separator components
+    /// @param tokenName ERC20 token name
+    /// @param tokenSymbol ERC20 token symbol
     constructor(string memory tokenName, string memory tokenSymbol)
     ERC20(tokenName, tokenSymbol)
     {
@@ -51,11 +73,13 @@ contract PonderERC20 is ERC20 {
         _CACHED_DOMAIN_SEPARATOR = _computeDomainSeparator();
     }
 
-    /**
-     * @notice Computes the domain separator for EIP-712 structured data hashing
-     * @dev Uses token name, version "1", chain ID, and contract address
-     * @return bytes32 The computed domain separator
-     */
+    /*//////////////////////////////////////////////////////////////
+                       EIP-2612 FUNCTIONS
+   //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates EIP-712 domain separator
+    /// @dev Incorporates name, version, chain ID, contract address
+    /// @return Domain separator hash
     function _computeDomainSeparator() internal view returns (bytes32) {
         return keccak256(
             abi.encode(
@@ -68,11 +92,9 @@ contract PonderERC20 is ERC20 {
         );
     }
 
-    /**
-     * @notice Gets the domain separator for EIP-712 structured data hashing
-     * @dev Returns cached value if chain ID and contract address haven't changed
-     * @return bytes32 The domain separator
-     */
+    /// @notice Retrieves current domain separator
+    /// @dev Returns cached value if chain hasn't changed
+    /// @return Current domain separator
     function domainSeparator() public view returns (bytes32) {
         if (block.chainid == _CACHED_CHAIN_ID && address(this) == _CACHED_THIS) {
             return _CACHED_DOMAIN_SEPARATOR;
@@ -80,27 +102,23 @@ contract PonderERC20 is ERC20 {
         return _computeDomainSeparator();
     }
 
-    /**
-     * @notice Get the current nonce for an address
-     * @dev Used for generating permit signatures
-     * @param owner The address to get the nonce for
-     * @return The current nonce
-     */
+    /// @notice Gets current nonce for address
+    /// @dev Used for signature generation
+    /// @param owner Address to get nonce for
+    /// @return Current nonce value
     function nonces(address owner) public view returns (uint256) {
         return _nonces[owner];
     }
 
-    /**
-     * @notice Approve spending of tokens via signature (EIP-2612)
-     * @dev Validates permit signature and sets approval if valid
-     * @param owner The owner of the tokens
-     * @param spender The approved spender
-     * @param value The amount of tokens to approve
-     * @param deadline The timestamp after which the permit is invalid
-     * @param v The recovery byte of the signature
-     * @param r Half of the ECDSA signature pair
-     * @param s Half of the ECDSA signature pair
-     */
+    /// @notice Enables gasless token approvals
+    /// @dev Validates signature and sets approval
+    /// @param owner Token owner address
+    /// @param spender Address to approve
+    /// @param value Amount to approve
+    /// @param deadline Timestamp when permit expires
+    /// @param v ECDSA signature recovery byte
+    /// @param r ECDSA signature half
+    /// @param s ECDSA signature half
     function permit(
         address owner,
         address spender,
@@ -126,13 +144,15 @@ contract PonderERC20 is ERC20 {
         _approve(owner, spender, value);
     }
 
-    /**
-     * @notice Hook that is called before any transfer of tokens
-     * @dev Overrides OpenZeppelin's _update to allow custom transfer logic
-     * @param from Address tokens are transferred from
-     * @param to Address tokens are transferred to
-     * @param amount Amount of tokens transferred
-     */
+    /*//////////////////////////////////////////////////////////////
+                       INTERNAL HOOKS
+   //////////////////////////////////////////////////////////////*/
+
+    /// @notice Pre-transfer hook
+    /// @dev Override point for custom transfer logic
+    /// @param from Sender address
+    /// @param to Recipient address
+    /// @param amount Transfer amount
     function _update(
         address from,
         address to,
