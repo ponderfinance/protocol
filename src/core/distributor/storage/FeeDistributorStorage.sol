@@ -19,16 +19,16 @@ abstract contract FeeDistributorStorage {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The protocol's factory contract for managing pairs
-    IPonderFactory public FACTORY;
+    IPonderFactory public factory;
 
     /// @notice The protocol's router contract for swap operations
-    IPonderRouter public ROUTER;
+    IPonderRouter public router;
 
     /// @notice The address of the protocol's PONDER token
-    address public PONDER;
+    address public ponder;
 
     /// @notice The protocol's staking contract for PONDER tokens
-    IPonderStaking public STAKING;
+    IPonderStaking public staking;
 
     /*//////////////////////////////////////////////////////////////
                         DISTRIBUTION TRACKING
