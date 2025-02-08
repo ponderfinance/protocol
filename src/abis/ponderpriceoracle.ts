@@ -11,11 +11,6 @@ export const ponderpriceoracleAbi = [
         "name": "_baseToken",
         "type": "address",
         "internalType": "address"
-      },
-      {
-        "name": "_stablecoin",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -36,19 +31,6 @@ export const ponderpriceoracleAbi = [
   {
     "type": "function",
     "name": "FACTORY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "STABLECOIN",
     "inputs": [],
     "outputs": [
       {
@@ -128,30 +110,6 @@ export const ponderpriceoracleAbi = [
         "type": "address",
         "internalType": "address"
       },
-      {
-        "name": "tokenIn",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amountIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "amountOut",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getPriceInStablecoin",
-    "inputs": [
       {
         "name": "tokenIn",
         "type": "address",
@@ -272,19 +230,6 @@ export const ponderpriceoracleAbi = [
         "name": "price1Cumulative",
         "type": "uint224",
         "internalType": "uint224"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "stableCoin",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "view"

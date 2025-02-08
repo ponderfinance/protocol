@@ -1,168 +1,162 @@
-//// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
-//
-//import "forge-std/Test.sol";
-//import "../../script/deploy/DeployBitkub.sol";
-//import "../../src/core/pair/IPonderPair.sol";
-//import "../../src/core/factory/IPonderFactory.sol";
-//import "../../src/core/token/PonderToken.sol";
-//
-//contract DeployBitkubTest is Test {
-//    DeployBitkubScript public deployerScript;
-//    address public constant MOCK_TEAM = address(0x1);
-//    address public constant MOCK_MARKETING = address(0x2);
-//    address public constant MOCK_KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
-//    address public constant MOCK_USDT = 0x7d984C24d2499D840eB3b7016077164e15E5faA6;
-//
-//    // Events to test
-//    event DeploymentStarted(address indexed deployer, uint256 deadline);
-//    event ContractDeployed(string indexed name, address indexed addr);
-//    event LibraryDeployed(string indexed name, address indexed addr);
-//    event LiquidityAdded(uint256 kubAmount, uint256 ponderAmount);
-//    event ConfigurationFinalized(
-//        address indexed factory,
-//        address indexed masterChef,
-//        address indexed feeDistributor
-//    );
-//
-//    function setUp() public {
-//        // Deploy the script contract
-//        deployerScript = new DeployBitkubScript();
-//
-//        // Setup environment variables
-//        vm.etch(MOCK_KKUB, "some code");
-//        vm.etch(MOCK_USDT, "some code");
-//
-//        vm.mockCall(
-//            address(vm),
-//            abi.encodeWithSignature("envUint(string)", "PRIVATE_KEY"),
-//            abi.encode(uint256(1))
-//        );
-//        vm.mockCall(
-//            address(vm),
-//            abi.encodeWithSignature("envAddress(string)", "TEAM_RESERVE_ADDRESS"),
-//            abi.encode(MOCK_TEAM)
-//        );
-//        vm.mockCall(
-//            address(vm),
-//            abi.encodeWithSignature("envAddress(string)", "MARKETING_ADDRESS"),
-//            abi.encode(MOCK_MARKETING)
-//        );
-//
-//        // Fund test contract
-//        vm.deal(address(this), 1000 ether);
-//    }
-//
-//    // Test successful deployment sequence
-//    function testSuccessfulDeployment() public {
-//        address deployerAddress = address(this);
-//
-//        vm.expectEmit(true, true, false, false);
-//        emit DeploymentStarted(deployerAddress, block.timestamp + 1 hours);
-//
-//        // Execute full deployment
-//        DeployBitkubScript.DeploymentState memory state = deployerScript.executeDeploy(
-//            deployerAddress,
-//            MOCK_TEAM,
-//            MOCK_MARKETING
-//        );
-//
-//        // Verify core contract deployments
-//        assertTrue(state.factory != address(0), "Factory not deployed");
-//        assertTrue(state.ponder != address(0), "Ponder not deployed");
-//        assertTrue(state.router != address(0), "Router not deployed");
-//        assertTrue(state.ponderKubPair != address(0), "Pair not created");
-//
-//        // Verify that the deployer is set as feeToSetter
-//        assertEq(IPonderFactory(state.factory).feeToSetter(), deployerAddress, "Deployer should be feeToSetter");
-//    }
-//
-//    // Test front-running protection
-//    function testFrontRunningProtection() public {
-//        address attacker = address(0xBad);
-//        vm.startPrank(attacker);
-//        vm.deal(attacker, 1000 ether);
-//
-//        // Expect revert when attacker tries to deploy
-//        vm.expectRevert("Invalid addresses");
-//        deployerScript.executeDeploy(
-//            attacker,
-//            MOCK_TEAM,
-//            MOCK_MARKETING
-//        );
-//
-//        vm.stopPrank();
-//    }
-//
-//    // Test initial liquidity setup
-//    function testInitialLiquiditySetup() public {
-//        address deployerAddress = address(this);
-//        DeployBitkubScript.DeploymentState memory state = deployerScript.executeDeploy(
-//            deployerAddress,
-//            MOCK_TEAM,
-//            MOCK_MARKETING
-//        );
-//
-//        // Verify liquidity was added
-//        IPonderPair pair = IPonderPair(state.ponderKubPair);
-//        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
-//        assertTrue(reserve0 > 0 && reserve1 > 0, "Liquidity not added");
-//    }
-//
-//    // Test configuration completion
-//    function testConfigurationCompletion() public {
-//        address deployerAddress = address(this);
-//        DeployBitkubScript.DeploymentState memory state = deployerScript.executeDeploy(
-//            deployerAddress,
-//            MOCK_TEAM,
-//            MOCK_MARKETING
-//        );
-//
-//        // Verify permissions are set correctly
-//        assertEq(PonderToken(state.ponder).minter(), state.masterChef, "MasterChef not set as minter");
-//        assertEq(IPonderFactory(state.factory).feeTo(), state.feeDistributor, "FeeDistributor not set");
-//        assertEq(IPonderFactory(state.factory).launcher(), state.launcher, "Launcher not set");
-//    }
-//
-//    // Test invalid address protection
-//    function testInvalidAddresses() public {
-//        vm.expectRevert("Invalid addresses");
-//        deployerScript.executeDeploy(
-//            address(0),
-//            MOCK_TEAM,
-//            MOCK_MARKETING
-//        );
-//
-//        vm.expectRevert("Invalid addresses");
-//        deployerScript.executeDeploy(
-//            address(this),
-//            address(0),
-//            MOCK_MARKETING
-//        );
-//
-//        vm.expectRevert("Invalid addresses");
-//        deployerScript.executeDeploy(
-//            address(this),
-//            MOCK_TEAM,
-//            address(0)
-//        );
-//    }
-//
-//    // Test library deployment and linking
-//    function testLibraryDeployment() public {
-//        address deployerAddress = address(this);
-//
-//        vm.expectEmit(true, true, false, false);
-//        emit LibraryDeployed("ContributionLib", address(0)); // address will be dynamic
-//
-//        DeployBitkubScript.DeploymentState memory state = deployerScript.executeDeploy(
-//            deployerAddress,
-//            MOCK_TEAM,
-//            MOCK_MARKETING
-//        );
-//
-//        assertTrue(state.launcher != address(0), "Launcher not deployed with libraries");
-//    }
-//
-//    receive() external payable {}
-//}
+
+import { Test, Vm } from "forge-std/Test.sol";
+import { console } from "forge-std/console.sol";
+import { DeployBitkubScript } from "../../script/deploy/DeployBitkub.sol";
+import { PonderToken } from "../../src/core/token/PonderToken.sol";
+import { PonderFactory } from "../../src/core/factory/PonderFactory.sol";
+import { PonderMasterChef } from "../../src/core/masterchef/PonderMasterChef.sol";
+import { PonderRouter } from "../../src/periphery/router/PonderRouter.sol";
+import { PonderPriceOracle } from "../../src/core/oracle/PonderPriceOracle.sol";
+import { PonderStaking } from "../../src/core/staking/PonderStaking.sol";
+import { FeeDistributor } from "../../src/core/distributor/FeeDistributor.sol";
+import { KKUBUnwrapper } from "../../src/periphery/unwrapper/KKUBUnwrapper.sol";
+import { FiveFiveFiveLauncher } from "../../src/launch/FiveFiveFiveLauncher.sol";
+
+contract DeployBitkubTest is Test {
+    DeployBitkubScript public deployer;
+    address constant KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
+
+    event ContractDeployed(string indexed name, address indexed addr);
+    event ConfigurationFinalized(address indexed factory, address indexed masterChef, address indexed feeDistributor);
+
+    uint256 constant DEPLOYER_PRIVATE_KEY = 0xBEEF;
+    address deployerAddress;
+
+    function setUp() public {
+        // Setup deployer
+        deployerAddress = vm.addr(DEPLOYER_PRIVATE_KEY);
+        vm.deal(deployerAddress, 100 ether);
+
+        // Remove "0x" prefix for private key environment variable
+        string memory pkString = vm.toString(DEPLOYER_PRIVATE_KEY);
+        vm.setEnv("PRIVATE_KEY", pkString);
+        vm.setEnv("TEAM_RESERVE_ADDRESS", "0xb9991047fAAFe64F56F981b0CC829494Add5bD54");
+        vm.setEnv("MARKETING_ADDRESS", "0xC07B3f9471A4036b1B577483fC51aC04c6885730");
+
+        // Mock KKUB
+        vm.etch(KKUB, address(0xBEEF).code);
+
+        deployer = new DeployBitkubScript();
+    }
+
+    function test_InvalidAddresses() public {
+        vm.setEnv("TEAM_RESERVE_ADDRESS", "0x0000000000000000000000000000000000000000");
+        vm.expectRevert("Invalid addresses");
+        deployer.run();
+    }
+
+    function test_DeploymentAndConfiguration() public {
+        vm.startPrank(deployerAddress);
+        vm.recordLogs();
+
+        deployer.run();
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // Track all contracts that should be deployed
+        address[10] memory contracts;
+        string[10] memory expectedNames = [
+                    "PONDER",
+                    "Factory",
+                    "KKUBUnwrapper",
+                    "Router",
+                    "Oracle",
+                    "Staking",
+                    "FeeDistributor",
+                    "Launcher",
+                    "MasterChef",
+                    "PONDER-KUB Pair"
+            ];
+        uint256 found = 0;
+
+        // Process logs to find contract deployments
+        for (uint i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == keccak256("ContractDeployed(string,address)")) {
+                string memory name = abi.decode(logs[i].data, (string));
+                address addr = address(uint160(uint256(logs[i].topics[1])));
+
+                for (uint j = 0; j < expectedNames.length; j++) {
+                    if (keccak256(bytes(name)) == keccak256(bytes(expectedNames[j]))) {
+                        contracts[j] = addr;
+                        found++;
+                        break;
+                    }
+                }
+            }
+        }
+
+        assertEq(found, 10, "Not all contracts deployed");
+
+        // Verify configurations
+        PonderToken ponder = PonderToken(contracts[0]);
+        PonderFactory factory = PonderFactory(contracts[1]);
+
+        assertEq(ponder.minter(), contracts[8], "Wrong minter"); // MasterChef
+        assertEq(ponder.launcher(), contracts[7], "Wrong launcher"); // Launcher
+        assertEq(factory.ponder(), address(ponder), "Wrong factory token");
+        assertEq(factory.feeTo(), contracts[6], "Wrong fee recipient"); // FeeDistributor
+
+        vm.stopPrank();
+    }
+
+    function test_PairCreation() public {
+        vm.startPrank(deployerAddress);
+        vm.recordLogs();
+
+        deployer.run();
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        address ponderKubPair;
+
+        for (uint i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == keccak256("ContractDeployed(string,address)")) {
+                string memory name = abi.decode(logs[i].data, (string));
+                if (keccak256(bytes(name)) == keccak256(bytes("PONDER-KUB Pair"))) {
+                    ponderKubPair = address(uint160(uint256(logs[i].topics[1])));
+                    break;
+                }
+            }
+        }
+
+        assertTrue(ponderKubPair != address(0), "PONDER-KUB pair not created");
+        assertTrue(ponderKubPair.code.length > 0, "PONDER-KUB pair has no code");
+
+        vm.stopPrank();
+    }
+
+    function test_DeployerPrivileges() public {
+        vm.expectRevert();
+        vm.prank(address(0xDEAD));
+        deployer.run();
+
+        // Should work with deployer address
+        vm.prank(deployerAddress);
+        deployer.run();
+    }
+
+    function test_FeeConfiguration() public {
+        vm.startPrank(deployerAddress);
+        vm.recordLogs();
+
+        deployer.run();
+
+        bool foundConfigFinalized = false;
+        for (uint i = 0; i < vm.getRecordedLogs().length; i++) {
+            Vm.Log memory log = vm.getRecordedLogs()[i];
+            if (log.topics[0] == keccak256("ConfigurationFinalized(address,address,address)")) {
+                foundConfigFinalized = true;
+                break;
+            }
+        }
+
+        assertTrue(foundConfigFinalized, "Configuration finalization event not emitted");
+        vm.stopPrank();
+    }
+
+    function testGas_Deployment() public {
+        vm.prank(deployerAddress);
+        deployer.run();
+    }
+}

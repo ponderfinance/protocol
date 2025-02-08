@@ -2,7 +2,7 @@
   "name": "@ponderfinance/dex",
   "version": "1.0.0",
   "type": "module",
-  "description": "Core smart contracts for Ponder Protocol",
+  "description": "Core smart contracts for Ponder DEX & 555 Launcher",
   "files": [
     "dist",
     "contracts"
