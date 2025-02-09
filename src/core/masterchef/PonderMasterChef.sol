@@ -262,6 +262,41 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         return numerator / denominator;
     }
 
+    /// @notice Get pool information
+    /// @dev Returns all data for a farm pool
+    /// @param _pid Pool ID to query
+    /// @return lpToken Address of LP token
+    /// @return allocPoint Pool's share of PONDER emissions
+    /// @return lastRewardTime Last reward distribution timestamp
+    /// @return accPonderPerShare Accumulated PONDER per share, scaled by 1e12
+    /// @return totalStaked Total LP tokens staked
+    /// @return totalWeightedShares Total boosted share amount
+    /// @return depositFeeBP Deposit fee in basis points (1 BP = 0.01%)
+    /// @return boostMultiplier Maximum boost multiplier for this pool
+    function poolInfo(uint256 _pid) external view returns (
+        address lpToken,
+        uint256 allocPoint,
+        uint256 lastRewardTime,
+        uint256 accPonderPerShare,
+        uint256 totalStaked,
+        uint256 totalWeightedShares,
+        uint16 depositFeeBP,
+        uint16 boostMultiplier
+    ) {
+        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
+        return (
+            pool.lpToken,
+            pool.allocPoint,
+            pool.lastRewardTime,
+            pool.accPonderPerShare,
+            pool.totalStaked,
+            pool.totalWeightedShares,
+            pool.depositFeeBP,
+            pool.boostMultiplier
+        );
+    }
+
 
     /// @notice Calculate potential boost multiplier
     /// @dev Preview boost multiplier for given stake amounts
