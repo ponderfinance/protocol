@@ -51,6 +51,7 @@ contract DeployBitkubScript is Script {
 
     event ContractDeployed(string indexed name, address indexed addr);
     event ConfigurationFinalized(address indexed factory, address indexed masterChef, address indexed feeDistributor);
+    event LiquidityAdded(uint256 kubAmount, uint256 ponderAmount);
 
     function initialize(address deployer, address teamReserve, address marketing) internal {
         require(!state.initialized, "Already initialized");
@@ -93,12 +94,34 @@ contract DeployBitkubScript is Script {
         state.core.masterChef = address(new PonderMasterChef(PonderToken(state.core.ponder), PonderFactory(state.core.factory), state.participants.teamReserve, INITIAL_PONDER_PER_SECOND));
         emit ContractDeployed("MasterChef", state.core.masterChef);
 
-        // **CREATE PONDER-KUB PAIR**
+        // Create PONDER-KUB pair
         console.log("Creating PONDER-KUB pair...");
         PonderFactory(state.core.factory).createPair(state.core.ponder, KKUB);
         state.core.ponderKubPair = PonderFactory(state.core.factory).getPair(state.core.ponder, KKUB);
         require(state.core.ponderKubPair != address(0), "Pair creation failed");
         emit ContractDeployed("PONDER-KUB Pair", state.core.ponderKubPair);
+
+        // Setup initial liquidity
+        setupInitialLiquidity();
+    }
+
+    function setupInitialLiquidity() internal {
+        // Add approvals
+        PonderToken(state.core.ponder).approve(state.core.router, INITIAL_LIQUIDITY_ALLOCATION);
+
+        // Add liquidity
+        try IPonderRouter(state.core.router).addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
+            state.core.ponder,
+            INITIAL_LIQUIDITY_ALLOCATION,
+            INITIAL_LIQUIDITY_ALLOCATION,
+            INITIAL_KUB_AMOUNT,
+            state.participants.deployer,
+            block.timestamp + 300
+        ) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
+            emit LiquidityAdded(amountETH, amountToken);
+        } catch Error(string memory reason) {
+            revert(string(abi.encodePacked("Liquidity addition failed: ", reason)));
+        }
     }
 
     function finalizeConfiguration() internal {

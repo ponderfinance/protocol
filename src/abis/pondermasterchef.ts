@@ -320,6 +320,60 @@ export const pondermasterchefAbi = [
   },
   {
     "type": "function",
+    "name": "poolInfo",
+    "inputs": [
+      {
+        "name": "_pid",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "lpToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allocPoint",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lastRewardTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "accPonderPerShare",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalStaked",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalWeightedShares",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "depositFeeBP",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "boostMultiplier",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "poolLength",
     "inputs": [],
     "outputs": [
