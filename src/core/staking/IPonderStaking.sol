@@ -54,8 +54,9 @@ interface IPonderStaking {
     /// @notice Stakes PONDER tokens to receive xPONDER shares
     /// @dev Transfers PONDER from user and mints xPONDER
     /// @param amount Amount of PONDER tokens to stake
+    /// @param recipient Address of the xPONDER recipient
     /// @return shares Amount of xPONDER shares minted
-    function enter(uint256 amount) external returns (uint256 shares);
+    function enter(uint256 amount, address recipient) external returns (uint256 shares);
 
     /// @notice Withdraws PONDER tokens by burning xPONDER shares
     /// @dev Burns xPONDER and returns corresponding PONDER

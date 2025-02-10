@@ -56,7 +56,7 @@ contract PonderStakingTest is Test {
         // First stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Simulate fee distribution using test contract's balance
@@ -74,7 +74,7 @@ contract PonderStakingTest is Test {
         // First user stakes
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Add rewards using test contract's balance
@@ -84,7 +84,7 @@ contract PonderStakingTest is Test {
         uint256 user2StakeAmount = 1000e18;
         vm.startPrank(user2);
         ponder.approve(address(staking), user2StakeAmount);
-        uint256 shares = staking.enter(user2StakeAmount);
+        uint256 shares = staking.enter(user2StakeAmount, user2);
         vm.stopPrank();
 
         assertLt(shares, user2StakeAmount, "Should receive fewer shares due to rewards");
@@ -94,7 +94,7 @@ contract PonderStakingTest is Test {
         // Initial stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         assertEq(staking.getPonderAmount(1000e18), 1000e18, "Should be 1:1 initially");
@@ -114,7 +114,7 @@ contract PonderStakingTest is Test {
         vm.stopPrank();
 
         ponder.approve(address(staking), amount);
-        uint256 shares = staking.enter(amount);
+        uint256 shares = staking.enter(amount, address(staking));
         uint256 ponderReceived = staking.leave(shares);
 
         assertApproxEqRel(ponderReceived, amount, 1e14);
@@ -136,7 +136,7 @@ contract PonderStakingTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Staked(user1, stakeAmount, stakeAmount); // 1:1 for first stake
 
-        uint256 shares = staking.enter(stakeAmount);
+        uint256 shares = staking.enter(stakeAmount, user1);
         vm.stopPrank();
 
         assertEq(shares, stakeAmount, "Should receive 1:1 shares for first stake");
@@ -148,7 +148,7 @@ contract PonderStakingTest is Test {
         // First stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
 
         // Leave half
         uint256 sharesToLeave = 500e18;
@@ -168,7 +168,7 @@ contract PonderStakingTest is Test {
         ponder.approve(address(staking), 1000e18);
 
         vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
-        staking.enter(0);
+        staking.enter(0, user1);
 
         vm.expectRevert(abi.encodeWithSignature("InvalidAmount()"));
         staking.leave(0);
@@ -213,7 +213,7 @@ contract PonderStakingTest is Test {
         // User1 performs normal stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        uint256 shares = staking.enter(1000e18);
+        uint256 shares = staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Should get exact 1:1 ratio for first stake
@@ -226,7 +226,7 @@ contract PonderStakingTest is Test {
         vm.startPrank(user1);
         ponder.approve(address(staking), smallAmount);
         vm.expectRevert(abi.encodeWithSignature("InsufficientFirstStake()"));
-        staking.enter(smallAmount);
+        staking.enter(smallAmount, user1);
         vm.stopPrank();
     }
 
@@ -234,13 +234,13 @@ contract PonderStakingTest is Test {
         // Initial stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        uint256 shares1 = staking.enter(1000e18);
+        uint256 shares1 = staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Second stake with half amount
         vm.startPrank(user2);
         ponder.approve(address(staking), 500e18);
-        uint256 shares2 = staking.enter(500e18);
+        uint256 shares2 = staking.enter(500e18, user2);
         vm.stopPrank();
 
         // Half amount should get half shares
@@ -257,7 +257,7 @@ contract PonderStakingTest is Test {
         // First stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Record initial share value
@@ -276,7 +276,7 @@ contract PonderStakingTest is Test {
         // User1 stakes first
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Simulate fee distribution
@@ -288,7 +288,7 @@ contract PonderStakingTest is Test {
         // When user2 stakes 1000e18 PONDER, they should get proportionally fewer shares
         // Total pool = 1100e18 PONDER, total shares = 1000e18
         // So 1000e18 PONDER should get (1000e18 * 1000e18) / 1100e18 shares
-        uint256 user2Shares = staking.enter(1000e18);
+        uint256 user2Shares = staking.enter(1000e18, user2);
         vm.stopPrank();
 
         // Both users should have proportional claims
@@ -307,7 +307,7 @@ contract PonderStakingTest is Test {
         // Initial stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Add fees
@@ -316,7 +316,7 @@ contract PonderStakingTest is Test {
         // Second user stakes
         vm.startPrank(user2);
         ponder.approve(address(staking), 500e18);
-        uint256 user2Shares = staking.enter(500e18);
+        uint256 user2Shares = staking.enter(500e18, user2);
         vm.stopPrank();
 
         // More fees
@@ -338,7 +338,7 @@ contract PonderStakingTest is Test {
         // Initial stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Setup sandwich attack
@@ -362,7 +362,7 @@ contract PonderStakingTest is Test {
         // Initial stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Try to withdraw tiny amount
@@ -376,7 +376,7 @@ contract PonderStakingTest is Test {
         // Initial stake
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Try to withdraw more than owned
@@ -399,7 +399,7 @@ contract PonderStakingTest is Test {
         // Initial stake with the reentrant token
         vm.startPrank(user1);
         reentrantToken.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
 
         // Try to leave with the reentrant token
         vm.expectRevert(abi.encodeWithSignature("SafeERC20FailedOperation(address)", address(reentrantToken)));

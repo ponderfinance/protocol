@@ -211,8 +211,7 @@ contract FeeDistributorTest is Test {
             address(factory),
             address(router),
             address(ponder),
-            address(staking),
-            teamReserve
+            address(staking)
         );
 
         // Deploy test token and create pair
@@ -305,9 +304,6 @@ contract FeeDistributorTest is Test {
         assertEq(address(distributor.router()), address(router));
         assertEq(address(distributor.ponder()), address(ponder));
         assertEq(address(distributor.staking()), address(staking));
-        assertEq(distributor.team(), teamReserve);
-        assertEq(distributor.stakingRatio(), 8000); // 80%
-        assertEq(distributor.teamRatio(), 2000);    // 20%
     }
 
     /**
@@ -398,51 +394,8 @@ contract FeeDistributorTest is Test {
         );
     }
 
-    /**
-     * @notice Test distribution ratio updates
-     */
-    function test_UpdateDistributionRatios() public {
-        uint256 newStakingRatio = 7000; // 70%
-        uint256 newTeamRatio = 3000;    // 30%
 
-        distributor.updateDistributionRatios(
-            newStakingRatio,
-            newTeamRatio
-        );
 
-        assertEq(distributor.stakingRatio(), newStakingRatio);
-        assertEq(distributor.teamRatio(), newTeamRatio);
-    }
-
-    /**
-     * @notice Test invalid ratio combinations revert
-     */
-    function test_RevertInvalidRatios() public {
-        // Total > 100%
-        vm.expectRevert(abi.encodeWithSignature("RatioSumIncorrect()"));
-        distributor.updateDistributionRatios(8000, 3000);
-
-        // Total < 100%
-        vm.expectRevert(abi.encodeWithSignature("RatioSumIncorrect()"));
-        distributor.updateDistributionRatios(7000, 2000);
-    }
-
-    /**
-     * @notice Test authorization controls
-     */
-    function test_RevertUnauthorizedDistributionChange() public {
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSignature("NotOwner()"));
-        distributor.updateDistributionRatios(7000, 3000);
-    }
-
-    /**
-     * @notice Test zero address validations
-     */
-    function test_RevertZeroAddresses() public {
-        vm.expectRevert(abi.encodeWithSignature("ZeroAddress()"));
-        distributor.setTeam(address(0));
-    }
 
 /**
      * @notice Test fee distribution to stakers and team
@@ -458,14 +411,10 @@ contract FeeDistributorTest is Test {
         uint256 totalAmount = ponder.balanceOf(address(distributor));
         require(totalAmount >= distributor.minimumAmount(), "Insufficient PONDER for distribution");
 
-        uint256 expectedStaking = (totalAmount * 8000) / BASIS_POINTS; // 80%
-        uint256 expectedTeam = (totalAmount * 2000) / BASIS_POINTS;    // 20%
+        uint256 expectedStaking = (totalAmount * 10000) / BASIS_POINTS; // 100%
 
         uint256 initialStaking = ponder.balanceOf(address(staking));
         uint256 initialTeam = ponder.balanceOf(teamReserve);
-
-        // Remove this line as it's no longer needed
-        // vm.warp(block.timestamp + 1 days);
 
         distributor.distribute();
 
@@ -476,12 +425,6 @@ contract FeeDistributorTest is Test {
             "Wrong staking distribution"
         );
 
-        assertApproxEqRel(
-            ponder.balanceOf(teamReserve) - initialTeam,
-            expectedTeam,
-            0.01e18,
-            "Wrong team distribution"
-        );
     }
 
     /**
@@ -570,7 +513,7 @@ contract FeeDistributorTest is Test {
         // Now do the staking
         vm.startPrank(user1);
         ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18);
+        staking.enter(1000e18, user1);
         vm.stopPrank();
 
         // Record initial state
@@ -1079,7 +1022,7 @@ contract FeeDistributorTest is Test {
 
         vm.startPrank(attacker);
         ponder.approve(address(staking), 100_000e18);
-        staking.enter(100_000e18);
+        staking.enter(100_000e18, attacker);
 
         // Try to distribute immediately after (t = startTime + 1)
         vm.warp(startTime + 1);
@@ -1114,7 +1057,7 @@ contract FeeDistributorTest is Test {
 
             vm.startPrank(stakers[i]);
             ponder.approve(address(staking), amounts[i]);
-            staking.enter(amounts[i]);
+            staking.enter(amounts[i], stakers[i]);
             vm.stopPrank();
         }
 
@@ -1143,7 +1086,7 @@ contract FeeDistributorTest is Test {
 
         vm.startPrank(attacker);
         ponder.approve(address(staking), 100_000e18);
-        staking.enter(100_000e18);
+        staking.enter(100_000e18, attacker);
 
         // Try to distribute within cooldown period (t = startTime + 1)
         vm.warp(startTime + 1);

@@ -12,6 +12,14 @@ pragma solidity 0.8.24;
 ///      Must be inherited by the main staking contract
 abstract contract PonderStakingStorage {
     /*//////////////////////////////////////////////////////////////
+                    TIMING STATE
+//////////////////////////////////////////////////////////////*/
+
+    /// @notice Contract deployment timestamp
+    /// @dev Used for team lock period validation
+    uint256 public immutable deploymentTime;
+
+    /*//////////////////////////////////////////////////////////////
                         ACCESS CONTROL
     //////////////////////////////////////////////////////////////*/
 

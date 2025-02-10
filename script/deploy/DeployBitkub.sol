@@ -67,31 +67,61 @@ contract DeployBitkubScript is Script {
     }
 
     function deployCoreProtocol() internal {
-        state.core.ponder = address(new PonderToken(state.participants.teamReserve, state.participants.marketing, state.participants.deployer));
-        emit ContractDeployed("PONDER", state.core.ponder);
-
-        state.core.factory = address(new PonderFactory(state.participants.deployer, address(0), state.core.ponder));
-        emit ContractDeployed("Factory", state.core.factory);
+        // Deploy factory and peripherals first
+        state.core.factory = address(new PonderFactory(
+            state.participants.deployer,
+            address(0),  // feeTo set later
+            address(0)   // ponder set later
+        ));
 
         state.core.kkubUnwrapper = address(new KKUBUnwrapper(KKUB));
-        emit ContractDeployed("KKUBUnwrapper", state.core.kkubUnwrapper);
+        state.core.router = address(new PonderRouter(
+            state.core.factory,
+            KKUB,
+            state.core.kkubUnwrapper
+        ));
 
-        state.core.router = address(new PonderRouter(state.core.factory, KKUB, state.core.kkubUnwrapper));
-        emit ContractDeployed("Router", state.core.router);
+        // First deploy token with temporary staking address
+        state.core.ponder = address(new PonderToken(
+            state.participants.teamReserve,
+            state.participants.deployer,  // launcher
+            address(1)  // temporary staking address
+        ));
 
+        // Now deploy staking with actual PONDER address
+        state.core.staking = address(new PonderStaking(
+            state.core.ponder,
+            state.core.router,
+            state.core.factory
+        ));
+
+        // Set up remaining contracts
         state.core.oracle = address(new PonderPriceOracle(state.core.factory, KKUB));
         emit ContractDeployed("Oracle", state.core.oracle);
 
-        state.core.staking = address(new PonderStaking(state.core.ponder, state.core.router, state.core.factory));
-        emit ContractDeployed("Staking", state.core.staking);
-
-        state.core.feeDistributor = address(new FeeDistributor(state.core.factory, state.core.router, state.core.ponder, state.core.staking, state.participants.teamReserve));
+        state.core.feeDistributor = address(new FeeDistributor(
+            state.core.factory,
+            state.core.router,
+            state.core.ponder,
+            state.core.staking
+        ));
         emit ContractDeployed("FeeDistributor", state.core.feeDistributor);
 
-        state.core.launcher = address(new FiveFiveFiveLauncher(state.core.factory, payable(state.core.router), state.participants.teamReserve, state.core.ponder, state.core.oracle));
+        state.core.launcher = address(new FiveFiveFiveLauncher(
+            state.core.factory,
+            payable(state.core.router),
+            state.participants.teamReserve,
+            state.core.ponder,
+            state.core.oracle
+        ));
         emit ContractDeployed("Launcher", state.core.launcher);
 
-        state.core.masterChef = address(new PonderMasterChef(PonderToken(state.core.ponder), PonderFactory(state.core.factory), state.participants.teamReserve, INITIAL_PONDER_PER_SECOND));
+        state.core.masterChef = address(new PonderMasterChef(
+            PonderToken(state.core.ponder),
+            PonderFactory(state.core.factory),
+            state.participants.teamReserve,
+            INITIAL_PONDER_PER_SECOND
+        ));
         emit ContractDeployed("MasterChef", state.core.masterChef);
 
         // Create PONDER-KUB pair
@@ -125,6 +155,10 @@ contract DeployBitkubScript is Script {
     }
 
     function finalizeConfiguration() internal {
+        // Update staking address in token
+        PonderToken(state.core.ponder).setStaking(state.core.staking);
+
+        // Set remaining configurations
         PonderToken(state.core.ponder).setMinter(state.core.masterChef);
         PonderToken(state.core.ponder).setLauncher(state.core.launcher);
         PonderFactory(state.core.factory).setFeeTo(state.core.feeDistributor);
@@ -145,7 +179,7 @@ contract DeployBitkubScript is Script {
         console.log("MasterChef:", state.core.masterChef);
         console.log("FeeDistributor:", state.core.feeDistributor);
         console.log("Launcher:", state.core.launcher);
-        console.log("KKUBUnwrapper", state.core.kkubUnwrapper);
+        console.log("KKUBUnwrapper:", state.core.kkubUnwrapper);
         console.log("PONDER-KUB Pair:", state.core.ponderKubPair);
     }
 

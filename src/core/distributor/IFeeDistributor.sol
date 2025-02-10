@@ -14,16 +14,9 @@ interface IFeeDistributor {
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted when protocol fees are distributed to stakeholders
-    /// @dev Triggered during successful fee distribution
+    /// @notice Emitted when protocol fees are distributed to staking
     /// @param totalAmount Total amount of PONDER tokens distributed
-    /// @param stakingAmount Amount sent to staking rewards
-    /// @param teamAmount Amount sent to team wallet
-    event FeesDistributed(
-        uint256 totalAmount,
-        uint256 stakingAmount,
-        uint256 teamAmount
-    );
+    event FeesDistributed(uint256 totalAmount);
 
     /// @notice Emitted when tokens are recovered in emergency situations
     /// @dev Only callable by contract owner
@@ -56,14 +49,6 @@ interface IFeeDistributor {
         uint256 ponderAmount
     );
 
-    /// @notice Emitted when fee distribution ratios are modified
-    /// @dev Sum of ratios must equal BASIS_POINTS (10000)
-    /// @param stakingRatio New ratio for staking rewards (in basis points)
-    /// @param teamRatio New ratio for team allocation (in basis points)
-    event DistributionRatiosUpdated(
-        uint256 stakingRatio,
-        uint256 teamRatio
-    );
 
     /*//////////////////////////////////////////////////////////////
                             CORE FUNCTIONS
@@ -78,31 +63,10 @@ interface IFeeDistributor {
     /// @param token Address of the token to convert to PONDER
     function convertFees(address token) external;
 
-    /*//////////////////////////////////////////////////////////////
-                        CONFIGURATION FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Updates the ratio split for fee distribution
-    /// @dev Only callable by owner. Ratios must sum to BASIS_POINTS
-    /// @param _stakingRatio New percentage for staking rewards (in basis points)
-    /// @param _teamRatio New percentage for team wallet (in basis points)
-    function updateDistributionRatios(
-        uint256 _stakingRatio,
-        uint256 _teamRatio
-    ) external;
 
     /*//////////////////////////////////////////////////////////////
                             VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
-    /// @notice Returns current fee distribution ratio configuration
-    /// @dev Values are in basis points (100% = 10000)
-    /// @return stakingRatio Current ratio for staking rewards
-    /// @return teamRatio Current ratio for team allocation
-    function getDistributionRatios() external view returns (
-        uint256 stakingRatio,
-        uint256 teamRatio
-    );
 
     /// @notice Returns minimum amount required for operations
     /// @dev Used to prevent dust transactions

@@ -32,22 +32,17 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @param _router Address of the protocol router contract
     /// @param _ponder Address of the PONDER token contract
     /// @param _staking Address of the protocol staking contract
-    /// @param _team Address of the team wallet for fee distribution
     constructor(
         address _factory,
         address _router,
         address _ponder,
-        address _staking,
-        address _team
+        address _staking
     ) {
-        if (_team == address(0)) revert FeeDistributorTypes.ZeroAddress();
-
         factory = IPonderFactory(_factory);
         router = IPonderRouter(_router);
         ponder = _ponder;
         staking = IPonderStaking(_staking);
 
-        team = _team;
         owner = msg.sender;
 
         // Approve router for all conversions
@@ -152,25 +147,12 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         // Update timestamp BEFORE transfers
         lastDistributionTimestamp = block.timestamp;
 
-        // Calculate splits
-        uint256 stakingAmount = (totalAmount * stakingRatio) / FeeDistributorTypes.BASIS_POINTS;
-        uint256 teamAmount = (totalAmount * teamRatio) / FeeDistributorTypes.BASIS_POINTS;
-
-        // Transfer to staking
-        if (stakingAmount > 0) {
-            if (!IERC20(ponder).transfer(address(staking), stakingAmount)) {
-                revert FeeDistributorTypes.TransferFailed();
-            }
+        // Send 100% to staking as team has separate allocation
+        if (!IERC20(ponder).transfer(address(staking), totalAmount)) {
+            revert FeeDistributorTypes.TransferFailed();
         }
 
-        // Transfer to team
-        if (teamAmount > 0) {
-            if (!IERC20(ponder).transfer(team, teamAmount)) {
-                revert FeeDistributorTypes.TransferFailed();
-            }
-        }
-
-        emit FeesDistributed(totalAmount, stakingAmount, teamAmount);
+        emit FeesDistributed(totalAmount);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -372,24 +354,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
                       ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Updates fee distribution ratio between staking and team
-    /// @dev Requires ratios sum to BASIS_POINTS (100%)
-    /// @param _stakingRatio New ratio for staking rewards
-    /// @param _teamRatio New ratio for team allocation
-    function updateDistributionRatios(
-        uint256 _stakingRatio,
-        uint256 _teamRatio
-    ) external onlyOwner {
-        if (_stakingRatio + _teamRatio != FeeDistributorTypes.BASIS_POINTS) {
-            revert FeeDistributorTypes.RatioSumIncorrect();
-        }
-
-        stakingRatio = _stakingRatio;
-        teamRatio = _teamRatio;
-
-        emit DistributionRatiosUpdated(_stakingRatio, _teamRatio);
-    }
-
     /// @notice Extracts unique tokens from a set of pairs
     /// @dev Filters out PONDER token and duplicates
     /// @param pairs Array of pair addresses to process
@@ -443,24 +407,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         emit EmergencyTokenRecovered(token, to, amount);
     }
 
-    /// @notice Retrieves current fee distribution ratios
-    /// @dev Returns both staking and team ratios
-    /// @return _stakingRatio Current staking ratio
-    /// @return _teamRatio Current team ratio
-    function getDistributionRatios() external view returns (
-        uint256 _stakingRatio,
-        uint256 _teamRatio
-    ) {
-        return (stakingRatio, teamRatio);
-    }
-
-    /// @notice Updates team wallet address
-    /// @dev Ensures new address is not zero
-    /// @param _team New team wallet address
-    function setTeam(address _team) external onlyOwner {
-        if (_team == address(0)) revert FeeDistributorTypes.ZeroAddress();
-        team = _team;
-    }
 
     /*//////////////////////////////////////////////////////////////
                         OWNERSHIP MANAGEMENT

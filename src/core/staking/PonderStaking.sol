@@ -2,6 +2,8 @@
 pragma solidity 0.8.24;
 
 import { IPonderStaking } from "./IPonderStaking.sol";
+import { IPonderToken } from "../token/IPonderToken.sol";
+
 import { PonderStakingStorage } from "./storage/PonderStakingStorage.sol";
 import { PonderStakingTypes } from "./types/PonderStakingTypes.sol";
 import { PonderERC20 } from "../token/PonderERC20.sol";
@@ -64,6 +66,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         FACTORY = IPonderFactory(_factory);
         owner = msg.sender;
         lastRebaseTime = block.timestamp;
+        deploymentTime = block.timestamp;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -82,19 +85,20 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
    //////////////////////////////////////////////////////////////*/
 
     /// @notice Stakes PONDER tokens for xPONDER shares
-    /// @dev Mints shares proportional to current share price
+    /// @dev Mints shares proportional to current share price to msg.sender
     /// @dev First stake requires minimum amount and sets initial ratio
     /// @param amount Amount of PONDER to stake
+    /// @param recipient Address to receive the xPONDER shares
     /// @return shares Amount of xPONDER shares minted
-    function enter(uint256 amount) external returns (uint256 shares) {
+    function enter(uint256 amount, address recipient) external returns (uint256 shares) {
         // Checks
         if (amount == 0) revert PonderStakingTypes.InvalidAmount();
+        if (recipient == address(0)) revert PonderStakingTypes.ZeroAddress();
+
         uint256 totalPonder = PONDER.balanceOf(address(this));
         uint256 totalShares = totalSupply();
 
         // Calculate shares
-        // Strict equality required: Special case for initial stake
-        // slither-disable-next-line dangerous-strict-equalities
         if (totalShares == 0) {
             if (amount < PonderStakingTypes.MINIMUM_FIRST_STAKE)
                 revert PonderStakingTypes.InsufficientFirstStake();
@@ -104,12 +108,12 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         }
 
         // Effects
-        _mint(msg.sender, shares);
+        _mint(recipient, shares);
 
         // Interactions
         PONDER.safeTransferFrom(msg.sender, address(this), amount);
 
-        emit Staked(msg.sender, amount, shares);
+        emit Staked(recipient, amount, shares);
     }
 
 
@@ -119,6 +123,12 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @param shares Amount of xPONDER to burn
     /// @return amount Amount of PONDER tokens returned
     function leave(uint256 shares) external returns (uint256 amount) {
+        if (msg.sender == IPonderToken(address(PONDER)).teamReserve()) {
+            if (block.timestamp < deploymentTime + PonderStakingTypes.TEAM_LOCK_DURATION) {
+                revert PonderStakingTypes.TeamStakingLocked();
+            }
+        }
+
         // Checks
         if (shares == 0) revert PonderStakingTypes.InvalidAmount();
         if (shares > balanceOf(msg.sender)) revert PonderStakingTypes.InvalidSharesAmount();
@@ -197,6 +207,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         pendingOwner = newOwner;
         emit OwnershipTransferInitiated(owner, newOwner);
     }
+
 
     /// @notice Completes ownership transfer process
     /// @dev Can only be called by pending owner

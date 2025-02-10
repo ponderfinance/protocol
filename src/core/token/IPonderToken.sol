@@ -15,24 +15,12 @@ interface IPonderToken {
                         CORE OPERATIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Claims vested team tokens
-    /// @dev Only callable by teamReserve address
-    /// @dev Linear vesting over VESTING_DURATION
-    /// @dev Amount determined by vesting schedule
-    function claimTeamTokens() external;
-
-    /// @notice Mints new tokens to specified recipient
-    /// @dev Restricted to minter role before MINTING_END
-    /// @dev Cannot exceed MAXIMUM_SUPPLY
-    /// @param to Recipient of minted tokens
-    /// @param amount Quantity of tokens to mint
-    function mint(address to, uint256 amount) external;
-
     /// @notice Burns tokens from caller's balance
     /// @dev Restricted to launcher or owner
     /// @dev Permanently removes tokens from circulation
     /// @param amount Quantity of tokens to burn
     function burn(uint256 amount) external;
+
 
     /*//////////////////////////////////////////////////////////////
                         ADMIN FUNCTIONS
@@ -62,11 +50,6 @@ interface IPonderToken {
                         VIEW FUNCTIONS - STATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Retrieves remaining team allocation
-    /// @dev Decreases as team tokens are claimed
-    /// @return Amount of tokens reserved for team
-    function getReservedForTeam() external view returns (uint256);
-
     /// @notice Current token minter address
     /// @return Address with minting privileges
     function minter() external view returns (address);
@@ -83,13 +66,14 @@ interface IPonderToken {
     /// @return Address receiving vested team tokens
     function teamReserve() external view returns (address);
 
-    /// @notice Marketing allocation recipient
-    /// @return Address for marketing operations
-    function marketing() external view returns (address);
-
     /// @notice Protocol launcher address
     /// @return Address with launcher privileges
     function launcher() external view returns (address);
+
+    /// @notice Gets the staking contract address
+    /// @return Address of protocol's staking contract
+    function staking() external view returns (address);
+
 
     /*//////////////////////////////////////////////////////////////
                         VIEW FUNCTIONS - ACCOUNTING
@@ -99,17 +83,9 @@ interface IPonderToken {
     /// @return Cumulative amount of burned tokens
     function totalBurned() external view returns (uint256);
 
-    /// @notice Vested team tokens distributed
-    /// @return Amount of claimed team allocation
-    function teamTokensClaimed() external view returns (uint256);
-
     /// @notice Contract deployment timestamp
     /// @return Block timestamp of deployment
     function deploymentTime() external view returns (uint256);
-
-    /// @notice Team vesting schedule start
-    /// @return Timestamp when vesting began
-    function teamVestingStart() external view returns (uint256);
 
     /*//////////////////////////////////////////////////////////////
                         VIEW FUNCTIONS - CONSTANTS
@@ -119,15 +95,7 @@ interface IPonderToken {
     /// @return Total supply limit (1B tokens)
     function maximumSupply() external pure returns (uint256);
 
-    /// @notice Minting period duration
-    /// @return Time until minting disabled (4 years)
-    function mintingEnd() external pure returns (uint256);
-
     /// @notice Total team token allocation
     /// @return Team allocation amount (250M tokens)
     function teamAllocation() external pure returns (uint256);
-
-    /// @notice Team vesting schedule length
-    /// @return Vesting duration (1 year)
-    function vestingDuration() external pure returns (uint256);
 }
