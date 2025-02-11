@@ -12,8 +12,12 @@ pragma solidity 0.8.24;
 ///      Used by the main staking implementation
 library PonderStakingTypes {
     /*//////////////////////////////////////////////////////////////
-                        STAKING CONSTANTS
+                           STAKING CONSTANTS
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Duration of team staking lock
+    /// @dev Team tokens cannot be unstaked before this period
+    uint256 public constant TEAM_LOCK_DURATION = 730 days;
 
     /// @notice Minimum time between reward distributions
     /// @dev Prevents excessive rebasing to maintain system stability
@@ -90,4 +94,13 @@ library PonderStakingTypes {
     /// @notice Thrown when token transfer fails
     /// @dev Handles failed ERC20 transfer operations
     error TransferFailed();
+
+    /// @notice Error thrown when team attempts to unstake before lock expires
+    /// @dev Prevents early withdrawal of team allocation
+    error TeamStakingLocked();
+
+
+    /// @notice Error thrown when ponder token already initialized
+    /// @dev Prevents changing address of ponder token
+    error AlreadyInitialized();
 }

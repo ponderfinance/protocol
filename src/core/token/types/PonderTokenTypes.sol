@@ -16,24 +16,29 @@ library PonderTokenTypes {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Maximum total token supply cap
-    /// @dev Hard cap of 1 billion PONDER tokens
+    /// @dev Hard cap of 1 billion KOI tokens
     /// @dev Value includes 18 decimal places
     uint256 public constant MAXIMUM_SUPPLY = 1_000_000_000e18;
 
-    /// @notice Duration of token minting period
-    /// @dev Minting disabled after 4 years from deployment
-    /// @dev Used to enforce controlled supply expansion
-    uint256 public constant MINTING_END = 4 * 365 days;
+    /// @notice Initial liquidity allocation
+    /// @dev 40% of total supply for protocol liquidity
+    /// @dev Used across primary trading pairs
+    uint256 public constant INITIAL_LIQUIDITY = 400_000_000e18;
 
-    /// @notice Team token allocation amount
-    /// @dev 25% of total supply (250M PONDER)
-    /// @dev Subject to linear vesting schedule
-    uint256 public constant TEAM_ALLOCATION = 250_000_000e18;
+    /// @notice Community rewards allocation
+    /// @dev 40% of total supply for farming incentives
+    /// @dev Distributed through MasterChef
+    uint256 public constant COMMUNITY_REWARDS = 400_000_000e18;
 
-    /// @notice Team tokens vesting duration
-    /// @dev Linear vesting over 1 year period
-    /// @dev Used to calculate claimable amounts
-    uint256 public constant VESTING_DURATION = 365 days;
+    /// @notice Team token allocation
+    /// @dev 20% of total supply, force-staked at launch
+    /// @dev Subject to cliff vesting
+    uint256 public constant TEAM_ALLOCATION = 200_000_000e18;
+
+    /// @notice Team vesting cliff duration
+    /// @dev Tokens remain staked for 2 years
+    /// @dev No linear vesting, full unlock after cliff
+    uint256 public constant TEAM_CLIFF = 930 days;
 
     /*//////////////////////////////////////////////////////////////
                         ERROR DEFINITIONS
@@ -43,10 +48,6 @@ library PonderTokenTypes {
     /// @dev Thrown when caller lacks required role
     error Forbidden();
 
-    /// @notice Minting period has concluded
-    /// @dev Thrown after MINTING_END timestamp
-    error MintingDisabled();
-
     /// @notice Total supply cap reached
     /// @dev Thrown when mint would exceed MAXIMUM_SUPPLY
     error SupplyExceeded();
@@ -54,18 +55,6 @@ library PonderTokenTypes {
     /// @notice Invalid zero address provided
     /// @dev Thrown when address parameter is zero
     error ZeroAddress();
-
-    /// @notice Vesting period not yet started
-    /// @dev Thrown when claiming before vesting begins
-    error VestingNotStarted();
-
-    /// @notice No tokens available to claim
-    /// @dev Thrown when vested amount is zero
-    error NoTokensAvailable();
-
-    /// @notice Vesting period still active
-    /// @dev Thrown for operations requiring complete vesting
-    error VestingNotEnded();
 
     /// @notice Restricted launcher/owner operation
     /// @dev Thrown when unauthorized caller
@@ -82,6 +71,12 @@ library PonderTokenTypes {
     /// @notice Insufficient token balance
     /// @dev Thrown when balance < required amount
     error InsufficientBalance();
+
+    /// @notice Thrown when trying to initialize an already initialized value
+    /// @dev Used to prevent re-initialization of critical contract parameters
+    /// @dev Particularly used for one-time settable addresses like staking
+    error AlreadyInitialized();
+
 
     /*//////////////////////////////////////////////////////////////
                             EVENTS
@@ -104,11 +99,6 @@ library PonderTokenTypes {
     /// @param previousOwner Address of previous owner
     /// @param newOwner Address of new owner
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    /// @notice Records team token claim
-    /// @dev Emitted when team claims vested tokens
-    /// @param amount Number of tokens claimed
-    event TeamTokensClaimed(uint256 amount);
 
     /// @notice Records launcher address update
     /// @dev Emitted when owner updates launcher

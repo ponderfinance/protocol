@@ -189,48 +189,52 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
     /// @notice Calculate user's unclaimed rewards
     /// @dev Calculates pending PONDER tokens for a given user in a specific pool
-    /// @dev Handles maximum supply and minting end time checks
+    /// @dev Takes into account:
+    ///      - Pool allocation points
+    ///      - User's weighted shares
+    ///      - Accumulated rewards per share
+    ///      - Maximum supply limits
     /// @param _pid Pool ID to check rewards for
     /// @param _user Address of the user to check
-    /// @return Unclaimed PONDER tokens available to harvest
-    function pendingPonder(uint256 _pid, address _user) external view returns (uint256) {
+    /// @return pending Amount of unclaimed PONDER tokens available
+    function pendingPonder(uint256 _pid, address _user) external view returns (uint256 pending) {
+        // CHECKS
         if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
 
+        // Load storage pointers
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][_user];
 
+        // Get current accumulated PONDER per share
         uint256 accPonderPerShare = pool.accPonderPerShare;
         uint256 lpSupply = pool.totalWeightedShares;
 
+        // Calculate new rewards if time has passed and pool has stakes
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && _farmingStarted) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
 
-            uint256 ponderReward =
-                (timeElapsed * _ponderPerSecond * pool.allocPoint * 1e12)
-                / (_totalAllocPoint * lpSupply);
+            uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint) / _totalAllocPoint;
 
-            uint256 remainingMintableForAccrual = PONDER.maximumSupply() - PONDER.totalSupply();
-            if (ponderReward > remainingMintableForAccrual) {
-                ponderReward = remainingMintableForAccrual;
+            // Check against remaining supply
+            uint256 remainingSupply = PONDER.maximumSupply() - PONDER.totalSupply();
+            if (ponderReward > remainingSupply) {
+                ponderReward = remainingSupply;
             }
 
-            accPonderPerShare = accPonderPerShare + ponderReward;
+            accPonderPerShare = accPonderPerShare +
+                ((ponderReward * 1e12) / lpSupply);
         }
 
-        uint256 pending = user.weightedShares > 0 ?
+        // Calculate pending rewards
+        pending = user.weightedShares > 0 ?
             ((user.weightedShares * accPonderPerShare) / 1e12) - user.rewardDebt :
             0;
 
-        uint256 remainingMintableForPending = PONDER.maximumSupply() - PONDER.totalSupply();
-        if (pending > remainingMintableForPending) {
-            pending = remainingMintableForPending;
+        // Final supply check
+        uint256 remainingSupply = PONDER.maximumSupply() - PONDER.totalSupply();
+        if (pending > remainingSupply) {
+            pending = remainingSupply;
         }
-
-        if (block.timestamp > PONDER.deploymentTime() + PONDER.mintingEnd()) {
-            pending = 0;
-        }
-
-        return pending;
     }
 
     /// @notice Calculate required PONDER stake for desired boost
@@ -429,34 +433,31 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @dev Updates reward variables and mints PONDER rewards
     /// @param _pid Pool ID to update
     function _updatePool(uint256 _pid) internal {
+        // CHECKS
         if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (!_farmingStarted) return;
+
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
-
-        if (!_farmingStarted) {
-            return;
-        }
-
-        if (block.timestamp <= pool.lastRewardTime) {
-            return;
-        }
-
-        uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
-
+        if (block.timestamp <= pool.lastRewardTime) return;
         if (pool.totalWeightedShares == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
         }
 
-        // Calculate ponder rewards and shares with precision in a single operation
+        // Calculate all values before state changes
+        uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
+        uint256 ponderBalance = PONDER.balanceOf(address(this));
         uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint) / _totalAllocPoint;
-        uint256 rewardShare =
-            (timeElapsed * _ponderPerSecond * pool.allocPoint * 1e12)
+        if (ponderReward > ponderBalance) {
+            ponderReward = ponderBalance;
+        }
+
+        uint256 rewardShare = (timeElapsed * _ponderPerSecond * pool.allocPoint * 1e12)
             / (_totalAllocPoint * pool.totalWeightedShares);
 
+        // EFFECTS
         pool.accPonderPerShare += rewardShare;
         pool.lastRewardTime = block.timestamp;
-
-        PONDER.mint(address(this), ponderReward);
     }
 
     /*//////////////////////////////////////////////////////////////

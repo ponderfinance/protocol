@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+import { IPonderStaking } from "../../staking/IPonderStaking.sol";
+
+
 /*//////////////////////////////////////////////////////////////
                     PONDER TOKEN STORAGE
 //////////////////////////////////////////////////////////////*/
@@ -35,20 +38,24 @@ abstract contract PonderTokenStorage {
                         ALLOCATION ADDRESSES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Address for team and reserve allocations
-    /// @dev Receives vested team tokens over time
-    /// @dev Subject to vesting schedule defined by _teamVestingStart and _teamVestingEnd
-    address internal _teamReserve;
+    /// @notice Protocol staking contract reference
+    /// @dev Can only be set once via setStaking
+    IPonderStaking internal _staking;
 
-    /// @notice Address for marketing operations
-    /// @dev Receives allocation for marketing activities
-    /// @dev Not subject to vesting restrictions
-    address internal _marketing;
 
     /// @notice Special purpose launcher address
     /// @dev Has privileged access to specific operations
     /// @dev Used for initial token distribution
     address internal _launcher;
+
+
+    /*//////////////////////////////////////////////////////////////
+                        ALLOCATION ADDRESSES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Address for team and reserve allocations
+    address internal _teamReserve;
+
 
     /*//////////////////////////////////////////////////////////////
                         TOKEN ACCOUNTING
@@ -58,30 +65,6 @@ abstract contract PonderTokenStorage {
     /// @dev Increases with each burn operation
     /// @dev Used for supply tracking and analytics
     uint256 internal _totalBurned;
-
-    /// @notice Amount of team allocation tokens claimed
-    /// @dev Tracks vested tokens claimed by team
-    /// @dev Cannot exceed TEAM_ALLOCATION constant
-    uint256 internal _teamTokensClaimed;
-
-    /// @notice Remaining unvested team allocation
-    /// @dev Decreases as team claims vested tokens
-    /// @dev Initially set to total team allocation
-    uint256 internal _reservedForTeam;
-
-    /*//////////////////////////////////////////////////////////////
-                        VESTING PARAMETERS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Timestamp when team token vesting completes
-    /// @dev All team tokens become available after this time
-    /// @dev Calculated relative to deployment or vesting start
-    uint256 internal _teamVestingEnd;
-
-    /// @notice Timestamp when team token vesting begins
-    /// @dev No team tokens can be claimed before this time
-    /// @dev Can be set after deployment for flexible start
-    uint256 internal _teamVestingStart;
 
     /*//////////////////////////////////////////////////////////////
                         UPGRADE GAP

@@ -685,8 +685,11 @@ contract PonderPairTest is Test {
         {
             // Give fresh allocation for PONDER pair testing
             deal(address(launchToken), alice, swapAmount * 4);
-            ponder.setMinter(address(this));
-            ponder.mint(alice, swapAmount * 4);
+
+            // Transfer PONDER from treasury instead of minting
+            vm.startPrank(treasury);
+            ponder.transfer(alice, swapAmount * 4);
+            vm.stopPrank();
 
             vm.startPrank(alice);
             ponder.approve(address(launchPonderPair), type(uint256).max);

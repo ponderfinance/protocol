@@ -49,6 +49,8 @@ contract FiveFiveFiveLauncherTest is Test {
     PonderPriceOracle oracle;
     WETH9 weth;
     address ponderWethPair;
+    address mockStaking;
+
 
     address creator = makeAddr("creator");
     address alice = makeAddr("alice");
@@ -94,7 +96,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Deploy core contracts
         weth = new WETH9();
-        ponder = new PonderToken(teamReserve, marketing, address(this));
+        ponder = new PonderToken(teamReserve, address(this), mockStaking);  // mockStaking for testing
 
         factory = new PonderFactory(address(this), address(this), address(ponder));
 
@@ -103,9 +105,10 @@ contract FiveFiveFiveLauncherTest is Test {
         MockKKUBUnwrapper unwrapper = new MockKKUBUnwrapper(address(weth));
         router = new PonderRouter(address(factory), address(weth), address(unwrapper));
 
-        // Setup initial PONDER liquidity
-        ponder.setMinter(address(this));
-        ponder.mint(address(this), INITIAL_LIQUIDITY * 10);
+        // Setup initial PONDER liquidity using owner's allocation
+        // We have 40% for liquidity from initial allocation
+        uint256 liquidityAllocation = PonderTokenTypes.INITIAL_LIQUIDITY;
+        ponder.transfer(address(this), INITIAL_LIQUIDITY * 10);
         ponder.approve(address(router), INITIAL_LIQUIDITY * 10);
 
         vm.deal(address(this), INITIAL_LIQUIDITY);
@@ -141,16 +144,19 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.deal(alice, 10000 ether);
         vm.deal(bob, 10000 ether);
         vm.deal(attacker, 10000 ether);
-        ponder.mint(alice, 100000 ether);
-        ponder.mint(bob, 100000 ether);
-        ponder.mint(attacker, 100000 ether); // Add this line
+
+        // Transfer tokens from owner's allocation instead of minting
+        ponder.transfer(alice, 100000 ether);
+        ponder.transfer(bob, 100000 ether);
+        ponder.transfer(attacker, 100000 ether);
 
         vm.prank(alice);
         ponder.approve(address(launcher), type(uint256).max);
         vm.prank(bob);
         ponder.approve(address(launcher), type(uint256).max);
 
-        ponder.setMinter(address(launcher));
+        // Remove minter setting since we don't use minting anymore
+        // ponder.setMinter(address(launcher));  // Remove this line
     }
 
     function testCreateLaunch() public {

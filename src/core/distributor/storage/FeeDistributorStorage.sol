@@ -46,10 +46,6 @@ abstract contract FeeDistributorStorage {
                         ADMIN STATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Address of the team wallet receiving fee distributions
-    /// @dev Receives the teamRatio percentage of collected fees
-    address public team;
-
     /// @notice Address of the contract owner
     /// @dev Has full administrative privileges
     address public owner;
@@ -57,18 +53,6 @@ abstract contract FeeDistributorStorage {
     /// @notice Address of the pending owner during ownership transfer
     /// @dev Must accept ownership to complete transfer
     address public pendingOwner;
-
-    /*//////////////////////////////////////////////////////////////
-                        DISTRIBUTION CONFIG
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Percentage of fees distributed to staking rewards
-    /// @dev Represented in basis points (8000 = 80%)
-    uint256 public stakingRatio = 8000;
-
-    /// @notice Percentage of fees distributed to team wallet
-    /// @dev Represented in basis points (2000 = 20%)
-    uint256 public teamRatio = 2000;
 
     /*//////////////////////////////////////////////////////////////
                         TIMING STATE

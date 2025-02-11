@@ -4,13 +4,14 @@ pragma solidity 0.8.24;
 import { PonderERC20 } from "./PonderERC20.sol";
 import { PonderTokenStorage } from "./storage/PonderTokenStorage.sol";
 import { IPonderToken } from "./IPonderToken.sol";
+import { IPonderStaking } from "../staking/IPonderStaking.sol";
 import { PonderTokenTypes } from "./types/PonderTokenTypes.sol";
 
 /*//////////////////////////////////////////////////////////////
                     PONDER TOKEN CONTRACT
 //////////////////////////////////////////////////////////////*/
 
-/// @title PonderToken
+/// @title PonderTokens
 /// @author taayyohh
 /// @notice Main implementation of Ponder protocol's token
 /// @dev ERC20 token with team vesting and governance features
@@ -27,99 +28,41 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
     /// @dev Immutable to prevent manipulation
     uint256 private immutable _DEPLOYMENT_TIME;
 
+    /// @notice Flag for if team locked staking has been initialized
+    bool private _stakingInitialized;
+
 
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Deploys and initializes the token contract
-    /// @dev Sets up initial allocations and vesting schedule
-    /// @param teamReserveAddr Recipient of team allocation
-    /// @param marketingAddr Recipient of marketing allocation
-    /// @param launcherAddr Protocol launcher address
-    /// @custom:security Launcher can be zero address initially
+    /// @dev Sets up initial allocations and team staking
+    /// @param teamReserve_ Recipient of team allocation
+    /// @param launcher_ Protocol launcher address
+    /// @param staking_ Ponder Staking contract
+    /// @custom:security Team allocation is force-staked for 2 years
     constructor(
-        address teamReserveAddr,
-        address marketingAddr,
-        address launcherAddr
+        address teamReserve_,
+        address launcher_,
+        address staking_
     ) PonderERC20("Koi", "KOI") {
-        if (teamReserveAddr == address(0) || marketingAddr == address(0)) {
+        if (teamReserve_ == address(0)) {
             revert PonderTokenTypes.ZeroAddress();
         }
-        // Launcher is intentionally allowed to be zero address in constructor
-        // slither-disable-next-line missing-zero-check
-        _launcher = launcherAddr;
 
+        // Set core contract parameters
         _owner = msg.sender;
         _DEPLOYMENT_TIME = block.timestamp;
-        _teamReserve = teamReserveAddr;
-        _marketing = marketingAddr;
-        _teamVestingStart = block.timestamp;
-        _teamVestingEnd = block.timestamp + PonderTokenTypes.VESTING_DURATION;
+        _teamReserve = teamReserve_;
+        _launcher = launcher_;
+        _staking = IPonderStaking(staking_);
 
-        // Initialize reserved amount for team
-        _reservedForTeam = PonderTokenTypes.TEAM_ALLOCATION;
+        // Mint team allocation to this contract for force-staking
+        _mint(address(this), PonderTokenTypes.TEAM_ALLOCATION);
 
-        // Initial distributions
-        _mint(_owner, 200_000_000e18);
-        _mint(_marketing, 150_000_000e18);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                    INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Calculates currently vested team tokens
-    /// @dev Linear vesting over VESTING_DURATION
-    /// @dev Accounts for already claimed tokens
-    /// @return Amount of tokens currently available to claim
-    function _calculateVestedAmount() internal view returns (uint256) {
-        uint256 timeElapsed = block.timestamp - _teamVestingStart;
-        if (timeElapsed > PonderTokenTypes.VESTING_DURATION) {
-            timeElapsed = PonderTokenTypes.VESTING_DURATION;
-        }
-
-        uint256 totalVested = (PonderTokenTypes.TEAM_ALLOCATION * timeElapsed) / PonderTokenTypes.VESTING_DURATION;
-        return totalVested > _teamTokensClaimed ? totalVested - _teamTokensClaimed : 0;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                       TOKEN OPERATIONS
-   //////////////////////////////////////////////////////////////*/
-
-    /// @notice Claims vested team tokens
-    /// @dev Only callable by team reserve address
-    /// @dev Mints tokens according to vesting schedule
-    function claimTeamTokens() external {
-        if (msg.sender != _teamReserve) revert PonderTokenTypes.Forbidden();
-        if (block.timestamp < _teamVestingStart) revert PonderTokenTypes.VestingNotStarted();
-
-        uint256 vestedAmount = _calculateVestedAmount();
-        if (vestedAmount <= 0) revert PonderTokenTypes.NoTokensAvailable();
-
-        _reservedForTeam -= vestedAmount;
-        _teamTokensClaimed += vestedAmount;
-
-        _mint(_teamReserve, vestedAmount);
-
-        emit PonderTokenTypes.TeamTokensClaimed(vestedAmount);
-    }
-
-    /// @notice Mints new tokens to specified address
-    /// @dev Only callable by minter before MINTING_END
-    /// @dev Enforces maximum supply constraint
-    /// @param to Address to receive minted tokens
-    /// @param amount Quantity of tokens to mint
-    /// @dev Reverts if minting period ended or supply cap reached
-    function mint(address to, uint256 amount) external {
-        if (msg.sender != _minter) revert PonderTokenTypes.Forbidden();
-        if (block.timestamp > _DEPLOYMENT_TIME + PonderTokenTypes.MINTING_END) {
-            revert PonderTokenTypes.MintingDisabled();
-        }
-        if (totalSupply() + amount + _reservedForTeam > PonderTokenTypes.MAXIMUM_SUPPLY) {
-            revert PonderTokenTypes.SupplyExceeded();
-        }
-        _mint(to, amount);
+        // Mint initial liquidity allocation to launcher for pool creation
+        _mint(launcher_, PonderTokenTypes.INITIAL_LIQUIDITY);
     }
 
     /// @notice Burns tokens from caller's balance
@@ -141,6 +84,17 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         emit PonderTokenTypes.TokensBurned(msg.sender, amount);
     }
 
+
+    /// @notice Mints new tokens
+    /// @dev Only callable by minter (MasterChef)
+    /// @param to Address to receive minted tokens
+    /// @param amount Amount of tokens to mint
+    function mint(address to, uint256 amount) external {
+        if (msg.sender != _minter) revert PonderTokenTypes.Forbidden();
+        if (totalSupply() + amount > PonderTokenTypes.MAXIMUM_SUPPLY) revert PonderTokenTypes.SupplyExceeded();
+
+        _mint(to, amount);
+    }
 
     /*//////////////////////////////////////////////////////////////
                     ADMIN FUNCTIONS
@@ -172,6 +126,36 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         address oldLauncher = _launcher;
         _launcher = launcher_;
         emit PonderTokenTypes.LauncherUpdated(oldLauncher, launcher_);
+    }
+
+    /// @notice Initializes staking of team allocation
+    /// @dev Can only be called once after staking contract is properly set
+    function initializeStaking() external {
+        // Ensure caller is owner
+        if (msg.sender != _owner) revert PonderTokenTypes.Forbidden();
+        // Ensure not already initialized
+        if (_stakingInitialized) revert PonderTokenTypes.AlreadyInitialized();
+        // Ensure staking contract is set
+        if (address(_staking) == address(0)) revert PonderTokenTypes.ZeroAddress();
+
+        // Approve staking contract
+        _approve(address(this), address(_staking), PonderTokenTypes.TEAM_ALLOCATION);
+
+        // Enter staking with team allocation
+        _staking.enter(PonderTokenTypes.TEAM_ALLOCATION, _teamReserve);
+
+        _stakingInitialized = true;
+    }
+
+    /// @notice Sets the staking contract address
+    /// @dev Can only be called once by owner to set the final staking address
+    /// @dev Initial staking address must be address(1) to allow this update
+    /// @param newStaking Address of the PonderStaking contract
+    function setStaking(address newStaking) external {
+        if (msg.sender != _owner) revert PonderTokenTypes.Forbidden();
+        if (newStaking == address(0)) revert PonderTokenTypes.ZeroAddress();
+        if (address(_staking) != address(1)) revert PonderTokenTypes.AlreadyInitialized();
+        _staking = IPonderStaking(newStaking);
     }
 
     /// @notice Initiates ownership transfer
@@ -228,12 +212,6 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         return _teamReserve;
     }
 
-    /// @notice Marketing wallet address
-    /// @return Address for marketing funds
-    function marketing() external view returns (address) {
-        return _marketing;
-    }
-
     /// @notice Protocol launcher address
     /// @return Address with launcher privileges
     function launcher() external view returns (address) {
@@ -250,28 +228,10 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         return _totalBurned;
     }
 
-    /// @notice Vested team tokens claimed
-    /// @return Amount of claimed allocation
-    function teamTokensClaimed() external view returns (uint256) {
-        return _teamTokensClaimed;
-    }
-
-    /// @notice Team vesting start time
-    /// @return Vesting schedule start
-    function teamVestingStart() external view returns (uint256) {
-        return _teamVestingStart;
-    }
-
     /// @notice Contract deployment time
     /// @return Deployment timestamp
     function deploymentTime() external view returns (uint256) {
         return _DEPLOYMENT_TIME;
-    }
-
-    /// @notice Remaining team allocation
-    /// @return Unclaimed team tokens
-    function getReservedForTeam() external view returns (uint256) {
-        return _reservedForTeam;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -284,21 +244,17 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         return PonderTokenTypes.MAXIMUM_SUPPLY;
     }
 
-    /// @notice Minting period duration
-    /// @return Time until minting disabled
-    function mintingEnd() external pure returns (uint256) {
-        return PonderTokenTypes.MINTING_END;
-    }
-
     /// @notice Total team allocation
     /// @return Team token amount
     function teamAllocation() external pure returns (uint256) {
         return PonderTokenTypes.TEAM_ALLOCATION;
     }
 
-    /// @notice Vesting schedule length
-    /// @return Vesting duration
-    function vestingDuration() external pure returns (uint256) {
-        return PonderTokenTypes.VESTING_DURATION;
+    /// @notice Get the staking contract address
+    /// @dev Override for public state variable to meet interface requirements
+    /// @dev Converts IPonderStaking instance to address type
+    /// @return Address of protocol's xKOI staking contract
+    function staking() public view override returns (address) {
+        return address(_staking);
     }
 }
