@@ -133,6 +133,7 @@ contract FeeDistributorTest is Test {
 
     address public owner;
     address public user1;
+    address public user2;
     address public marketing;
     address public teamReserve;
     address constant WETH = address(0x1234);
@@ -140,39 +141,17 @@ contract FeeDistributorTest is Test {
     // Test token for pairs
     ERC20Mock public testToken;
 
+    uint256 constant INITIAL_SUPPLY = 1_000_000e18;
     uint256 constant BASIS_POINTS = 10000;
     uint256 constant MAX_PAIRS_PER_DISTRIBUTION = 10;
     uint256 public constant DISTRIBUTION_COOLDOWN = 1 hours;
-
-
-    bytes4 constant DISTRIBUTION_TOO_FREQUENT_ERROR = 0x1e4f7d8c;
     bytes4 constant INVALID_PAIR_ERROR = 0x6fd6873e;
-    bytes4 constant INSUFFICIENT_ACCUMULATION_ERROR = 0x7bb6e304;
-    bytes4 constant SWAP_FAILED_ERROR = 0x7c5f487d;
-    bytes4 constant INVALID_PAIR_COUNT_ERROR = 0x7773d3bc;
-    bytes4 constant INVALID_PAIR_COUNT = 0xf392fe61;  // Updated
 
-    error InvalidPairCount();
-    error InvalidPair();
-    error DistributionTooFrequent();
-    error InsufficientAccumulation();
-    error SwapFailed();
     error ReentrancyGuardReentrantCall();
 
-    event FeesDistributed(
-        uint256 totalAmount,
-        uint256 stakingAmount,
-        uint256 treasuryAmount,
-        uint256 teamAmount
-    );
-
+    event FeesDistributed(uint256 totalAmount);
     event FeesCollected(address indexed token, uint256 amount);
     event FeesConverted(address indexed token, uint256 tokenAmount, uint256 ponderAmount);
-    event DistributionRatiosUpdated(
-        uint256 stakingRatio,
-        uint256 treasuryRatio,
-        uint256 teamRatio
-    );
 
     function _getPath(address tokenIn, address tokenOut) internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
@@ -184,29 +163,28 @@ contract FeeDistributorTest is Test {
     function setUp() public {
         owner = address(this);
         user1 = address(0x1);
+        user2 = address(0x2);
         teamReserve = address(0x3);
+        marketing = address(0x4);
 
         // Deploy core contracts
         factory = new PonderFactory(owner, address(1), address(1));
+        router = new PonderRouter(address(factory), WETH, address(2));
 
-        router = new PonderRouter(
-            address(factory),
-            WETH,
-            address(2) //
-        );
+        // Deploy token with temporary staking address
+        ponder = new PonderToken(teamReserve, marketing, address(1));
 
-        ponder = new PonderToken(
-            teamReserve,
-            address(this), // marketing
-            address(2)
-        );
+        // Deploy staking
+        staking = new PonderStaking(address(ponder), address(router), address(factory));
 
-        staking = new PonderStaking(
-            address(ponder),
-            address(router),
-            address(factory)
-        );
+        // Setup staking in token
+        ponder.setStaking(address(staking));
+        ponder.initializeStaking();
 
+        // Deploy test token for pairs
+        testToken = new ERC20Mock("Test Token", "TEST");
+
+        // Deploy distributor
         distributor = new FeeDistributor(
             address(factory),
             address(router),
@@ -214,10 +192,14 @@ contract FeeDistributorTest is Test {
             address(staking)
         );
 
-        // Deploy test token and create pair
-        testToken = new ERC20Mock("Test Token", "TEST");
-        factory.createPair(address(ponder), address(testToken));
-        pair = PonderPair(factory.getPair(address(ponder), address(testToken)));
+        // Transfer initial tokens from marketing wallet
+        vm.startPrank(marketing);
+        ponder.transfer(address(this), INITIAL_SUPPLY * 100);
+        vm.stopPrank();
+
+        // Create test pair
+        address standardPairAddr = factory.createPair(address(ponder), address(testToken));
+        pair = PonderPair(standardPairAddr);
 
         // Set fee collector
         factory.setFeeTo(address(distributor));
@@ -226,15 +208,10 @@ contract FeeDistributorTest is Test {
         _setupInitialLiquidity();
     }
 
-    /**
-     * @notice Helper to setup initial liquidity in test pair
-     */
     function _setupInitialLiquidity() internal {
-        uint256 ponderAmount = 1_000_000e18;
-        uint256 tokenAmount = 1_000_000e18;
-
-        // Transfer PONDER from treasury
-        ponder.transfer(address(this), ponderAmount * 2);
+        // Add initial liquidity using test contract's balance
+        uint256 ponderAmount = INITIAL_SUPPLY * 10;  // Use larger amount
+        uint256 tokenAmount = INITIAL_SUPPLY * 10;   // Match PONDER amount
 
         // Mint test tokens
         testToken.mint(address(this), tokenAmount * 2);
@@ -261,23 +238,22 @@ contract FeeDistributorTest is Test {
      */
     function _generateTradingFees() internal {
         // First ensure larger initial liquidity
-        testToken.mint(address(this), 100_000_000e18);
-        ponder.transfer(address(this), 100_000_000e18);
+        testToken.mint(address(this), INITIAL_SUPPLY * 100);
 
         // Add massive liquidity to the pair
         vm.startPrank(address(this));
         testToken.approve(address(pair), type(uint256).max);
         ponder.approve(address(pair), type(uint256).max);
 
-        testToken.transfer(address(pair), 10_000_000e18);
-        ponder.transfer(address(pair), 10_000_000e18);
+        testToken.transfer(address(pair), INITIAL_SUPPLY * 10);
+        ponder.transfer(address(pair), INITIAL_SUPPLY * 10);
         pair.mint(address(this));
         vm.stopPrank();
 
-        // Do moderate swaps to generate fees without extreme price impact
+        // Do moderate swaps to generate fees
         for (uint i = 0; i < 10; i++) {
             (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
-            uint256 swapAmount = uint256(reserve0) / 10; // Use 10% of reserves instead of 20%
+            uint256 swapAmount = uint256(reserve0) / 10; // Use 10% of reserves
 
             testToken.transfer(address(pair), swapAmount);
             uint256 amountOut = (swapAmount * 997 * reserve1) / ((reserve0 * 1000) + (swapAmount * 997));
@@ -287,7 +263,7 @@ contract FeeDistributorTest is Test {
             vm.warp(block.timestamp + 1 hours);
 
             (reserve0, reserve1,) = pair.getReserves();
-            swapAmount = uint256(reserve1) / 10; // Also reduced to 10%
+            swapAmount = uint256(reserve1) / 10;
             ponder.transfer(address(pair), swapAmount);
             pair.swap(amountOut, 0, address(this), "");
             pair.skim(address(distributor));
@@ -296,6 +272,7 @@ contract FeeDistributorTest is Test {
             pair.sync();
         }
     }
+
     /**
      * @notice Test initial contract state
      */
@@ -411,20 +388,16 @@ contract FeeDistributorTest is Test {
         uint256 totalAmount = ponder.balanceOf(address(distributor));
         require(totalAmount >= distributor.minimumAmount(), "Insufficient PONDER for distribution");
 
-        uint256 expectedStaking = (totalAmount * 10000) / BASIS_POINTS; // 100%
-
         uint256 initialStaking = ponder.balanceOf(address(staking));
-        uint256 initialTeam = ponder.balanceOf(teamReserve);
 
         distributor.distribute();
 
-        assertApproxEqRel(
+        // Verify all fees went to staking
+        assertEq(
             ponder.balanceOf(address(staking)) - initialStaking,
-            expectedStaking,
-            0.01e18,
+            totalAmount,
             "Wrong staking distribution"
         );
-
     }
 
     /**
@@ -435,7 +408,6 @@ contract FeeDistributorTest is Test {
         _generateTradingFees();
 
         uint256 initialStakingBalance = ponder.balanceOf(address(staking));
-        uint256 initialTeamBalance = ponder.balanceOf(teamReserve);
 
         // Collect and convert fees
         distributor.collectFeesFromPair(address(pair));
@@ -451,21 +423,6 @@ contract FeeDistributorTest is Test {
         assertTrue(
             ponder.balanceOf(address(staking)) > initialStakingBalance,
             "Staking balance should increase"
-        );
-        assertTrue(
-            ponder.balanceOf(teamReserve) > initialTeamBalance,
-            "Team balance should increase"
-        );
-
-        // Verify ratio
-        uint256 stakingIncrease = ponder.balanceOf(address(staking)) - initialStakingBalance;
-        uint256 teamIncrease = ponder.balanceOf(teamReserve) - initialTeamBalance;
-
-        assertApproxEqRel(
-            stakingIncrease * 2000,
-            teamIncrease * 8000,
-            0.01e18,
-            "Wrong distribution ratio"
         );
     }
 
@@ -694,26 +651,13 @@ contract FeeDistributorTest is Test {
         address[] memory pairs = new address[](1);
         pairs[0] = address(pair);
 
-        uint256 preStakingBalance = IERC20(ponder).balanceOf(address(staking));
-        uint256 preTeamBalance = IERC20(ponder).balanceOf(teamReserve);
+        uint256 preStakingBalance = ponder.balanceOf(address(staking));
 
         distributor.distributePairFees(pairs);
 
-        uint256 postStakingBalance = IERC20(ponder).balanceOf(address(staking));
-        uint256 postTeamBalance = IERC20(ponder).balanceOf(teamReserve);
+        uint256 postStakingBalance = ponder.balanceOf(address(staking));
 
         assertTrue(postStakingBalance > preStakingBalance, "Staking balance should increase");
-        assertTrue(postTeamBalance > preTeamBalance, "Team balance should increase");
-
-        // Verify distribution ratio (80/20)
-        uint256 stakingIncrease = postStakingBalance - preStakingBalance;
-        uint256 teamIncrease = postTeamBalance - preTeamBalance;
-        assertApproxEqRel(
-            stakingIncrease * 2000,
-            teamIncrease * 8000,
-            0.01e18,
-            "Incorrect distribution ratio"
-        );
     }
 
     function test_DistributePairFeesDuplicatePairs() public {

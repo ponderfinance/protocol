@@ -37,7 +37,6 @@ contract DeployBitkubScript is Script {
     struct ParticipantAddresses {
         address deployer;
         address teamReserve;
-        address marketing;
     }
 
     struct DeploymentState {
@@ -53,52 +52,76 @@ contract DeployBitkubScript is Script {
     event ConfigurationFinalized(address indexed factory, address indexed masterChef, address indexed feeDistributor);
     event LiquidityAdded(uint256 kubAmount, uint256 ponderAmount);
 
-    function initialize(address deployer, address teamReserve, address marketing) internal {
+    function initialize(address deployer, address teamReserve) public {
         require(!state.initialized, "Already initialized");
-        require(deployer != address(0) && teamReserve != address(0) && marketing != address(0), "Invalid addresses");
+        require(deployer != address(0), "Invalid deployer address");
+        require(teamReserve != address(0), "Invalid team reserve address");
+
+        console.log("Initializing with:");
+        console.log("Deployer:", deployer);
+        console.log("Team Reserve:", teamReserve);
 
         state.participants = ParticipantAddresses({
             deployer: deployer,
-            teamReserve: teamReserve,
-            marketing: marketing
+            teamReserve: teamReserve
         });
         state.deploymentStartTime = block.timestamp;
         state.initialized = true;
     }
 
     function deployCoreProtocol() internal {
-        // Deploy factory and peripherals first
-        state.core.factory = address(new PonderFactory(
-            state.participants.deployer,
-            address(0),  // feeTo set later
-            address(0)   // ponder set later
-        ));
+        require(state.initialized, "Not initialized");
+        require(state.participants.deployer != address(0), "Deployer not set");
+        console.log("Starting deployment with deployer:", state.participants.deployer);
 
+        // Deploy KKUBUnwrapper first (no complex dependencies)
+        console.log("Deploying KKUBUnwrapper...");
         state.core.kkubUnwrapper = address(new KKUBUnwrapper(KKUB));
+        emit ContractDeployed("KKUBUnwrapper", state.core.kkubUnwrapper);
+
+        // Deploy PONDER token with temporary staking address
+        console.log("Deploying PONDER token...");
+        state.core.ponder = address(new PonderToken(
+            state.participants.teamReserve,
+            state.participants.deployer,
+            address(1)  // temporary staking address
+        ));
+        emit ContractDeployed("PONDER", state.core.ponder);
+
+        // Deploy Factory
+        console.log("Deploying Factory...");
+        state.core.factory = address(new PonderFactory(
+            state.participants.deployer,  // feeToSetter
+            state.participants.deployer,  // temporary launcher
+            state.core.ponder
+        ));
+        emit ContractDeployed("Factory", state.core.factory);
+
+        // Deploy Router
+        console.log("Deploying Router...");
         state.core.router = address(new PonderRouter(
             state.core.factory,
             KKUB,
             state.core.kkubUnwrapper
         ));
+        emit ContractDeployed("Router", state.core.router);
 
-        // First deploy token with temporary staking address
-        state.core.ponder = address(new PonderToken(
-            state.participants.teamReserve,
-            state.participants.deployer,  // launcher
-            address(1)  // temporary staking address
-        ));
+        // Deploy Oracle
+        console.log("Deploying Oracle...");
+        state.core.oracle = address(new PonderPriceOracle(state.core.factory, KKUB));
+        emit ContractDeployed("Oracle", state.core.oracle);
 
-        // Now deploy staking with actual PONDER address
+        // Deploy Staking with actual PONDER
+        console.log("Deploying Staking...");
         state.core.staking = address(new PonderStaking(
             state.core.ponder,
             state.core.router,
             state.core.factory
         ));
+        emit ContractDeployed("Staking", state.core.staking);
 
-        // Set up remaining contracts
-        state.core.oracle = address(new PonderPriceOracle(state.core.factory, KKUB));
-        emit ContractDeployed("Oracle", state.core.oracle);
-
+        // Deploy FeeDistributor
+        console.log("Deploying FeeDistributor...");
         state.core.feeDistributor = address(new FeeDistributor(
             state.core.factory,
             state.core.router,
@@ -107,6 +130,8 @@ contract DeployBitkubScript is Script {
         ));
         emit ContractDeployed("FeeDistributor", state.core.feeDistributor);
 
+        // Deploy Launcher
+        console.log("Deploying Launcher...");
         state.core.launcher = address(new FiveFiveFiveLauncher(
             state.core.factory,
             payable(state.core.router),
@@ -116,6 +141,8 @@ contract DeployBitkubScript is Script {
         ));
         emit ContractDeployed("Launcher", state.core.launcher);
 
+        // Deploy MasterChef
+        console.log("Deploying MasterChef...");
         state.core.masterChef = address(new PonderMasterChef(
             PonderToken(state.core.ponder),
             PonderFactory(state.core.factory),
@@ -124,7 +151,7 @@ contract DeployBitkubScript is Script {
         ));
         emit ContractDeployed("MasterChef", state.core.masterChef);
 
-        // Create PONDER-KUB pair
+        // Create and initialize PONDER-KUB pair
         console.log("Creating PONDER-KUB pair...");
         PonderFactory(state.core.factory).createPair(state.core.ponder, KKUB);
         state.core.ponderKubPair = PonderFactory(state.core.factory).getPair(state.core.ponder, KKUB);
@@ -136,10 +163,13 @@ contract DeployBitkubScript is Script {
     }
 
     function setupInitialLiquidity() internal {
-        // Add approvals
+        console.log("Setting up initial liquidity...");
+        require(state.core.ponder != address(0), "PONDER token not deployed");
+        require(state.core.router != address(0), "Router not deployed");
+
+        // Approve router for PONDER spending
         PonderToken(state.core.ponder).approve(state.core.router, INITIAL_LIQUIDITY_ALLOCATION);
 
-        // Add liquidity
         try IPonderRouter(state.core.router).addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
             state.core.ponder,
             INITIAL_LIQUIDITY_ALLOCATION,
@@ -149,27 +179,39 @@ contract DeployBitkubScript is Script {
             block.timestamp + 300
         ) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
             emit LiquidityAdded(amountETH, amountToken);
+            console.log("Initial liquidity added successfully:");
+            console.log("- KUB added:", amountETH);
+            console.log("- PONDER added:", amountToken);
+            console.log("- LP tokens received:", liquidity);
         } catch Error(string memory reason) {
             revert(string(abi.encodePacked("Liquidity addition failed: ", reason)));
         }
     }
 
     function finalizeConfiguration() internal {
-        // Update staking address in token
-        PonderToken(state.core.ponder).setStaking(state.core.staking);
+        require(state.initialized, "Not initialized");
+        console.log("Finalizing configuration...");
 
-        // Set remaining configurations
+        // Update PONDER's staking and other settings
+        PonderToken(state.core.ponder).setStaking(state.core.staking);
+        PonderToken(state.core.ponder).initializeStaking();
         PonderToken(state.core.ponder).setMinter(state.core.masterChef);
         PonderToken(state.core.ponder).setLauncher(state.core.launcher);
+
+        // Update Factory settings
         PonderFactory(state.core.factory).setFeeTo(state.core.feeDistributor);
-        PonderFactory(state.core.factory).setPonder(state.core.ponder);
 
-        // Ensure liquidity is added before initializing oracle
-        console.log("Skipping Oracle initialization, run manually after liquidity is added.");
+        emit ConfigurationFinalized(
+            state.core.factory,
+            state.core.masterChef,
+            state.core.feeDistributor
+        );
 
-        emit ConfigurationFinalized(state.core.factory, state.core.masterChef, state.core.feeDistributor);
+        logDeploymentSummary();
+    }
 
-        console.log("Deployment Summary:");
+    function logDeploymentSummary() internal view {
+        console.log("=== Deployment Summary ===");
         console.log("Deployer:", state.participants.deployer);
         console.log("PONDER Token:", state.core.ponder);
         console.log("Factory:", state.core.factory);
@@ -184,15 +226,26 @@ contract DeployBitkubScript is Script {
     }
 
     function run() external {
+        console.log("Starting deployment script...");
+
+        // Get deployment parameters
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
         address teamReserve = vm.envAddress("TEAM_RESERVE_ADDRESS");
-        address marketing = vm.envAddress("MARKETING_ADDRESS");
 
-        initialize(deployer, teamReserve, marketing);
+        console.log("Retrieved addresses:");
+        console.log("Deployer:", deployer);
+        console.log("Team Reserve:", teamReserve);
+
+        // Initialize state
+        initialize(deployer, teamReserve);
+
+        // Start deployment
         vm.startBroadcast(deployerPrivateKey);
+
         deployCoreProtocol();
         finalizeConfiguration();
+
         vm.stopBroadcast();
     }
 }

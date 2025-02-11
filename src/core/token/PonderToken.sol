@@ -6,7 +6,6 @@ import { PonderTokenStorage } from "./storage/PonderTokenStorage.sol";
 import { IPonderToken } from "./IPonderToken.sol";
 import { IPonderStaking } from "../staking/IPonderStaking.sol";
 import { PonderTokenTypes } from "./types/PonderTokenTypes.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /*//////////////////////////////////////////////////////////////
                     PONDER TOKEN CONTRACT
@@ -29,6 +28,9 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
     /// @dev Immutable to prevent manipulation
     uint256 private immutable _DEPLOYMENT_TIME;
 
+    /// @notice Flag for if team locked staking has been initialized
+    bool private _stakingInitialized;
+
 
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
@@ -45,7 +47,6 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         address launcher_,
         address staking_
     ) PonderERC20("Koi", "KOI") {
-        // Input validation
         if (teamReserve_ == address(0)) {
             revert PonderTokenTypes.ZeroAddress();
         }
@@ -57,19 +58,11 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         _launcher = launcher_;
         _staking = IPonderStaking(staking_);
 
-        // Step 1: Mint team allocation to this contract temporarily
+        // Mint team allocation to this contract for force-staking
         _mint(address(this), PonderTokenTypes.TEAM_ALLOCATION);
 
-        // Step 2: Approve staking contract to take team allocation
-        IERC20(address(this)).approve(address(_staking), PonderTokenTypes.TEAM_ALLOCATION);
-
-        // Step 3: Enter staking for team - this will:
-        // - Transfer PONDER from this contract to staking contract
-        // - Mint xKOI directly to teamReserve_
-        _staking.enter(PonderTokenTypes.TEAM_ALLOCATION, _teamReserve);
-
-        // Step 4: Mint remaining allocations
-        _mint(_owner, PonderTokenTypes.INITIAL_LIQUIDITY);
+        // Mint initial liquidity allocation to launcher for pool creation
+        _mint(launcher_, PonderTokenTypes.INITIAL_LIQUIDITY);
     }
 
     /// @notice Burns tokens from caller's balance
@@ -135,6 +128,24 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         emit PonderTokenTypes.LauncherUpdated(oldLauncher, launcher_);
     }
 
+    /// @notice Initializes staking of team allocation
+    /// @dev Can only be called once after staking contract is properly set
+    function initializeStaking() external {
+        // Ensure caller is owner
+        if (msg.sender != _owner) revert PonderTokenTypes.Forbidden();
+        // Ensure not already initialized
+        if (_stakingInitialized) revert PonderTokenTypes.AlreadyInitialized();
+        // Ensure staking contract is set
+        if (address(_staking) == address(0)) revert PonderTokenTypes.ZeroAddress();
+
+        // Approve staking contract
+        _approve(address(this), address(_staking), PonderTokenTypes.TEAM_ALLOCATION);
+
+        // Enter staking with team allocation
+        _staking.enter(PonderTokenTypes.TEAM_ALLOCATION, _teamReserve);
+
+        _stakingInitialized = true;
+    }
 
     /// @notice Sets the staking contract address
     /// @dev Can only be called once by owner to set the final staking address

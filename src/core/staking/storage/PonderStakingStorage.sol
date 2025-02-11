@@ -17,7 +17,7 @@ abstract contract PonderStakingStorage {
 
     /// @notice Contract deployment timestamp
     /// @dev Used for team lock period validation
-    uint256 public immutable deploymentTime;
+    uint256 public immutable DEPLOYMENT_TIME;
 
     /*//////////////////////////////////////////////////////////////
                         ACCESS CONTROL

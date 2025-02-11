@@ -66,7 +66,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         FACTORY = IPonderFactory(_factory);
         owner = msg.sender;
         lastRebaseTime = block.timestamp;
-        deploymentTime = block.timestamp;
+        DEPLOYMENT_TIME = block.timestamp;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -124,7 +124,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @return amount Amount of PONDER tokens returned
     function leave(uint256 shares) external returns (uint256 amount) {
         if (msg.sender == IPonderToken(address(PONDER)).teamReserve()) {
-            if (block.timestamp < deploymentTime + PonderStakingTypes.TEAM_LOCK_DURATION) {
+            if (block.timestamp < DEPLOYMENT_TIME + PonderStakingTypes.TEAM_LOCK_DURATION) {
                 revert PonderStakingTypes.TeamStakingLocked();
             }
         }
