@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import "forge-std/Test.sol";
 import "../mocks/WETH9.sol";
 import "../../src/periphery/unwrapper/KKUBUnwrapper.sol";
+import { IKKUBUnwrapper } from "../../src/periphery/unwrapper/IKKUBUnwrapper.sol";
 
 contract MockKKUB is WETH9 {
     mapping(address => bool) public blacklist;
@@ -207,7 +208,7 @@ contract KKUBUnwrapperTest is Test {
         kkub.approve(address(unwrapper), AMOUNT);
 
         // Should revert with InsufficientKYCLevel error
-        vm.expectRevert(KKUBUnwrapperTypes.InsufficientKYCLevel.selector);
+        vm.expectRevert(IKKUBUnwrapper.InsufficientKYCLevel.selector);
         unwrapper.unwrapKKUB(AMOUNT, alice);
         vm.stopPrank();
     }
@@ -219,7 +220,7 @@ contract KKUBUnwrapperTest is Test {
         kkub.deposit{value: AMOUNT}();
         kkub.approve(address(unwrapper), AMOUNT);
 
-        vm.expectRevert(KKUBUnwrapperTypes.BlacklistedAddress.selector);
+        vm.expectRevert(IKKUBUnwrapper.BlacklistedAddress.selector);
         unwrapper.unwrapKKUB(AMOUNT, alice);
         vm.stopPrank();
     }
@@ -344,7 +345,7 @@ contract KKUBUnwrapperTest is Test {
     function testUnwrapZeroAmount() public {
         vm.startPrank(alice);
         kkub.approve(address(unwrapper), 0);
-        vm.expectRevert(KKUBUnwrapperTypes.ZeroAmount.selector);
+        vm.expectRevert(IKKUBUnwrapper.ZeroAmount.selector);
         unwrapper.unwrapKKUB(0, alice);
         vm.stopPrank();
     }
@@ -363,7 +364,7 @@ contract KKUBUnwrapperTest is Test {
         assertEq(firstWithdrawal, 1000 ether, "Should be limited to MAX_WITHDRAWAL_AMOUNT");
 
         // Immediate second withdrawal should fail
-        vm.expectRevert(KKUBUnwrapperTypes.WithdrawalTooFrequent.selector);
+        vm.expectRevert(IKKUBUnwrapper.WithdrawalTooFrequent.selector);
         unwrapper.emergencyWithdraw();
 
         // After delay, should work again
@@ -407,7 +408,7 @@ contract KKUBUnwrapperTest is Test {
 
         // Try reset before delay (should not reset)
         unwrapper.resetWithdrawalLimit();
-        vm.expectRevert(KKUBUnwrapperTypes.WithdrawalTooFrequent.selector);
+        vm.expectRevert(IKKUBUnwrapper.WithdrawalTooFrequent.selector);
         unwrapper.emergencyWithdraw();
 
         // Move past delay and reset

@@ -31,8 +31,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         address launcher_,
         address ponder_
     ) {
-        if (feeToSetter_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
-        if (ponder_ == address(0)) revert PonderFactoryTypes.ZeroAddress();
+        if (feeToSetter_ == address(0)) revert IPonderFactory.ZeroAddress();
+        if (ponder_ == address(0)) revert IPonderFactory.ZeroAddress();
 
         _feeToSetter = feeToSetter_;
         _launcher = launcher_;
@@ -120,10 +120,10 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     /// @return pair Address of the newly created pair
     function createPair(address tokenA, address tokenB) external returns (address pair) {
         // Checks
-        if (tokenA == tokenB) revert PonderFactoryTypes.IdenticalAddresses();
+        if (tokenA == tokenB) revert IPonderFactory.IdenticalAddresses();
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        if (token0 == address(0)) revert PonderFactoryTypes.ZeroAddress();
-        if (_getPair[token0][token1] != address(0)) revert PonderFactoryTypes.PairExists();
+        if (token0 == address(0)) revert IPonderFactory.ZeroAddress();
+        if (_getPair[token0][token1] != address(0)) revert IPonderFactory.PairExists();
 
         // Effects
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
@@ -146,7 +146,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     /// @dev Restricted to feeToSetter
     /// @param newFeeTo New fee collection address
     function setFeeTo(address newFeeTo) external onlyFeeToSetter {
-        if (newFeeTo == address(0)) revert PonderFactoryTypes.InvalidFeeReceiver();
+        if (newFeeTo == address(0)) revert IPonderFactory.InvalidFeeReceiver();
         address oldFeeTo = _feeTo;
         _feeTo = newFeeTo;
         emit FeeToUpdated(oldFeeTo, newFeeTo);
@@ -156,7 +156,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     /// @dev Restricted to current feeToSetter
     /// @param newFeeToSetter New fee admin address
     function setFeeToSetter(address newFeeToSetter) external onlyFeeToSetter {
-        if (newFeeToSetter == address(0)) revert PonderFactoryTypes.ZeroAddress();
+        if (newFeeToSetter == address(0)) revert IPonderFactory.ZeroAddress();
         address oldFeeToSetter = _feeToSetter;
 
         _feeToSetter = newFeeToSetter;
@@ -167,7 +167,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     /// @dev Starts timelock period for launcher change
     /// @param newLauncher Proposed new launcher address
     function setLauncher(address newLauncher) external onlyFeeToSetter {
-        if (newLauncher == address(0)) revert PonderFactoryTypes.InvalidLauncher();
+        if (newLauncher == address(0)) revert IPonderFactory.InvalidLauncher();
 
         if (_launcher == address(0)) {
             _launcher = newLauncher;
@@ -186,8 +186,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         // - Timestamp manipulation window (900s) is negligible compared to typical timelock periods
         // - Only callable by privileged role (feeToSetter)
         // slither-disable-next-line block-timestamp
-        if (block.timestamp < _launcherDelay) revert PonderFactoryTypes.TimelockNotFinished();
-        if (_pendingLauncher == address(0)) revert PonderFactoryTypes.InvalidLauncher();
+        if (block.timestamp < _launcherDelay) revert IPonderFactory.TimelockNotFinished();
+        if (_pendingLauncher == address(0)) revert IPonderFactory.InvalidLauncher();
 
         address oldLauncher = _launcher;
         _launcher = _pendingLauncher;
@@ -201,7 +201,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     /// @dev Restricted to feeToSetter
     /// @param newPonder New PONDER token address
     function setPonder(address newPonder) external onlyFeeToSetter {
-        if (newPonder == address(0)) revert PonderFactoryTypes.ZeroAddress();
+        if (newPonder == address(0)) revert IPonderFactory.ZeroAddress();
 
         address oldPonder = _ponder;
         _ponder = newPonder;
@@ -215,7 +215,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     /// @notice Restricts function access to fee setter
     /// @dev Reverts if caller is not the current fee setter
     modifier onlyFeeToSetter() {
-        if (msg.sender != _feeToSetter) revert PonderFactoryTypes.Forbidden();
+        if (msg.sender != _feeToSetter) revert IPonderFactory.Forbidden();
         _;
     }
 }

@@ -298,7 +298,7 @@ export const pondermasterchefAbi = [
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "pending",
         "type": "uint256",
         "internalType": "uint256"
       }

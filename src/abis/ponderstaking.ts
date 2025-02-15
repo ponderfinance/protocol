@@ -22,6 +22,19 @@ export const ponderstakingAbi = [
   },
   {
     "type": "function",
+    "name": "DEPLOYMENT_TIME",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "FACTORY",
     "inputs": [],
     "outputs": [
@@ -180,6 +193,11 @@ export const ponderstakingAbi = [
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [
@@ -852,6 +870,11 @@ export const ponderstakingAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "TeamStakingLocked",
+    "inputs": []
   },
   {
     "type": "error",

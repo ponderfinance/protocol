@@ -41,8 +41,8 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     /// @param _factory Address of pair factory
     /// @param _baseToken Address of base routing token
     constructor(address _factory, address _baseToken) {
-        if (_factory == address(0)) revert PonderOracleTypes.ZeroAddress();
-        if (_baseToken == address(0)) revert PonderOracleTypes.ZeroAddress();
+        if (_factory == address(0)) revert IPonderPriceOracle.ZeroAddress();
+        if (_baseToken == address(0)) revert IPonderPriceOracle.ZeroAddress();
 
         FACTORY = _factory;
         BASE_TOKEN = _baseToken;
@@ -57,9 +57,9 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     /// @dev Creates initial observation array
     /// @param pair Address of pair to initialize
     function initializePair(address pair) public {
-        if (pair == address(0)) revert PonderOracleTypes.ZeroAddress();
-        if (!_isValidPair(pair)) revert PonderOracleTypes.InvalidPair();
-        if (_initializedPairs[pair]) revert PonderOracleTypes.AlreadyInitialized();
+        if (pair == address(0)) revert IPonderPriceOracle.ZeroAddress();
+        if (!_isValidPair(pair)) revert IPonderPriceOracle.InvalidPair();
+        if (_initializedPairs[pair]) revert IPonderPriceOracle.AlreadyInitialized();
 
         (uint256 price0Cumulative, uint256 price1Cumulative, uint32 blockTimestamp) =
                             PonderOracleLibrary.currentCumulativePrices(pair);
@@ -92,10 +92,10 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         // - Additional price deviation checks are implemented
         // slither-disable-next-line block-timestamp
         if (block.timestamp < _lastUpdateTime[pair] + PonderOracleTypes.MIN_UPDATE_DELAY) {
-            revert PonderOracleTypes.UpdateTooFrequent();
+            revert IPonderPriceOracle.UpdateTooFrequent();
         }
         if (!_isValidPair(pair)) {
-            revert PonderOracleTypes.InvalidPair();
+            revert IPonderPriceOracle.InvalidPair();
         }
 
         if (!_initializedPairs[pair]) {
@@ -136,19 +136,19 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         uint256 amountIn,
         uint32 period
     ) external view returns (uint256 amountOut) {
-        if (!_initializedPairs[pair]) revert PonderOracleTypes.NotInitialized();
-        if (period == 0 || period > PonderOracleTypes.PERIOD) revert PonderOracleTypes.InvalidPeriod();
+        if (!_initializedPairs[pair]) revert IPonderPriceOracle.NotInitialized();
+        if (period == 0 || period > PonderOracleTypes.PERIOD) revert IPonderPriceOracle.InvalidPeriod();
         if (amountIn == 0) return 0;
 
         // Check observation array is initialized
-        if (_observations[pair].length == 0) revert PonderOracleTypes.InsufficientData();
+        if (_observations[pair].length == 0) revert IPonderPriceOracle.InsufficientData();
 
         // Check oracle has recent data
         // - TWAP mechanism inherently resistant to short-term manipulation
         // - Price staleness check is much longer than possible timestamp manipulation
         // slither-disable-next-line block-timestamp
         if (block.timestamp > _lastUpdateTime[pair] + PonderOracleTypes.PERIOD) {
-            revert PonderOracleTypes.StalePrice();
+            revert IPonderPriceOracle.StalePrice();
         }
 
         // Get latest cumulative price
@@ -162,7 +162,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         // Verify have enough elapsed time for accurate TWAP
         uint32 timeElapsed = blockTimestamp - uint32(oldTimestamp);
         if (timeElapsed < PonderOracleTypes.MIN_UPDATE_DELAY || timeElapsed > period) {
-            revert PonderOracleTypes.InsufficientData();
+            revert IPonderPriceOracle.InsufficientData();
         }
 
         IPonderPair pairContract = IPonderPair(pair);
@@ -183,7 +183,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
             );
         }
 
-        revert PonderOracleTypes.InvalidToken();
+        revert IPonderPriceOracle.InvalidToken();
     }
 
     /// @notice Get current spot price
@@ -197,7 +197,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         address tokenIn,
         uint256 amountIn
     ) public view returns (uint256 amountOut) {
-        if (!_isValidPair(pair)) revert PonderOracleTypes.InvalidPair();
+        if (!_isValidPair(pair)) revert IPonderPriceOracle.InvalidPair();
 
         IPonderPair pairContract = IPonderPair(pair);
 
@@ -208,7 +208,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
 
         // Check which token is token0 based on address ordering
         bool isToken0 = tokenIn == pairContract.token0();
-        if (!isToken0 && tokenIn != pairContract.token1()) revert PonderOracleTypes.InvalidToken();
+        if (!isToken0 && tokenIn != pairContract.token1()) revert IPonderPriceOracle.InvalidToken();
 
         // Get reserves matching input token
         uint256 reserveIn = uint256(isToken0 ? reserve0 : reserve1);

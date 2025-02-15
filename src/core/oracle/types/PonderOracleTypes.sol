@@ -31,37 +31,6 @@ library PonderOracleTypes {
     }
 
     /*//////////////////////////////////////////////////////////////
-                        CUSTOM ERRORS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Invalid trading pair address
-    error InvalidPair();
-
-    /// @notice Invalid token in trading pair
-    error InvalidToken();
-
-    /// @notice Update attempted too soon
-    error UpdateTooFrequent();
-
-    /// @notice Price data has expired
-    error StalePrice();
-
-    /// @notice Not enough observations recorded
-    error InsufficientData();
-
-    /// @notice Invalid time period requested
-    error InvalidPeriod();
-
-    /// @notice Pair already initialized
-    error AlreadyInitialized();
-
-    /// @notice Pair not yet initialized
-    error NotInitialized();
-
-    /// @notice Zero address provided
-    error ZeroAddress();
-
-    /*//////////////////////////////////////////////////////////////
                             CONSTANTS
     //////////////////////////////////////////////////////////////*/
 

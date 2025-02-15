@@ -134,9 +134,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /// @param token0_ First token address (lower sort order)
     /// @param token1_ Second token address (higher sort order)
     function initialize(address token0_, address token1_) external override {
-        if (msg.sender != _FACTORY) revert PonderPairTypes.Forbidden();
-        if (token0_ == address(0)) revert PonderPairTypes.ZeroAddress();
-        if (token1_ == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (msg.sender != _FACTORY) revert IPonderPair.Forbidden();
+        if (token0_ == address(0)) revert IPonderPair.ZeroAddress();
+        if (token1_ == address(0)) revert IPonderPair.ZeroAddress();
 
         _token0 = token0_;
         _token1 = token1_;
@@ -162,7 +162,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         if (currentSupply == 0) {
             if (amount0 < PonderPairTypes.MINIMUM_LIQUIDITY ||
                 amount1 < PonderPairTypes.MINIMUM_LIQUIDITY) {
-                revert PonderPairTypes.InsufficientInitialLiquidity();
+                revert IPonderPair.InsufficientInitialLiquidity();
             }
             liquidity = Math.sqrt(amount0 * amount1) - PonderPairTypes.MINIMUM_LIQUIDITY;
             _mint(address(1), PonderPairTypes.MINIMUM_LIQUIDITY);
@@ -173,7 +173,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             );
         }
 
-        if (liquidity <= 0) revert PonderPairTypes.InsufficientLiquidityMinted();
+        if (liquidity <= 0) revert IPonderPair.InsufficientLiquidityMinted();
         _mint(to, liquidity);
 
         _update(balance0, balance1, reserve0_, reserve1_);
@@ -199,7 +199,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
 
         amount0 = (liquidity * balance0) / currentSupply;
         amount1 = (liquidity * balance1) / currentSupply;
-        if (amount0 <= 0 || amount1 <= 0) revert PonderPairTypes.InsufficientLiquidityBurned();
+        if (amount0 <= 0 || amount1 <= 0) revert IPonderPair.InsufficientLiquidityBurned();
 
         // EFFECTS - Update all state variables before external calls
         _burn(address(this), liquidity);
@@ -244,14 +244,14 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         bytes calldata data
     ) external override nonReentrant {
         // CHECKS
-        if (amount0Out == 0 && amount1Out == 0) revert PonderPairTypes.InsufficientOutputAmount();
-        if (to == _token0 || to == _token1) revert PonderPairTypes.InvalidToAddress();
+        if (amount0Out == 0 && amount1Out == 0) revert IPonderPair.InsufficientOutputAmount();
+        if (to == _token0 || to == _token1) revert IPonderPair.InvalidToAddress();
 
         PonderPairTypes.SwapState memory state;
         (state.reserve0, state.reserve1,) = getReserves();
 
         if (amount0Out >= state.reserve0 || amount1Out >= state.reserve1) {
-            revert PonderPairTypes.InsufficientLiquidity();
+            revert IPonderPair.InsufficientLiquidity();
         }
 
         // INITIAL EFFECTS - Flash loan protection
@@ -276,7 +276,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             state.balance1 - (state.reserve1 - amount1Out) : 0;
 
         if (state.amount0In <= 0 && state.amount1In <= 0) {
-            revert PonderPairTypes.InsufficientInputAmount();
+            revert IPonderPair.InsufficientInputAmount();
         }
 
         // Validate k-value with actual balances
@@ -292,7 +292,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         });
 
         if (!_validateKValue(swapData)) {
-            revert PonderPairTypes.KValueCheckFailed();
+            revert IPonderPair.KValueCheckFailed();
         }
 
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
@@ -313,8 +313,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /// @param to Recipient address
     /// @param value Amount to transfer
     function _safeTransfer(address token, address to, uint256 value) private {
-        if (token == address(0)) revert PonderPairTypes.ZeroAddress();
-        if (to == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (token == address(0)) revert IPonderPair.ZeroAddress();
+        if (to == address(0)) revert IPonderPair.ZeroAddress();
 
         IERC20(token).safeTransfer(to, value);
     }
@@ -327,7 +327,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount1Out,
         bytes calldata data
     ) private {
-        if (to == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (to == address(0)) revert IPonderPair.ZeroAddress();
 
         if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out);
         if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out);
@@ -347,9 +347,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount0Out,
         uint256 amount1Out
     ) private {
-        if (token == address(0)) revert PonderPairTypes.ZeroAddress();
-        if (token0Address == address(0)) revert PonderPairTypes.ZeroAddress();
-        if (token1Address == address(0)) revert PonderPairTypes.ZeroAddress();
+        if (token == address(0)) revert IPonderPair.ZeroAddress();
+        if (token0Address == address(0)) revert IPonderPair.ZeroAddress();
+        if (token1Address == address(0)) revert IPonderPair.ZeroAddress();
 
         if (amountIn <= 0) return;
 
@@ -416,7 +416,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             state.balance1 - (state.reserve1 - amount1Out) : 0;
 
         if (state.amount0In <= 0 && state.amount1In <= 0) {
-            revert PonderPairTypes.InsufficientInputAmount();
+            revert IPonderPair.InsufficientInputAmount();
         }
 
         // Create SwapData struct and validate
@@ -432,7 +432,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         });
 
         if (!_validateKValue(swapData)) {
-            revert PonderPairTypes.KValueCheckFailed();
+            revert IPonderPair.KValueCheckFailed();
         }
 
         // Update state before external interactions
@@ -495,7 +495,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint112 _reserve1Old
     ) private {
         if (balance0 > type(uint112).max || balance1 > type(uint112).max) {
-            revert PonderPairTypes.Overflow();
+            revert IPonderPair.Overflow();
         }
 
 

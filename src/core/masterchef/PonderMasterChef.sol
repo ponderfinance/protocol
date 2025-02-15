@@ -51,7 +51,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         address _teamReserve_,
         uint256 _ponderPerSecond_
     ) {
-        if (_teamReserve_ == address(0)) revert PonderMasterChefTypes.ZeroAddress();
+        if (_teamReserve_ == address(0)) revert IPonderMasterChef.ZeroAddress();
         PONDER = _ponder;
         FACTORY = _factory;
         _teamReserve = _teamReserve_;
@@ -66,7 +66,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @notice Restricts function to the contract owner
     /// @dev Reverts if caller is not the owner
     modifier onlyOwner {
-        if (msg.sender != _owner) revert PonderMasterChefTypes.Forbidden();
+        if (msg.sender != _owner) revert IPonderMasterChef.Forbidden();
         _;
     }
 
@@ -199,7 +199,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @return pending Amount of unclaimed PONDER tokens available
     function pendingPonder(uint256 _pid, address _user) external view returns (uint256 pending) {
         // CHECKS
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
 
         // Load storage pointers
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
@@ -287,7 +287,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         uint16 depositFeeBP,
         uint16 boostMultiplier
     ) {
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         return (
             pool.lpToken,
@@ -313,7 +313,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         uint256 ponderStaked,
         uint256 lpAmount
     ) external view returns (uint256) {
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         return _calculateBoostMultiplier(
             ponderStaked,
             lpAmount,
@@ -339,26 +339,26 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         uint16 _boostMultiplier
     ) external onlyOwner {
         // Checks
-        if (_lpToken == address(0)) revert PonderMasterChefTypes.ZeroAddress();
+        if (_lpToken == address(0)) revert IPonderMasterChef.ZeroAddress();
         if (_allocPoint > PonderMasterChefTypes.MAX_ALLOC_POINT)  {
-            revert PonderMasterChefTypes.ExcessiveAllocation();
+            revert IPonderMasterChef.ExcessiveAllocation();
         }
-        if (_depositFeeBP > 1000) revert PonderMasterChefTypes.ExcessiveDepositFee();
+        if (_depositFeeBP > 1000) revert IPonderMasterChef.ExcessiveDepositFee();
         if (_boostMultiplier < PonderMasterChefTypes.MIN_BOOST_MULTIPLIER) {
-            revert PonderMasterChefTypes.InvalidBoostMultiplier();
+            revert IPonderMasterChef.InvalidBoostMultiplier();
         }
-        if (_boostMultiplier > 50000) revert PonderMasterChefTypes.InvalidBoostMultiplier();
+        if (_boostMultiplier > 50000) revert IPonderMasterChef.InvalidBoostMultiplier();
 
         // Check for duplicate pools
         uint256 length = _poolInfo.length;
         for (uint256 pid; pid < length; ++pid) {
-            if (_poolInfo[pid].lpToken == _lpToken) revert PonderMasterChefTypes.DuplicatePool();
+            if (_poolInfo[pid].lpToken == _lpToken) revert IPonderMasterChef.DuplicatePool();
         }
 
         // Validate LP token is from our factory
         address token0 = IPonderPair(_lpToken).token0();
         address token1 = IPonderPair(_lpToken).token1();
-        if (FACTORY.getPair(token0, token1) != _lpToken) revert PonderMasterChefTypes.InvalidPair();
+        if (FACTORY.getPair(token0, token1) != _lpToken) revert IPonderMasterChef.InvalidPair();
 
         // Update pools first before changing allocation points to ensure proper reward distribution
         _massUpdatePools();
@@ -394,7 +394,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         uint256 _allocPoint,
         bool _withUpdate
     ) external onlyOwner {
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
 
         // Effects: Update state variables before external calls
         _totalAllocPoint = _totalAllocPoint - _poolInfo[_pid].allocPoint + _allocPoint;
@@ -434,7 +434,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to update
     function _updatePool(uint256 _pid) internal {
         // CHECKS
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         if (!_farmingStarted) return;
 
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
@@ -470,7 +470,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to stake in
     /// @param _amount Amount of LP tokens to stake
     function deposit(uint256 _pid, uint256 _amount) external nonReentrant {
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
@@ -511,10 +511,10 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _amount Amount of LP tokens to withdraw
     function withdraw(uint256 _pid, uint256 _amount) external nonReentrant {
         // CHECKS
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
-        if (user.amount < _amount) revert PonderMasterChefTypes.InsufficientAmount();
+        if (user.amount < _amount) revert IPonderMasterChef.InsufficientAmount();
 
         // Calculate pending rewards before any state changes
         uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
@@ -539,7 +539,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         if (_amount > 0) {
             if (!IERC20(pool.lpToken).transfer(msg.sender, _amount)) {
-                revert PonderMasterChefTypes.TransferFailed();
+                revert IPonderMasterChef.TransferFailed();
             }
         }
 
@@ -551,7 +551,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @dev Allows withdrawal without reward collection
     /// @param _pid Pool ID to withdraw from
     function emergencyWithdraw(uint256 _pid) external nonReentrant {
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
@@ -564,7 +564,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         user.weightedShares = 0;
 
         if (!IERC20(pool.lpToken).transfer(msg.sender, amount)) {
-            revert PonderMasterChefTypes.TransferFailed();
+            revert IPonderMasterChef.TransferFailed();
         }
         emit EmergencyWithdraw(msg.sender, _pid, amount);
     }
@@ -580,17 +580,17 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _amount Amount of PONDER to stake
     function boostStake(uint256 _pid, uint256 _amount) external nonReentrant {
         // CHECKS
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
-        if (_amount == 0) revert PonderMasterChefTypes.ZeroAmount();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
+        if (_amount == 0) revert IPonderMasterChef.ZeroAmount();
 
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        if (user.amount == 0) revert PonderMasterChefTypes.InsufficientAmount();
+        if (user.amount == 0) revert IPonderMasterChef.InsufficientAmount();
 
         // Check boost limits before any state changes
         uint256 maxPonderStake = getRequiredPonderForBoost(user.amount, pool.boostMultiplier);
-        if (user.ponderStaked + _amount > maxPonderStake) revert PonderMasterChefTypes.BoostTooHigh();
+        if (user.ponderStaked + _amount > maxPonderStake) revert IPonderMasterChef.BoostTooHigh();
 
         // Calculate pending rewards before any state changes
         _updatePool(_pid);
@@ -605,7 +605,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         // Update weighted shares and validate boost
         _updateUserWeightedShares(_pid, msg.sender);
         if (user.weightedShares > user.amount * pool.boostMultiplier / PonderMasterChefTypes.BASE_MULTIPLIER) {
-            revert PonderMasterChefTypes.BoostTooHigh();
+            revert IPonderMasterChef.BoostTooHigh();
         }
 
         // Update reward debt
@@ -613,13 +613,13 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         // INTERACTIONS - Handle token transfers after all state updates
         if (!PONDER.transferFrom(msg.sender, address(this), _amount)) {
-            revert PonderMasterChefTypes.TransferFailed();
+            revert IPonderMasterChef.TransferFailed();
         }
 
         // Validate transfer amount
         uint256 actualAmount = PONDER.balanceOf(address(this)) - beforeBalance;
-        if (actualAmount <= 0) revert PonderMasterChefTypes.ZeroAmount();
-        if (actualAmount != _amount) revert PonderMasterChefTypes.InvalidAmount();
+        if (actualAmount <= 0) revert IPonderMasterChef.ZeroAmount();
+        if (actualAmount != _amount) revert IPonderMasterChef.InvalidAmount();
 
         // Handle pending rewards
         if (pending > 0) {
@@ -635,13 +635,13 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _amount Amount of PONDER to unstake
     function boostUnstake(uint256 _pid, uint256 _amount) external nonReentrant {
         // CHECKS
-        if (_pid >= _poolInfo.length) revert PonderMasterChefTypes.InvalidPool();
-        if (_amount == 0) revert PonderMasterChefTypes.ZeroAmount();
+        if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
+        if (_amount == 0) revert IPonderMasterChef.ZeroAmount();
 
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        if (user.ponderStaked < _amount) revert PonderMasterChefTypes.InsufficientAmount();
+        if (user.ponderStaked < _amount) revert IPonderMasterChef.InsufficientAmount();
 
         // Calculate pending rewards before any state changes
         _updatePool(_pid);
@@ -667,13 +667,13 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         // Then handle the unstaked PONDER tokens
         if (!PONDER.transfer(msg.sender, _amount)) {
-            revert PonderMasterChefTypes.TransferFailed();
+            revert IPonderMasterChef.TransferFailed();
         }
 
         // Validate final balance
         uint256 finalBalance = PONDER.balanceOf(address(this));
         if (initialBalance - finalBalance != _amount) {
-            revert PonderMasterChefTypes.InvalidAmount();
+            revert IPonderMasterChef.InvalidAmount();
         }
 
         emit BoostUnstake(msg.sender, _pid, _amount);
@@ -722,19 +722,19 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         // Transfer tokens
         if (!IERC20(pool.lpToken).transferFrom(msg.sender, address(this), amount)) {
-            revert PonderMasterChefTypes.TransferFailed();
+            revert IPonderMasterChef.TransferFailed();
         }
 
         uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
         uint256 receivedAmount = afterBalance - beforeBalance;
-        if (receivedAmount == 0) revert PonderMasterChefTypes.NoTokensTransferred();
+        if (receivedAmount == 0) revert IPonderMasterChef.NoTokensTransferred();
 
         // Handle deposit fee
         (uint256 depositFee, uint256 actualAmount) = _calculateDepositFee(receivedAmount, pool.depositFeeBP);
 
         if (depositFee > 0) {
             if (!IERC20(pool.lpToken).transfer(_teamReserve, depositFee)) {
-                revert PonderMasterChefTypes.TransferFailed();
+                revert IPonderMasterChef.TransferFailed();
             }
         }
 
@@ -813,11 +813,11 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         uint256 ponderBalance = PONDER.balanceOf(address(this));
         if (_amount > ponderBalance) {
             if (!PONDER.transfer(_to, ponderBalance)) {
-                revert PonderMasterChefTypes.TransferFailed();
+                revert IPonderMasterChef.TransferFailed();
             }
         } else {
             if (!PONDER.transfer(_to, _amount)) {
-                revert PonderMasterChefTypes.TransferFailed();
+                revert IPonderMasterChef.TransferFailed();
             }
         }
     }
@@ -832,7 +832,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @dev Sets new address for collecting deposit fees
     /// @param _newTeamReserve New fee collector address
     function setTeamReserve(address _newTeamReserve) external onlyOwner {
-        if (_newTeamReserve == address(0)) revert PonderMasterChefTypes.ZeroAddress();
+        if (_newTeamReserve == address(0)) revert IPonderMasterChef.ZeroAddress();
         address oldTeamReserve = _teamReserve;
         _teamReserve = _newTeamReserve;
         emit TeamReserveUpdated(oldTeamReserve, _newTeamReserve);
@@ -856,7 +856,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @dev Starts two-step ownership transfer
     /// @param newOwner Address of the new owner
     function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert PonderMasterChefTypes.ZeroAddress();
+        if (newOwner == address(0)) revert IPonderMasterChef.ZeroAddress();
         _pendingOwner = newOwner;
         emit OwnershipTransferInitiated(_owner, newOwner);
     }
@@ -864,7 +864,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @notice Complete ownership transfer
     /// @dev Finalizes two-step ownership transfer
     function acceptOwnership() external {
-        if (msg.sender != _pendingOwner) revert PonderMasterChefTypes.Forbidden();
+        if (msg.sender != _pendingOwner) revert IPonderMasterChef.Forbidden();
         address oldOwner = _owner;
         _owner = _pendingOwner;
         _pendingOwner = address(0);

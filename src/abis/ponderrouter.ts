@@ -978,6 +978,17 @@ export const ponderrouterAbi = [
   },
   {
     "type": "error",
+    "name": "ExcessivePriceImpact",
+    "inputs": [
+      {
+        "name": "impact",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ExpiredDeadline",
     "inputs": []
   },
@@ -1018,6 +1029,11 @@ export const ponderrouterAbi = [
   },
   {
     "type": "error",
+    "name": "InsufficientKkubBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientLiquidity",
     "inputs": []
   },
@@ -1033,7 +1049,22 @@ export const ponderrouterAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidETHAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidPath",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "KKUBApprovalFailure",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Locked",
     "inputs": []
   },
   {
@@ -1043,7 +1074,17 @@ export const ponderrouterAbi = [
   },
   {
     "type": "error",
+    "name": "PairNonexistent",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RefundFailed",
     "inputs": []
   },
   {
@@ -1070,6 +1111,11 @@ export const ponderrouterAbi = [
   {
     "type": "error",
     "name": "ZeroAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroOutput",
     "inputs": []
   }
 ] as const;

@@ -59,7 +59,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         address _factory
     ) {
         if (_ponder == address(0) || _router == address(0) || _factory == address(0))
-            revert PonderStakingTypes.ZeroAddress();
+            revert IPonderStaking.ZeroAddress();
 
         PONDER = IERC20(_ponder);
         ROUTER = IPonderRouter(_router);
@@ -92,8 +92,8 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @return shares Amount of xPONDER shares minted
     function enter(uint256 amount, address recipient) external returns (uint256 shares) {
         // Checks
-        if (amount == 0) revert PonderStakingTypes.InvalidAmount();
-        if (recipient == address(0)) revert PonderStakingTypes.ZeroAddress();
+        if (amount == 0) revert IPonderStaking.InvalidAmount();
+        if (recipient == address(0)) revert IPonderStaking.ZeroAddress();
 
         uint256 totalPonder = PONDER.balanceOf(address(this));
         uint256 totalShares = totalSupply();
@@ -101,7 +101,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         // Calculate shares
         if (totalShares == 0) {
             if (amount < PonderStakingTypes.MINIMUM_FIRST_STAKE)
-                revert PonderStakingTypes.InsufficientFirstStake();
+                revert IPonderStaking.InsufficientFirstStake();
             shares = amount;
         } else {
             shares = (amount * totalShares) / totalPonder;
@@ -125,20 +125,20 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     function leave(uint256 shares) external returns (uint256 amount) {
         if (msg.sender == IPonderToken(address(PONDER)).teamReserve()) {
             if (block.timestamp < DEPLOYMENT_TIME + PonderStakingTypes.TEAM_LOCK_DURATION) {
-                revert PonderStakingTypes.TeamStakingLocked();
+                revert IPonderStaking.TeamStakingLocked();
             }
         }
 
         // Checks
-        if (shares == 0) revert PonderStakingTypes.InvalidAmount();
-        if (shares > balanceOf(msg.sender)) revert PonderStakingTypes.InvalidSharesAmount();
+        if (shares == 0) revert IPonderStaking.InvalidAmount();
+        if (shares > balanceOf(msg.sender)) revert IPonderStaking.InvalidSharesAmount();
 
         uint256 totalShares = totalSupply();
         uint256 totalPonderBefore = PONDER.balanceOf(address(this));
         amount = (shares * totalPonderBefore) / totalShares;
 
         if (amount < PonderStakingTypes.MINIMUM_WITHDRAW)
-            revert PonderStakingTypes.MinimumSharesRequired();
+            revert IPonderStaking.MinimumSharesRequired();
 
         // Effects
         _burn(msg.sender, shares);
@@ -154,7 +154,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @dev Can only be called after REBASE_DELAY has passed
     function rebase() external {
         if (block.timestamp < lastRebaseTime + PonderStakingTypes.REBASE_DELAY)
-            revert PonderStakingTypes.RebaseTooFrequent();
+            revert IPonderStaking.RebaseTooFrequent();
 
         uint256 totalPonderBalance = PONDER.balanceOf(address(this));
         lastRebaseTime = block.timestamp;
@@ -202,7 +202,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @dev Sets pending owner, requires acceptance
     /// @param newOwner Address of proposed new owner
     function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert PonderStakingTypes.ZeroAddress();
+        if (newOwner == address(0)) revert IPonderStaking.ZeroAddress();
 
         pendingOwner = newOwner;
         emit OwnershipTransferInitiated(owner, newOwner);
@@ -212,7 +212,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @notice Completes ownership transfer process
     /// @dev Can only be called by pending owner
     function acceptOwnership() external {
-        if (msg.sender != pendingOwner) revert PonderStakingTypes.NotPendingOwner();
+        if (msg.sender != pendingOwner) revert IPonderStaking.NotPendingOwner();
 
         address oldOwner = owner;
         owner = pendingOwner;
@@ -228,7 +228,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     /// @notice Restricts function access to contract owner
     /// @dev Reverts if caller is not current owner
     modifier onlyOwner() {
-        if (msg.sender != owner) revert PonderStakingTypes.NotOwner();
+        if (msg.sender != owner) revert IPonderStaking.NotOwner();
         _;
     }
 }

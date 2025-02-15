@@ -267,6 +267,25 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "function",
+    "name": "getLaunchDeadline",
+    "inputs": [
+      {
+        "name": "launchId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getLaunchInfo",
     "inputs": [
       {
@@ -906,7 +925,152 @@ export const fivefivefivelauncherAbi = [
   },
   {
     "type": "error",
+    "name": "AlreadyLaunched",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ApprovalFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ContributionTooSmall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ContributorTokensOverflow",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExcessiveContribution",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExcessivePriceDeviation",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ImageRequired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLPTokens",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientPoolLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientPriceHistory",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTokenParams",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LPTokensOverflow",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchBeingFinalized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchDeadlinePassed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchNotCancellable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchStillActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LaunchSucceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoContributionToRefund",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PriceOutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RefundFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StalePrice",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TokenApprovalRequired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TokenNameExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TokenSymbolExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TokenTransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Unauthorized",
     "inputs": []
   },
   {

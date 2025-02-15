@@ -81,4 +81,48 @@ interface IKKUBUnwrapper {
     /// @dev Restricted to admin/owner
     /// @dev Reverts contract to normal operation state
     function unpause() external;
+
+    /*//////////////////////////////////////////////////////////////
+                    ERROR DEFINITIONS
+//////////////////////////////////////////////////////////////*/
+
+    /// @notice Error for withdrawal timing violations
+    /// @dev Thrown when attempting withdrawal before WITHDRAWAL_DELAY has elapsed
+    /// @dev Check getNextWithdrawalTime() before attempting withdrawal
+    error WithdrawalTooFrequent();
+
+    /// @notice Error for insufficient contract balance
+    /// @dev Thrown when contract lacks ETH to fulfill unwrap request
+    /// @dev Check getLockedBalance() before operations
+    error InsufficientBalance();
+
+    /// @notice Error for failed withdrawal operations
+    /// @dev Thrown when ETH transfer fails during unwrapping
+    /// @dev May indicate recipient contract rejection
+    error WithdrawFailed();
+
+    /// @notice Error for blacklisted address interactions
+    /// @dev Thrown when interacting with KKUB-blacklisted addresses
+    /// @dev Check address status before interaction
+    error BlacklistedAddress();
+
+    /// @notice Error for zero-value operations
+    /// @dev Thrown when amount parameter is 0
+    /// @dev All operations must involve positive amounts
+    error ZeroAmount();
+
+    /// @notice Error for KYC verification failures
+    /// @dev Thrown when address lacks required KYC level
+    /// @dev Verify KYC status before attempting operations
+    error InsufficientKYCLevel();
+
+    /// @notice Error for zero address inputs
+    /// @dev Thrown when zero address is provided for critical parameters
+    /// @dev Validate addresses before submission
+    error ZeroAddressNotAllowed();
+
+    /// @notice Error for invalid owner address updates
+    /// @dev Thrown during ownership transfer to invalid address
+    /// @dev Ensure new owner meets all requirements
+    error InvalidNewOwner();
 }

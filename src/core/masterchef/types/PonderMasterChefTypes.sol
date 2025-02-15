@@ -75,52 +75,6 @@ library PonderMasterChefTypes {
     }
 
     /*//////////////////////////////////////////////////////////////
-                            CUSTOM ERRORS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Invalid boost multiplier configuration
-    error InvalidBoostMultiplier();
-
-    /// @notice Deposit fee exceeds maximum allowed
-    error ExcessiveDepositFee();
-
-    /// @notice Unauthorized access attempt
-    error Forbidden();
-
-    /// @notice Invalid pool ID or reference
-    error InvalidPool();
-
-    /// @notice Invalid LP token pair
-    error InvalidPair();
-
-    /// @notice Invalid input amount
-    error InvalidAmount();
-
-    /// @notice Zero amount provided
-    error ZeroAmount();
-
-    /// @notice Zero address provided
-    error ZeroAddress();
-
-    /// @notice Insufficient token amount
-    error InsufficientAmount();
-
-    /// @notice Boost multiplier exceeds maximum
-    error BoostTooHigh();
-
-    /// @notice Token transfer operation failed
-    error TransferFailed();
-
-    /// @notice Pool allocation exceeds maximum
-    error ExcessiveAllocation();
-
-    /// @notice Attempted to add duplicate pool
-    error DuplicatePool();
-
-    /// @notice No tokens were transferred
-    error NoTokensTransferred();
-
-    /*//////////////////////////////////////////////////////////////
                             CONSTANTS
     //////////////////////////////////////////////////////////////*/
 

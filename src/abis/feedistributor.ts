@@ -21,11 +21,6 @@ export const feedistributorAbi = [
         "name": "_staking",
         "type": "address",
         "internalType": "address"
-      },
-      {
-        "name": "_team",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -115,24 +110,6 @@ export const feedistributorAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IPonderFactory"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDistributionRatios",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "_stakingRatio",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_teamRatio",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -236,19 +213,6 @@ export const feedistributorAbi = [
   },
   {
     "type": "function",
-    "name": "setTeam",
-    "inputs": [
-      {
-        "name": "_team",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "staking",
     "inputs": [],
     "outputs": [
@@ -256,45 +220,6 @@ export const feedistributorAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IPonderStaking"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "stakingRatio",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "team",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "teamRatio",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -311,43 +236,6 @@ export const feedistributorAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "updateDistributionRatios",
-    "inputs": [
-      {
-        "name": "_stakingRatio",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_teamRatio",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "DistributionRatiosUpdated",
-    "inputs": [
-      {
-        "name": "stakingRatio",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "teamRatio",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
   },
   {
     "type": "event",
@@ -427,18 +315,6 @@ export const feedistributorAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      },
-      {
-        "name": "stakingAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "teamAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -511,11 +387,6 @@ export const feedistributorAbi = [
   {
     "type": "error",
     "name": "PairNotFound",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "RatioSumIncorrect",
     "inputs": []
   },
   {

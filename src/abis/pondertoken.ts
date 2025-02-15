@@ -3,17 +3,17 @@ export const pondertokenAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "teamReserveAddr",
+        "name": "teamReserve_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "marketingAddr",
+        "name": "launcher_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "launcherAddr",
+        "name": "staking_",
         "type": "address",
         "internalType": "address"
       }
@@ -122,13 +122,6 @@ export const pondertokenAbi = [
   },
   {
     "type": "function",
-    "name": "claimTeamTokens",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "decimals",
     "inputs": [],
     "outputs": [
@@ -168,33 +161,14 @@ export const pondertokenAbi = [
   },
   {
     "type": "function",
-    "name": "getReservedForTeam",
+    "name": "initializeStaking",
     "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "launcher",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "marketing",
     "inputs": [],
     "outputs": [
       {
@@ -248,19 +222,6 @@ export const pondertokenAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "mintingEnd",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -391,6 +352,32 @@ export const pondertokenAbi = [
   },
   {
     "type": "function",
+    "name": "setStaking",
+    "inputs": [
+      {
+        "name": "newStaking",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "staking",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "symbol",
     "inputs": [],
     "outputs": [
@@ -424,32 +411,6 @@ export const pondertokenAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "teamTokensClaimed",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "teamVestingStart",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -545,19 +506,6 @@ export const pondertokenAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "vestingDuration",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
   },
   {
     "type": "event",
@@ -662,19 +610,6 @@ export const pondertokenAbi = [
   },
   {
     "type": "event",
-    "name": "TeamTokensClaimed",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "TokensBurned",
     "inputs": [
       {
@@ -716,6 +651,11 @@ export const pondertokenAbi = [
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyInitialized",
+    "inputs": []
   },
   {
     "type": "error",
@@ -857,16 +797,6 @@ export const pondertokenAbi = [
   },
   {
     "type": "error",
-    "name": "MintingDisabled",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NoTokensAvailable",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "OnlyLauncherOrOwner",
     "inputs": []
   },
@@ -878,11 +808,6 @@ export const pondertokenAbi = [
   {
     "type": "error",
     "name": "SupplyExceeded",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "VestingNotStarted",
     "inputs": []
   },
   {

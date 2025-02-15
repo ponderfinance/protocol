@@ -166,4 +166,59 @@ interface IPonderPair is IERC20 {
     /// @param token0_ Address of first token (lower sort order)
     /// @param token1_ Address of second token (higher sort order)
     function initialize(address token0_, address token1_) external;
+
+    /*//////////////////////////////////////////////////////////////
+                         CUSTOM ERRORS
+ //////////////////////////////////////////////////////////////*/
+
+    /// @notice Thrown when reentrancy lock is active
+    error Locked();
+
+    /// @notice Thrown when caller lacks permissions
+    error Forbidden();
+
+    /// @notice Thrown when token transfer fails
+    error TransferFailed();
+
+    /// @notice Thrown when output amount is below minimum
+    error InsufficientOutputAmount();
+
+    /// @notice Thrown for invalid recipient address
+    error InvalidToAddress();
+
+    /// @notice Thrown when pool lacks required liquidity
+    error InsufficientLiquidity();
+
+    /// @notice Thrown when LP token burn amount is too low
+    error InsufficientLiquidityBurned();
+
+    /// @notice Thrown when initial liquidity is below minimum
+    error InsufficientInitialLiquidity();
+
+    /// @notice Thrown when LP token mint would be zero
+    error InsufficientLiquidityMinted();
+
+    /// @notice Thrown when swap output is below minimum
+    error InsufficientOutput();
+
+    /// @notice Thrown when recipient address is zero
+    error InvalidRecipient();
+
+    /// @notice Thrown when pool lacks swap liquidity
+    error InsufficientLiquiditySwap();
+
+    /// @notice Thrown when swap input is too low
+    error InsufficientInputAmount();
+
+    /// @notice Thrown when K value validation fails
+    error KValueCheckFailed();
+
+    /// @notice Thrown when constant product invariant breaks
+    error InvariantViolation();
+
+    /// @notice Thrown on arithmetic overflow
+    error Overflow();
+
+    /// @notice Thrown when address is zero
+    error ZeroAddress();
 }

@@ -47,7 +47,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
 
         // Approve router for all conversions
         if (!IERC20(_ponder).approve(_router, type(uint256).max)) {
-            revert FeeDistributorTypes.ApprovalFailed();
+            revert IFeeDistributor.ApprovalFailed();
         }
     }
 
@@ -59,7 +59,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @notice Collects fees from a specific trading pair
     /// @param pair Address of the trading pair to collect fees from
     function collectFeesFromPair(address pair) public nonReentrant {
-        if (pair == address(0)) revert FeeDistributorTypes.InvalidPairAddress();
+        if (pair == address(0)) revert IFeeDistributor.InvalidPairAddress();
 
         IPonderPair pairContract = IPonderPair(pair);
         address token0 = pairContract.token0();
@@ -92,14 +92,14 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (token == ponder) return;
 
         uint256 amount = IERC20(token).balanceOf(address(this));
-        if (amount < FeeDistributorTypes.MINIMUM_AMOUNT) revert FeeDistributorTypes.InvalidAmount();
+        if (amount < FeeDistributorTypes.MINIMUM_AMOUNT) revert IFeeDistributor.InvalidAmount();
 
         // Calculate minimum output with slippage protection
         uint256 minOutAmount = _calculateMinimumPonderOut(token, amount);
 
         // Approve router
         if (!IERC20(token).approve(address(router), amount)) {
-            revert FeeDistributorTypes.ApprovalFailed();
+            revert IFeeDistributor.ApprovalFailed();
         }
 
         // Setup path
@@ -117,7 +117,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         ) returns (uint256[] memory amounts) {
             emit FeesConverted(token, amount, amounts[1]);
         } catch {
-            revert FeeDistributorTypes.SwapFailed();
+            revert IFeeDistributor.SwapFailed();
         }
     }
 
@@ -137,19 +137,19 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (lastDistributionTimestamp != 0) {
             uint256 timeElapsed = block.timestamp - lastDistributionTimestamp;
             if (timeElapsed < FeeDistributorTypes.DISTRIBUTION_COOLDOWN) {
-                revert FeeDistributorTypes.DistributionTooFrequent();
+                revert IFeeDistributor.DistributionTooFrequent();
             }
         }
 
         uint256 totalAmount = IERC20(ponder).balanceOf(address(this));
-        if (totalAmount < FeeDistributorTypes.MINIMUM_AMOUNT) revert FeeDistributorTypes.InvalidAmount();
+        if (totalAmount < FeeDistributorTypes.MINIMUM_AMOUNT) revert IFeeDistributor.InvalidAmount();
 
         // Update timestamp BEFORE transfers
         lastDistributionTimestamp = block.timestamp;
 
         // Send 100% to staking as team has separate allocation
         if (!IERC20(ponder).transfer(address(staking), totalAmount)) {
-            revert FeeDistributorTypes.TransferFailed();
+            revert IFeeDistributor.TransferFailed();
         }
 
         emit FeesDistributed(totalAmount);
@@ -164,15 +164,15 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @param pairs Array of pair addresses to validate
     function validatePairs(address[] calldata pairs) internal view {
         if (pairs.length == 0 || pairs.length > FeeDistributorTypes.MAX_PAIRS_PER_DISTRIBUTION)
-            revert FeeDistributorTypes.InvalidPairCount();
+            revert IFeeDistributor.InvalidPairCount();
 
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
             if (currentPair == address(0) || processedPairs[currentPair])
-                revert FeeDistributorTypes.InvalidPair();
+                revert IFeeDistributor.InvalidPair();
 
             if (block.timestamp - lastPairDistribution[currentPair] < FeeDistributorTypes.DISTRIBUTION_COOLDOWN)
-                revert FeeDistributorTypes.DistributionTooFrequent();
+                revert IFeeDistributor.DistributionTooFrequent();
         }
     }
 
@@ -244,7 +244,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
 
         // Step 5: Verify and distribute
         if (postBalance - preBalance < FeeDistributorTypes.MINIMUM_AMOUNT) {
-            revert FeeDistributorTypes.InsufficientAccumulation();
+            revert IFeeDistributor.InsufficientAccumulation();
         }
 
         if (IERC20(ponder).balanceOf(address(this)) >= FeeDistributorTypes.MINIMUM_AMOUNT) {
@@ -267,7 +267,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 amountIn
     ) internal view returns (uint256 minOut) {
         address pair = factory.getPair(token, ponder);
-        if (pair == address(0)) revert FeeDistributorTypes.PairNotFound();
+        if (pair == address(0)) revert IFeeDistributor.PairNotFound();
 
         /// @dev Third value from getReserves is block.timestamp
         /// which we don't need for minimal output calculation
@@ -280,10 +280,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
                 (reserve1, reserve0);
 
         // Add check for extreme reserve imbalance
-        if (tokenReserve == 0 || ponderReserve == 0) revert FeeDistributorTypes.InvalidReserves();
+        if (tokenReserve == 0 || ponderReserve == 0) revert IFeeDistributor.InvalidReserves();
 
         uint256 reserveRatio = (uint256(tokenReserve) * 1e18) / uint256(ponderReserve);
-        if (reserveRatio > 100e18 || reserveRatio < 1e16) revert FeeDistributorTypes.SwapFailed();
+        if (reserveRatio > 100e18 || reserveRatio < 1e16) revert IFeeDistributor.SwapFailed();
 
         uint256 amountOut = router.getAmountsOut(
             amountIn,
@@ -322,13 +322,13 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     ) internal {
         if (token == ponder) return;
 
-        if (amountIn > type(uint96).max) revert FeeDistributorTypes.AmountTooLarge();
+        if (amountIn > type(uint96).max) revert IFeeDistributor.AmountTooLarge();
 
         // Approve router if needed
         uint256 currentAllowance = IERC20(token).allowance(address(this), address(router));
         if (currentAllowance < amountIn) {
             if (!IERC20(token).approve(address(router), type(uint256).max)) {
-                revert FeeDistributorTypes.ApprovalFailed();
+                revert IFeeDistributor.ApprovalFailed();
             }
         }
 
@@ -346,7 +346,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         ) returns (uint256[] memory amounts) {
             emit FeesConverted(token, amountIn, amounts[1]);
         } catch {
-            revert FeeDistributorTypes.SwapFailed();
+            revert IFeeDistributor.SwapFailed();
         }
     }
 
@@ -398,11 +398,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         address to,
         uint256 amount
     ) external onlyOwner {
-        if (to == address(0)) revert FeeDistributorTypes.InvalidRecipient();
-        if (amount == 0) revert FeeDistributorTypes.InvalidRecoveryAmount();
+        if (to == address(0)) revert IFeeDistributor.InvalidRecipient();
+        if (amount == 0) revert IFeeDistributor.InvalidRecoveryAmount();
 
         if (!IERC20(token).transfer(to, amount)) {
-            revert FeeDistributorTypes.TransferFailed();
+            revert IFeeDistributor.TransferFailed();
         }
         emit EmergencyTokenRecovered(token, to, amount);
     }
@@ -416,14 +416,14 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @dev First step of two-step ownership transfer
     /// @param newOwner Address of proposed new owner
     function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert FeeDistributorTypes.ZeroAddress();
+        if (newOwner == address(0)) revert IFeeDistributor.ZeroAddress();
         pendingOwner = newOwner;
     }
 
     /// @notice Completes ownership transfer process
     /// @dev Can only be called by pending owner
     function acceptOwnership() external {
-        if (msg.sender != pendingOwner) revert FeeDistributorTypes.NotPendingOwner();
+        if (msg.sender != pendingOwner) revert IFeeDistributor.NotPendingOwner();
         owner = pendingOwner;
         pendingOwner = address(0);
     }
@@ -447,7 +447,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @notice Restricts function access to contract owner
     /// @dev Reverts if caller is not the current owner
     modifier onlyOwner() {
-        if (msg.sender != owner) revert FeeDistributorTypes.NotOwner();
+        if (msg.sender != owner) revert IFeeDistributor.NotOwner();
         _;
     }
 }

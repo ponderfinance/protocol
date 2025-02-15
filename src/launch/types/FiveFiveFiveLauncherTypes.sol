@@ -7,7 +7,7 @@ pragma solidity 0.8.24;
 
 /// @title FiveFiveFiveLauncherTypes
 /// @author taayyohh
-/// @notice Defines all custom types, constants, and errors for the 555 launch platform
+/// @notice Defines all custom types and constants for the 555 launch platform
 /// @dev Contains optimized storage layouts and packed values for gas efficiency
 ///      All percentage values use basis points (10000 = 100%)
 library FiveFiveFiveLauncherTypes {

@@ -52,7 +52,7 @@ contract KKUBUnwrapper is
     /// @dev Sets up KKUB reference and ownership
     /// @param _kkub Address of KKUB token contract
     constructor(address _kkub) Ownable(msg.sender) {
-        if (_kkub == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
+        if (_kkub == address(0)) revert IKKUBUnwrapper.ZeroAddressNotAllowed();
         KKUB = _kkub;
     }
 
@@ -94,15 +94,15 @@ contract KKUBUnwrapper is
         address recipient
     ) external override nonReentrant whenNotPaused returns (bool) {
         // Checks
-        if (amount == 0) revert KKUBUnwrapperTypes.ZeroAmount();
-        if (recipient == address(0)) revert KKUBUnwrapperTypes.ZeroAddressNotAllowed();
+        if (amount == 0) revert IKKUBUnwrapper.ZeroAmount();
+        if (recipient == address(0)) revert IKKUBUnwrapper.ZeroAddressNotAllowed();
 
         // Validate KYC and blacklist status
         if (IKKUB(KKUB).kycsLevel(address(this)) <= KKUBUnwrapperTypes.REQUIRED_KYC_LEVEL) {
-            revert KKUBUnwrapperTypes.InsufficientKYCLevel();
+            revert IKKUBUnwrapper.InsufficientKYCLevel();
         }
         if (IKKUB(KKUB).blacklist(recipient)) {
-            revert KKUBUnwrapperTypes.BlacklistedAddress();
+            revert IKKUBUnwrapper.BlacklistedAddress();
         }
 
         uint256 initialBalance = address(this).balance;
@@ -122,7 +122,7 @@ contract KKUBUnwrapper is
         if (ethReceived < amount) {
             // Effects - Revert state changes if withdrawal fails
             _lockedBalance -= amount;
-            revert KKUBUnwrapperTypes.WithdrawFailed();
+            revert IKKUBUnwrapper.WithdrawFailed();
         }
 
         // Final state update before last external call
@@ -144,7 +144,7 @@ contract KKUBUnwrapper is
     /// @dev Overrides to prevent zero address
     /// @param newOwner Address of proposed owner
     function transferOwnership(address newOwner) public virtual override(Ownable2Step) {
-        if (newOwner == address(0)) revert KKUBUnwrapperTypes.InvalidNewOwner();
+        if (newOwner == address(0)) revert IKKUBUnwrapper.InvalidNewOwner();
         super.transferOwnership(newOwner);
     }
 
@@ -164,11 +164,11 @@ contract KKUBUnwrapper is
         // - Additional protections like pausable and nonReentrant are in place
         // slither-disable-next-line timestamp
         if (block.timestamp < lastWithdrawalTime + KKUBUnwrapperTypes.WITHDRAWAL_DELAY) {
-            revert KKUBUnwrapperTypes.WithdrawalTooFrequent();
+            revert IKKUBUnwrapper.WithdrawalTooFrequent();
         }
 
         uint256 withdrawableAmount = address(this).balance - _lockedBalance;
-        if (withdrawableAmount <= 0) revert KKUBUnwrapperTypes.InsufficientBalance();
+        if (withdrawableAmount <= 0) revert IKKUBUnwrapper.InsufficientBalance();
 
         if (withdrawableAmount > KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT) {
             withdrawableAmount = KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT;

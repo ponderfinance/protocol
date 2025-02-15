@@ -10,6 +10,88 @@ pragma solidity 0.8.24;
 /// @notice Interface for Ponder protocol's farming rewards system
 /// @dev Defines the external interface for the MasterChef contract including all functions and events
 interface IPonderMasterChef {
+
+    /*//////////////////////////////////////////////////////////////
+                            EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice LP token deposit
+    /// @param user Depositor address
+    /// @param pid Pool receiving deposit
+    /// @param amount Tokens deposited
+    event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
+
+    /// @notice LP token withdrawal
+    /// @param user Withdrawer address
+    /// @param pid Pool withdrawn from
+    /// @param amount Tokens withdrawn
+    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
+
+    /// @notice Emergency LP withdrawal
+    /// @param user Withdrawer address
+    /// @param pid Pool withdrawn from
+    /// @param amount Tokens withdrawn
+    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
+
+    /// @notice PONDER boost stake
+    /// @param user Staker address
+    /// @param pid Pool being boosted
+    /// @param amount PONDER staked
+    event BoostStake(address indexed user, uint256 indexed pid, uint256 amount);
+
+    /// @notice PONDER boost unstake
+    /// @param user Unstaker address
+    /// @param pid Pool boost removed from
+    /// @param amount PONDER unstaked
+    event BoostUnstake(address indexed user, uint256 indexed pid, uint256 amount);
+
+    /// @notice New pool creation
+    /// @param pid Pool identifier
+    /// @param lpToken LP token address
+    /// @param allocPoint Reward allocation
+    event PoolAdded(uint256 indexed pid, address indexed lpToken, uint256 allocPoint);
+
+    /// @notice Pool allocation update
+    /// @param pid Pool identifier
+    /// @param allocPoint New allocation
+    event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
+
+    /// @notice Fee collector update
+    /// @param oldTeamReserve Previous collector
+    /// @param newTeamReserve New collector
+    event TeamReserveUpdated(address indexed oldTeamReserve, address indexed newTeamReserve);
+
+    /// @notice Emission rate update
+    /// @param newPonderPerSecond New rate
+    event PonderPerSecondUpdated(uint256 newPonderPerSecond);
+
+    /// @notice User boost shares update
+    /// @param pid Pool identifier
+    /// @param user User address
+    /// @param newShares Updated shares
+    /// @param totalShares Pool total shares
+    event WeightedSharesUpdated(
+        uint256 indexed pid,
+        address indexed user,
+        uint256 newShares,
+        uint256 totalShares
+    );
+
+    /// @notice Pool total shares update
+    /// @param pid Pool identifier
+    /// @param totalWeightedShares New total
+    event PoolWeightedSharesUpdated(uint256 indexed pid, uint256 totalWeightedShares);
+
+    /// @notice Ownership transfer initiated
+    /// @param previousOwner Current owner
+    /// @param newOwner Pending owner
+    event OwnershipTransferInitiated(address indexed previousOwner, address indexed newOwner);
+
+    /// @notice Ownership transfer completed
+    /// @param previousOwner Previous owner
+    /// @param newOwner New owner
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
     /*//////////////////////////////////////////////////////////////
                             VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -231,83 +313,48 @@ interface IPonderMasterChef {
     function farmingStarted() external view returns (bool);
 
     /*//////////////////////////////////////////////////////////////
-                            EVENTS
-    //////////////////////////////////////////////////////////////*/
+                           CUSTOM ERRORS
+   //////////////////////////////////////////////////////////////*/
 
-    /// @notice LP token deposit
-    /// @param user Depositor address
-    /// @param pid Pool receiving deposit
-    /// @param amount Tokens deposited
-    event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
+    /// @notice Invalid boost multiplier configuration
+    error InvalidBoostMultiplier();
 
-    /// @notice LP token withdrawal
-    /// @param user Withdrawer address
-    /// @param pid Pool withdrawn from
-    /// @param amount Tokens withdrawn
-    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
+    /// @notice Deposit fee exceeds maximum allowed
+    error ExcessiveDepositFee();
 
-    /// @notice Emergency LP withdrawal
-    /// @param user Withdrawer address
-    /// @param pid Pool withdrawn from
-    /// @param amount Tokens withdrawn
-    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
+    /// @notice Unauthorized access attempt
+    error Forbidden();
 
-    /// @notice PONDER boost stake
-    /// @param user Staker address
-    /// @param pid Pool being boosted
-    /// @param amount PONDER staked
-    event BoostStake(address indexed user, uint256 indexed pid, uint256 amount);
+    /// @notice Invalid pool ID or reference
+    error InvalidPool();
 
-    /// @notice PONDER boost unstake
-    /// @param user Unstaker address
-    /// @param pid Pool boost removed from
-    /// @param amount PONDER unstaked
-    event BoostUnstake(address indexed user, uint256 indexed pid, uint256 amount);
+    /// @notice Invalid LP token pair
+    error InvalidPair();
 
-    /// @notice New pool creation
-    /// @param pid Pool identifier
-    /// @param lpToken LP token address
-    /// @param allocPoint Reward allocation
-    event PoolAdded(uint256 indexed pid, address indexed lpToken, uint256 allocPoint);
+    /// @notice Invalid input amount
+    error InvalidAmount();
 
-    /// @notice Pool allocation update
-    /// @param pid Pool identifier
-    /// @param allocPoint New allocation
-    event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
+    /// @notice Zero amount provided
+    error ZeroAmount();
 
-    /// @notice Fee collector update
-    /// @param oldTeamReserve Previous collector
-    /// @param newTeamReserve New collector
-    event TeamReserveUpdated(address indexed oldTeamReserve, address indexed newTeamReserve);
+    /// @notice Zero address provided
+    error ZeroAddress();
 
-    /// @notice Emission rate update
-    /// @param newPonderPerSecond New rate
-    event PonderPerSecondUpdated(uint256 newPonderPerSecond);
+    /// @notice Insufficient token amount
+    error InsufficientAmount();
 
-    /// @notice User boost shares update
-    /// @param pid Pool identifier
-    /// @param user User address
-    /// @param newShares Updated shares
-    /// @param totalShares Pool total shares
-    event WeightedSharesUpdated(
-        uint256 indexed pid,
-        address indexed user,
-        uint256 newShares,
-        uint256 totalShares
-    );
+    /// @notice Boost multiplier exceeds maximum
+    error BoostTooHigh();
 
-    /// @notice Pool total shares update
-    /// @param pid Pool identifier
-    /// @param totalWeightedShares New total
-    event PoolWeightedSharesUpdated(uint256 indexed pid, uint256 totalWeightedShares);
+    /// @notice Token transfer operation failed
+    error TransferFailed();
 
-    /// @notice Ownership transfer initiated
-    /// @param previousOwner Current owner
-    /// @param newOwner Pending owner
-    event OwnershipTransferInitiated(address indexed previousOwner, address indexed newOwner);
+    /// @notice Pool allocation exceeds maximum
+    error ExcessiveAllocation();
 
-    /// @notice Ownership transfer completed
-    /// @param previousOwner Previous owner
-    /// @param newOwner New owner
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    /// @notice Attempted to add duplicate pool
+    error DuplicatePool();
+
+    /// @notice No tokens were transferred
+    error NoTokensTransferred();
 }

@@ -6,7 +6,7 @@ import "../../src/core/masterchef/PonderMasterChef.sol";
 import "../../src/core/token/PonderToken.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
-import "../../src/core/masterchef/IPonderMasterChef.sol";
+import { IPonderMasterChef } from "../../src/core/masterchef/IPonderMasterChef.sol";
 import "../../src/core/staking/PonderStaking.sol";
 import "../mocks/ERC20Mint.sol";
 
@@ -367,7 +367,7 @@ contract PonderMasterChefTest is Test {
         // Try to boost with amount larger than valid boost
         uint256 excessAmount = maxValidBoost + 1e18;
         ponder.approve(address(masterChef), excessAmount);
-        vm.expectRevert(PonderMasterChefTypes.BoostTooHigh.selector);
+        vm.expectRevert(IPonderMasterChef.BoostTooHigh.selector);
         masterChef.boostStake(0, excessAmount);
         vm.stopPrank();
     }
@@ -390,7 +390,7 @@ contract PonderMasterChefTest is Test {
         ponder.approve(address(masterChef), 1000e18);
         uint256 tooMuchPonder = masterChef.getRequiredPonderForBoost(depositAmount, 40000); // Try for 4x
 
-        vm.expectRevert(PonderMasterChefTypes.BoostTooHigh.selector);
+        vm.expectRevert(IPonderMasterChef.BoostTooHigh.selector);
         masterChef.boostStake(0, tooMuchPonder);
         vm.stopPrank();
     }
@@ -437,7 +437,7 @@ contract PonderMasterChefTest is Test {
 
         // Try to boost beyond max
         ponder.approve(address(masterChef), 10000e18);
-        vm.expectRevert(PonderMasterChefTypes.BoostTooHigh.selector);
+        vm.expectRevert(IPonderMasterChef.BoostTooHigh.selector);
         masterChef.boostStake(0, 10000e18);
         vm.stopPrank();
 

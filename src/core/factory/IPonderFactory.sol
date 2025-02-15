@@ -149,4 +149,37 @@ interface IPonderFactory {
     /// @dev Restricted to feeToSetter
     /// @param ponder New PONDER token address
     function setPonder(address ponder) external;
+
+    /*//////////////////////////////////////////////////////////////
+                        CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Error thrown when attempting to create a pair with same token twice
+    /// @dev Prevents invalid pair creation with identical addresses
+    error IdenticalAddresses();
+
+    /// @notice Error thrown when a required address parameter is zero
+    /// @dev Basic validation for address inputs
+    error ZeroAddress();
+
+    /// @notice Error thrown when attempting to create an already existing pair
+    /// @dev Prevents duplicate pair creation
+    error PairExists();
+
+    /// @notice Error thrown when caller lacks required permissions
+    /// @dev Access control for restricted functions
+    error Forbidden();
+
+    /// @notice Error thrown when setting an invalid fee receiver
+    /// @dev Validates fee receiver address updates
+    error InvalidFeeReceiver();
+
+    /// @notice Error thrown when setting an invalid launcher address
+    /// @dev Validates launcher address updates
+    error InvalidLauncher();
+
+    /// @notice Error thrown when attempting launcher update before timelock expires
+    /// @dev Enforces timelock delay for launcher updates
+    error TimelockNotFinished();
+
 }
