@@ -10,6 +10,8 @@ import { LaunchToken } from "../LaunchToken.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
 import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
+import { IFiveFiveFiveLauncher } from "../IFiveFiveFiveLauncher.sol";
+
 import { LaunchTokenTypes } from "../types/LaunchTokenTypes.sol";
 
 /*//////////////////////////////////////////////////////////////
@@ -83,14 +85,14 @@ library LiquidityLib {
         PonderToken ponder,
         PonderPriceOracle priceOracle
     ) external {
-        if (launch.base.launched) revert FiveFiveFiveLauncherTypes.AlreadyLaunched();
+        if (launch.base.launched) revert IFiveFiveFiveLauncher.AlreadyLaunched();
 
         // Check total distribution using uint128 comparison
         unchecked {
         // Safe arithmetic: tokensDistributed and tokensForLP are uint128
             if (uint128(launch.contributions.tokensDistributed) + launch.allocation.tokensForLP >
                 uint128(LaunchTokenTypes.TOTAL_SUPPLY)) {
-                revert FiveFiveFiveLauncherTypes.InsufficientLPTokens();
+                revert IFiveFiveFiveLauncher.InsufficientLPTokens();
             }
         }
 
@@ -302,7 +304,7 @@ library LiquidityLib {
         _validatePoolLiquidity(pools.kubAmount);
 
         if (!LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount)) {
-            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+            revert IFiveFiveFiveLauncher.ApprovalFailed();
         }
 
         router.addLiquidityETH{value: pools.kubAmount}(
@@ -377,10 +379,10 @@ library LiquidityLib {
         launch.pools.memePonderPair = pair;
 
         if (!LaunchToken(launch.base.tokenAddress).approve(address(router), pools.tokenAmount)) {
-            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+            revert IFiveFiveFiveLauncher.ApprovalFailed();
         }
         if (!ponder.approve(address(router), pools.ponderAmount)) {
-            revert FiveFiveFiveLauncherTypes.ApprovalFailed();
+            revert IFiveFiveFiveLauncher.ApprovalFailed();
         }
 
         router.addLiquidity(
@@ -415,14 +417,14 @@ library LiquidityLib {
     /// @param pair Address of the pair to validate
     function _validatePairState(address pair) private view {
         (uint112 r0, uint112 r1,) = PonderPair(pair).getReserves();
-        if (r0 != 0 || r1 != 0) revert FiveFiveFiveLauncherTypes.PriceOutOfBounds();
+        if (r0 != 0 || r1 != 0) revert IFiveFiveFiveLauncher.PriceOutOfBounds();
     }
 
     /// @dev Ensures minimum liquidity requirements are met
     /// @param amount Amount of liquidity to validate
     function _validatePoolLiquidity(uint256 amount) private pure {
         if (amount < FiveFiveFiveLauncherTypes.MIN_POOL_LIQUIDITY)
-            revert FiveFiveFiveLauncherTypes.InsufficientPoolLiquidity();
+            revert IFiveFiveFiveLauncher.InsufficientPoolLiquidity();
     }
 
     /// @dev Enables trading and sets LP lock period

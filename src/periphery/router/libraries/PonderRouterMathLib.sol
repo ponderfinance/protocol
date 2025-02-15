@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import { PonderRouterTypes } from "../types/PonderRouterTypes.sol";
+import { IPonderRouter } from "../IPonderRouter.sol";
 import { IPonderFactory } from "../../../core/factory/IPonderFactory.sol";
 import { PonderRouterSwapLib } from "./PonderRouterSwapLib.sol";
 
@@ -32,8 +32,8 @@ library PonderRouterMathLib {
         uint256 reserveIn,
         uint256 reserveOut
     ) internal pure returns (uint256) {
-        if (amountIn == 0) revert PonderRouterTypes.InsufficientInputAmount();
-        if (reserveIn == 0 || reserveOut == 0) revert PonderRouterTypes.InsufficientLiquidity();
+        if (amountIn == 0) revert IPonderRouter.InsufficientInputAmount();
+        if (reserveIn == 0 || reserveOut == 0) revert IPonderRouter.InsufficientLiquidity();
 
         uint256 amountInWithFee = amountIn * 997;
         uint256 numerator = amountInWithFee * reserveOut;
@@ -53,7 +53,7 @@ library PonderRouterMathLib {
         address[] memory path,
         IPonderFactory factory
     ) internal view returns (uint256[] memory amounts) {
-        if (path.length < 2) revert PonderRouterTypes.InvalidPath();
+        if (path.length < 2) revert IPonderRouter.InvalidPath();
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
 
@@ -81,8 +81,8 @@ library PonderRouterMathLib {
         uint256 reserveIn,
         uint256 reserveOut
     ) internal pure returns (uint256) {
-        if (amountOut == 0) revert PonderRouterTypes.InsufficientOutputAmount();
-        if (reserveIn == 0 || reserveOut == 0) revert PonderRouterTypes.InsufficientLiquidity();
+        if (amountOut == 0) revert IPonderRouter.InsufficientOutputAmount();
+        if (reserveIn == 0 || reserveOut == 0) revert IPonderRouter.InsufficientLiquidity();
 
         uint256 numerator = reserveIn * amountOut * 1000;
         uint256 denominator = (reserveOut - amountOut) * 997;
@@ -101,7 +101,7 @@ library PonderRouterMathLib {
         address[] memory path,
         IPonderFactory factory
     ) internal view returns (uint256[] memory amounts) {
-        if (path.length < 2) revert PonderRouterTypes.InvalidPath();
+        if (path.length < 2) revert IPonderRouter.InvalidPath();
         amounts = new uint256[](path.length);
         amounts[amounts.length - 1] = amountOut;
 
@@ -129,8 +129,8 @@ library PonderRouterMathLib {
         uint256 reserveA,
         uint256 reserveB
     ) internal pure returns (uint256 amountB) {
-        if (amountA == 0) revert PonderRouterTypes.InsufficientAmount();
-        if (reserveA == 0 || reserveB == 0) revert PonderRouterTypes.InsufficientLiquidity();
+        if (amountA == 0) revert IPonderRouter.InsufficientAmount();
+        if (reserveA == 0 || reserveB == 0) revert IPonderRouter.InsufficientLiquidity();
         amountB = (amountA * reserveB) / reserveA;
     }
 }

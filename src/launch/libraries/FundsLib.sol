@@ -5,6 +5,7 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { LaunchToken } from "../LaunchToken.sol";
+import { IFiveFiveFiveLauncher } from "../IFiveFiveFiveLauncher.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
 import { PonderERC20 } from "../../core/token/PonderERC20.sol";
 
@@ -95,7 +96,7 @@ library FundsLib {
         address contributor
     ) external returns (bool) {
         if (amount < FiveFiveFiveLauncherTypes.MIN_KUB_CONTRIBUTION)
-            revert FiveFiveFiveLauncherTypes.ContributionTooSmall();
+            revert IFiveFiveFiveLauncher.ContributionTooSmall();
 
         unchecked {
             // Safe math: contributions are bounded by TARGET_RAISE
@@ -103,7 +104,7 @@ library FundsLib {
                                 launch.contributions.ponderValueCollected +
                         amount;
             if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE)
-                revert FiveFiveFiveLauncherTypes.ExcessiveContribution();
+                revert IFiveFiveFiveLauncher.ExcessiveContribution();
 
             // Calculate tokens using packed uint128 allocation
             uint256 tokensToDistribute = (amount * uint256(launch.allocation.tokensForContributors)) /
@@ -122,7 +123,7 @@ library FundsLib {
             emit KUBContributed(launchId, contributor, amount);
 
             if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
-                revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+                revert IFiveFiveFiveLauncher.TokenTransferFailed();
             }
 
             return newTotal == FiveFiveFiveLauncherTypes.TARGET_RAISE;
@@ -149,34 +150,32 @@ library FundsLib {
         PonderToken ponder
     ) external returns (bool) {
         if (amount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
-            revert FiveFiveFiveLauncherTypes.ContributionTooSmall();
+            revert IFiveFiveFiveLauncher.ContributionTooSmall();
 
-        unchecked {
-            // Safe math: contributions are bounded
             uint256 totalPonderValue = launch.contributions.ponderValueCollected + kubValue;
             uint256 maxPonderValue = (FiveFiveFiveLauncherTypes.TARGET_RAISE *
                 FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) / FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
             if (totalPonderValue > maxPonderValue)
-                revert FiveFiveFiveLauncherTypes.ExcessiveContribution();
+                revert IFiveFiveFiveLauncher.ExcessiveContribution();
 
             uint256 newTotal = launch.contributions.kubCollected + totalPonderValue;
             if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE)
-                revert FiveFiveFiveLauncherTypes.ExcessiveContribution();
+                revert IFiveFiveFiveLauncher.ExcessiveContribution();
 
-        // Calculate tokens using packed allocation
+            // Calculate tokens using packed allocation
             uint256 tokensToDistribute = (kubValue * uint256(launch.allocation.tokensForContributors)) /
                             FiveFiveFiveLauncherTypes.TARGET_RAISE;
 
             if (ponder.allowance(contributor, address(this)) < amount) {
-                revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
+                revert IFiveFiveFiveLauncher.TokenApprovalRequired();
             }
 
             emit TokensDistributed(launchId, contributor, tokensToDistribute);
             emit PonderContributed(launchId, contributor, amount, kubValue);
 
             if (!ponder.transferFrom(contributor, address(this), amount)) {
-                revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+                revert IFiveFiveFiveLauncher.TokenTransferFailed();
             }
 
             // Update packed storage values
@@ -191,11 +190,10 @@ library FundsLib {
             info.tokensReceived = uint128(uint256(info.tokensReceived) + tokensToDistribute);
 
             if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
-                revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+                revert IFiveFiveFiveLauncher.TokenTransferFailed();
             }
 
             return newTotal == FiveFiveFiveLauncherTypes.TARGET_RAISE;
-        }
     }
 
     /// @notice Processes refund for a contributor
@@ -274,12 +272,12 @@ library FundsLib {
         uint256 launchId,
         address sender
     ) external {
-        if(sender != launch.base.creator) revert FiveFiveFiveLauncherTypes.Unauthorized();
+        if(sender != launch.base.creator) revert IFiveFiveFiveLauncher.Unauthorized();
 
         unchecked {
         // Safe comparison: timestamps are uint40
             if(block.timestamp < launch.base.lpUnlockTime)
-                revert FiveFiveFiveLauncherTypes.LaunchNotCancellable();
+                revert IFiveFiveFiveLauncher.LaunchNotCancellable();
         }
 
         emit LPTokensWithdrawn(launchId, launch.base.creator, block.timestamp);
@@ -305,19 +303,19 @@ library FundsLib {
         unchecked {
         // Safe comparison: launchDeadline is uint40
             if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
-                revert FiveFiveFiveLauncherTypes.LaunchStillActive();
+                revert IFiveFiveFiveLauncher.LaunchStillActive();
             }
         }
 
         if (launch.base.launched ||
             launch.contributions.kubCollected + launch.contributions.ponderValueCollected >=
             FiveFiveFiveLauncherTypes.TARGET_RAISE) {
-            revert FiveFiveFiveLauncherTypes.LaunchSucceeded();
+            revert IFiveFiveFiveLauncher.LaunchSucceeded();
         }
 
         FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[claimer];
         if (info.kubContributed == 0 && info.ponderContributed == 0) {
-            revert FiveFiveFiveLauncherTypes.NoContributionToRefund();
+            revert IFiveFiveFiveLauncher.NoContributionToRefund();
         }
     }
 
@@ -336,12 +334,12 @@ library FundsLib {
             LaunchToken token = LaunchToken(tokenAddress);
 
             if (token.balanceOf(claimer) < tokenAmount)
-                revert FiveFiveFiveLauncherTypes.InsufficientBalance();
+                revert IFiveFiveFiveLauncher.InsufficientBalance();
             if (token.allowance(claimer, address(this)) < tokenAmount)
-                revert FiveFiveFiveLauncherTypes.TokenApprovalRequired();
+                revert IFiveFiveFiveLauncher.TokenApprovalRequired();
 
             if (!token.transferFrom(claimer, address(this), tokenAmount)) {
-                revert FiveFiveFiveLauncherTypes.TokenTransferFailed();
+                revert IFiveFiveFiveLauncher.TokenTransferFailed();
             }
         }
     }
@@ -378,18 +376,18 @@ library FundsLib {
         address caller
     ) private view {
         if (launch.base.tokenAddress == address(0))
-            revert FiveFiveFiveLauncherTypes.LaunchNotCancellable();
+            revert IFiveFiveFiveLauncher.LaunchNotCancellable();
         if (caller != launch.base.creator)
-            revert FiveFiveFiveLauncherTypes.Unauthorized();
+            revert IFiveFiveFiveLauncher.Unauthorized();
         if (launch.base.launched)
-            revert FiveFiveFiveLauncherTypes.LaunchNotCancellable();
+            revert IFiveFiveFiveLauncher.LaunchNotCancellable();
         if (launch.base.isFinalizingLaunch)
-            revert FiveFiveFiveLauncherTypes.LaunchBeingFinalized();
+            revert IFiveFiveFiveLauncher.LaunchBeingFinalized();
 
         unchecked {
         // Safe comparison: launchDeadline is uint40
             if (block.timestamp > launch.base.launchDeadline)
-                revert FiveFiveFiveLauncherTypes.LaunchDeadlinePassed();
+                revert IFiveFiveFiveLauncher.LaunchDeadlinePassed();
         }
     }
 

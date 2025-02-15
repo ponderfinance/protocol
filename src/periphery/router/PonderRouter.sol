@@ -64,7 +64,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address _kkubUnwrapper
     ) {
         if (_factory == address(0) || _kkub == address(0) || _kkubUnwrapper == address(0))
-            revert PonderRouterTypes.ZeroAddress();
+            revert ZeroAddress();
 
         FACTORY = IPonderFactory(_factory);
         KKUB = _kkub;
@@ -85,7 +85,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
     /// @param deadline Maximum timestamp for execution
     /// @dev Reverts if current time exceeds deadline
     modifier ensure(uint256 deadline) {
-        if (deadline < block.timestamp) revert PonderRouterTypes.ExpiredDeadline();
+        if (deadline < block.timestamp) revert ExpiredDeadline();
         _;
     }
 
@@ -150,9 +150,9 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         uint256 amountETH,
         uint256 liquidity
     ) {
-        if(token == address(0) || to == address(0)) revert PonderRouterTypes.ZeroAddress();
-        if(msg.value < amountETHMin) revert PonderRouterTypes.InsufficientETH();
-        if(amountTokenDesired == 0) revert PonderRouterTypes.InvalidAmount();
+        if(token == address(0) || to == address(0)) revert ZeroAddress();
+        if(msg.value < amountETHMin) revert InsufficientETH();
+        if(amountTokenDesired == 0) revert InvalidAmount();
 
     address pair = FACTORY.getPair(token, KKUB);
         if(pair == address(0)) {
@@ -169,7 +169,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
             FACTORY
         );
 
-        if(amountETH > msg.value) revert PonderRouterTypes.InsufficientETH();
+        if(amountETH > msg.value) revert InsufficientETH();
 
         TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
         IKKUB(KKUB).deposit{value: amountETH}();
@@ -205,11 +205,11 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address pair = FACTORY.getPair(tokenA, tokenB);
 
         bool success = IPonderPair(pair).transferFrom(msg.sender, pair, liquidity);
-        if (!success) revert PonderRouterTypes.TransferFailed();
+        if (!success) revert TransferFailed();
 
         (amountA, amountB) = IPonderPair(pair).burn(to);
-        if (amountA < amountAMin) revert PonderRouterTypes.InsufficientAAmount();
-        if (amountB < amountBMin) revert PonderRouterTypes.InsufficientBAmount();
+        if (amountA < amountAMin) revert InsufficientAAmount();
+        if (amountB < amountBMin) revert InsufficientBAmount();
     }
 
     /// @notice Removes liquidity from an ETH pair
@@ -241,10 +241,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         TransferHelper.safeTransfer(token, to, amountToken);
 
         bool success = IERC20(KKUB).approve(KKUB_UNWRAPPER, amountETH);
-        if (!success) revert PonderRouterTypes.ApprovalFailed();
+        if (!success) revert ApprovalFailed();
 
         success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
-        if (!success) revert PonderRouterTypes.UnwrapFailed();
+        if (!success) revert UnwrapFailed();
     }
 
     /// @notice Removes liquidity from ETH pair with fee-on-transfer token support
@@ -275,10 +275,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         TransferHelper.safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
 
         bool success = IERC20(KKUB).approve(KKUB_UNWRAPPER, amountETH);
-        if (!success) revert PonderRouterTypes.ApprovalFailed();
+        if (!success) revert ApprovalFailed();
 
         success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountETH, to);
-        if (!success) revert PonderRouterTypes.UnwrapFailed();
+        if (!success) revert UnwrapFailed();
     }
 
     /// @notice Swaps exact input tokens for output tokens
@@ -297,7 +297,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
         amounts = PonderRouterMathLib.getAmountsOutMultiHop(amountIn, path, FACTORY);
         if (amounts[amounts.length - 1] < amountOutMin)
-            revert PonderRouterTypes.InsufficientOutputAmount();
+            revert InsufficientOutputAmount();
 
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amountIn
@@ -321,7 +321,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
         amounts = PonderRouterMathLib.getAmountsInMultiHop(amountOut, path, FACTORY);
-        if (amounts[0] > amountInMax) revert PonderRouterTypes.ExcessiveInputAmount();
+        if (amounts[0] > amountInMax) revert ExcessiveInputAmount();
 
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amounts[0]
@@ -342,11 +342,11 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) returns (uint256[] memory amounts) {
-        if (path[0] != KKUB) revert PonderRouterTypes.InvalidPath();
+        if (path[0] != KKUB) revert InvalidPath();
 
         amounts = PonderRouterMathLib.getAmountsOutMultiHop(msg.value, path, FACTORY);
         if (amounts[amounts.length - 1] < amountOutMin)
-            revert PonderRouterTypes.InsufficientOutputAmount();
+            revert InsufficientOutputAmount();
 
         IKKUB(KKUB).deposit{value: amounts[0]}();
         assert(IKKUB(KKUB).transfer(FACTORY.getPair(path[0], path[1]), amounts[0]));
@@ -368,10 +368,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
-        if (path[path.length - 1] != KKUB) revert PonderRouterTypes.InvalidPath();
+        if (path[path.length - 1] != KKUB) revert InvalidPath();
 
         amounts = PonderRouterMathLib.getAmountsInMultiHop(amountOut, path, FACTORY);
-        if (amounts[0] > amountInMax) revert PonderRouterTypes.ExcessiveInputAmount();
+        if (amounts[0] > amountInMax) revert ExcessiveInputAmount();
 
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amounts[0]
@@ -380,10 +380,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         PonderRouterSwapLib.executeSwap(amounts, path, address(this), false, FACTORY);
 
         bool success = IERC20(KKUB).approve(KKUB_UNWRAPPER, amountOut);
-        if (!success) revert PonderRouterTypes.ApprovalFailed();
+        if (!success) revert ApprovalFailed();
 
         success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
-        if (!success) revert PonderRouterTypes.UnwrapFailed();
+        if (!success) revert UnwrapFailed();
     }
 
     /// @notice Swaps exact tokens for ETH
@@ -400,11 +400,11 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
-        if (path[path.length - 1] != KKUB) revert PonderRouterTypes.InvalidPath();
+        if (path[path.length - 1] != KKUB) revert InvalidPath();
 
         amounts = PonderRouterMathLib.getAmountsOutMultiHop(amountIn, path, FACTORY);
         if (amounts[amounts.length - 1] < amountOutMin)
-            revert PonderRouterTypes.InsufficientOutputAmount();
+            revert InsufficientOutputAmount();
 
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amounts[0]
@@ -413,10 +413,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         PonderRouterSwapLib.executeSwap(amounts, path, address(this), false, FACTORY);
 
         bool success = IERC20(KKUB).approve(KKUB_UNWRAPPER, amounts[amounts.length - 1]);
-        if (!success) revert PonderRouterTypes.ApprovalFailed();
+        if (!success) revert ApprovalFailed();
 
         success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amounts[amounts.length - 1], to);
-        if (!success) revert PonderRouterTypes.UnwrapFailed();
+        if (!success) revert UnwrapFailed();
     }
 
     /// @notice Swaps ETH for exact tokens
@@ -431,10 +431,10 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) returns (uint256[] memory amounts) {
-        if (path[0] != KKUB) revert PonderRouterTypes.InvalidPath();
+        if (path[0] != KKUB) revert InvalidPath();
 
         amounts = PonderRouterMathLib.getAmountsInMultiHop(amountOut, path, FACTORY);
-        if (amounts[0] > msg.value) revert PonderRouterTypes.ExcessiveInputAmount();
+        if (amounts[0] > msg.value) revert ExcessiveInputAmount();
 
         IKKUB(KKUB).deposit{value: amounts[0]}();
         assert(IKKUB(KKUB).transfer(FACTORY.getPair(path[0], path[1]), amounts[0]));
@@ -467,7 +467,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         PonderRouterSwapLib.executeSwap(new uint256[](path.length), path, to, true, FACTORY);
 
         if (IERC20(path[path.length - 1]).balanceOf(to) - balanceBefore < amountOutMin) {
-            revert PonderRouterTypes.InsufficientOutputAmount();
+            revert InsufficientOutputAmount();
         }
     }
 
@@ -482,7 +482,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) {
-        if (path[0] != KKUB) revert PonderRouterTypes.InvalidPath();
+        if (path[0] != KKUB) revert InvalidPath();
 
         IKKUB(KKUB).deposit{value: msg.value}();
         assert(IKKUB(KKUB).transfer(FACTORY.getPair(path[0], path[1]), msg.value));
@@ -491,7 +491,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         PonderRouterSwapLib.executeSwap(new uint256[](path.length), path, to, true, FACTORY);
 
         if (IERC20(path[path.length - 1]).balanceOf(to) - balanceBefore < amountOutMin) {
-            revert PonderRouterTypes.InsufficientOutputAmount();
+            revert InsufficientOutputAmount();
         }
     }
 
@@ -508,7 +508,7 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external override ensure(deadline) {
-        if (path[path.length - 1] != KKUB) revert PonderRouterTypes.InvalidPath();
+        if (path[path.length - 1] != KKUB) revert InvalidPath();
 
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, FACTORY.getPair(path[0], path[1]), amountIn
@@ -517,13 +517,13 @@ contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
         PonderRouterSwapLib.executeSwap(new uint256[](path.length), path, address(this), true, FACTORY);
 
         uint256 amountOut = IERC20(KKUB).balanceOf(address(this));
-        if (amountOut < amountOutMin) revert PonderRouterTypes.InsufficientOutputAmount();
+        if (amountOut < amountOutMin) revert InsufficientOutputAmount();
 
         bool success = IERC20(KKUB).approve(KKUB_UNWRAPPER, amountOut);
-        if (!success) revert PonderRouterTypes.ApprovalFailed();
+        if (!success) revert ApprovalFailed();
 
         success = KKUBUnwrapper(KKUB_UNWRAPPER).unwrapKKUB(amountOut, to);
-        if (!success) revert PonderRouterTypes.UnwrapFailed();
+        if (!success) revert UnwrapFailed();
     }
 
     /// @notice Gets reserves for a token pair

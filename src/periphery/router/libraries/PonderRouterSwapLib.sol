@@ -4,8 +4,8 @@ pragma solidity 0.8.24;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IPonderFactory } from "../../../core/factory/IPonderFactory.sol";
 import { IPonderPair } from "../../../core/pair/IPonderPair.sol";
-import { PonderRouterTypes } from "../types/PonderRouterTypes.sol";
 import { PonderRouterMathLib } from "./PonderRouterMathLib.sol";
+import { IPonderRouter } from "../IPonderRouter.sol";
 
 /*//////////////////////////////////////////////////////////////
                     ROUTER SWAP OPERATIONS
@@ -19,7 +19,6 @@ import { PonderRouterMathLib } from "./PonderRouterMathLib.sol";
 ///      - Fee-on-transfer tokens
 ///      - Multi-hop swaps
 library PonderRouterSwapLib {
-    using PonderRouterTypes for *;
     using PonderRouterMathLib for *;
 
     /*//////////////////////////////////////////////////////////////
@@ -103,7 +102,7 @@ library PonderRouterSwapLib {
         if (params.supportingFee) {
             (uint256 reserve0, uint256 reserve1,) = pair.getReserves();
 
-            if (reserve0 == 0 && reserve1 == 0) revert PonderRouterTypes.InsufficientLiquidity();
+            if (reserve0 == 0 && reserve1 == 0) revert IPonderRouter.InsufficientLiquidity();
 
             (uint256 reserveIn, uint256 reserveOut) = params.input == token0
                 ? (reserve0, reserve1)
@@ -138,9 +137,9 @@ library PonderRouterSwapLib {
         address tokenA,
         address tokenB
     ) internal pure returns (address token0, address token1) {
-        if (tokenA == tokenB) revert PonderRouterTypes.IdenticalAddresses();
+        if (tokenA == tokenB) revert IPonderRouter.IdenticalAddresses();
         (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        if (token0 == address(0)) revert PonderRouterTypes.ZeroAddress();
+        if (token0 == address(0)) revert IPonderRouter.ZeroAddress();
     }
 
     /// @notice Retrieves current reserves for a token pair

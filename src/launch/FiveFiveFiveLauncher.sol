@@ -67,7 +67,7 @@ contract FiveFiveFiveLauncher is
             _feeCollector == address(0) ||
             _ponder == address(0) ||
             _priceOracle == address(0)
-        ) revert FiveFiveFiveLauncherTypes.ZeroAddress();
+        ) revert IFiveFiveFiveLauncher.ZeroAddress();
 
         FACTORY = IPonderFactory(_factory);
         ROUTER = IPonderRouter(_router);
@@ -303,6 +303,13 @@ contract FiveFiveFiveLauncher is
     )
     {
         return LiquidityLib.getRemainingToRaise(launches[launchId]);
+    }
+
+    /// @notice Get the launch deadline timestamp
+    /// @param launchId ID of the launch
+    /// @return The launch deadline as uint40
+    function getLaunchDeadline(uint256 launchId) external view returns (uint40) {
+        return launches[launchId].base.launchDeadline;
     }
 
     /*//////////////////////////////////////////////////////////////

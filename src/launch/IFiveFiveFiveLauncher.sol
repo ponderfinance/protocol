@@ -217,4 +217,56 @@ interface IFiveFiveFiveLauncher {
         uint256 remainingTotal,
         uint256 remainingPonderValue
     );
+
+    /// @notice Get launch deadline timestamp
+    /// @dev Returns the raw uint40 deadline value from storage
+    /// @param launchId Identifier of the launch
+    /// @return deadline Timestamp when the launch period ends
+    function getLaunchDeadline(uint256 launchId) external view returns (uint40 deadline);
+
+    /*//////////////////////////////////////////////////////////////
+                         CUSTOM ERRORS
+ //////////////////////////////////////////////////////////////*/
+
+    // Launch State Errors
+    error LaunchNotFound();              /// @dev Launch ID does not exist
+    error AlreadyLaunched();            /// @dev Launch already completed
+    error LaunchStillActive();          /// @dev Launch period not ended
+    error LaunchSucceeded();            /// @dev Launch met target raise
+    error LaunchDeadlinePassed();       /// @dev Launch period expired
+    error LaunchBeingFinalized();       /// @dev Launch in finalization
+    error LaunchNotCancellable();       /// @dev Cannot cancel launch
+
+    // Validation Errors
+    error ImageRequired();              /// @dev Missing token image
+    error InvalidTokenParams();         /// @dev Invalid name/symbol
+    error TokenNameExists();            /// @dev Name already used
+    error TokenSymbolExists();          /// @dev Symbol already used
+    error InsufficientLPTokens();       /// @dev Not enough LP tokens
+
+    // Token Operation Errors
+    error TokenApprovalRequired();      /// @dev Missing token approval
+    error TokenTransferFailed();        /// @dev Token transfer failed
+    error ApprovalFailed();             /// @dev Token approval failed
+
+    // Price Related Errors
+    error StalePrice();                 /// @dev Price data too old
+    error ExcessivePriceDeviation();    /// @dev Price outside bounds
+    error InsufficientPriceHistory();   /// @dev Missing price data
+    error PriceOutOfBounds();           /// @dev Price manipulation check
+
+    // Contribution Errors
+    error ExcessiveContribution();      /// @dev Exceeds max contribution
+    error InsufficientPoolLiquidity();  /// @dev Below min liquidity
+    error InsufficientLiquidity();      /// @dev Not enough liquidity
+    error ContributionTooSmall();       /// @dev Below min contribution
+
+    // General Errors
+    error Unauthorized();               /// @dev Missing permissions
+    error ZeroAddress();                /// @dev Invalid zero address
+    error InsufficientBalance();        /// @dev Not enough balance
+    error NoContributionToRefund();     /// @dev No refund available
+    error RefundFailed();               /// @dev Refund transfer failed
+    error ContributorTokensOverflow();  /// @dev Uint128 overflow
+    error LPTokensOverflow();           /// @dev Uint128 overflow
 }

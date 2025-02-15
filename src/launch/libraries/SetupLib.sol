@@ -9,6 +9,7 @@ import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
 import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { PonderPair } from "../../core/pair/PonderPair.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
+import { IFiveFiveFiveLauncher } from "../IFiveFiveFiveLauncher.sol";
 
 
 /*//////////////////////////////////////////////////////////////
@@ -89,10 +90,10 @@ library SetupLib {
         bytes memory symbolBytes = bytes(symbol);
 
         if(nameBytes.length == 0 || nameBytes.length > 32) {
-            revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
+            revert IFiveFiveFiveLauncher.InvalidTokenParams();
         }
         if(symbolBytes.length == 0 || symbolBytes.length > 8) {
-            revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
+            revert IFiveFiveFiveLauncher.InvalidTokenParams();
         }
 
         // Name character validation
@@ -106,7 +107,7 @@ library SetupLib {
                 char == 0x2D || // -
                 char == 0x5F    // _
             )) {
-                revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
+                revert IFiveFiveFiveLauncher.InvalidTokenParams();
             }
         }
 
@@ -118,12 +119,12 @@ library SetupLib {
                 (char >= 0x41 && char <= 0x5A) || // A-Z
                 (char >= 0x61 && char <= 0x7A)    // a-z
             )) {
-                revert FiveFiveFiveLauncherTypes.InvalidTokenParams();
+                revert IFiveFiveFiveLauncher.InvalidTokenParams();
             }
         }
 
-        if(usedNames[name]) revert FiveFiveFiveLauncherTypes.TokenNameExists();
-        if(usedSymbols[symbol]) revert FiveFiveFiveLauncherTypes.TokenSymbolExists();
+        if(usedNames[name]) revert IFiveFiveFiveLauncher.TokenNameExists();
+        if(usedSymbols[symbol]) revert IFiveFiveFiveLauncher.TokenSymbolExists();
     }
 
     /// @notice Validates PONDER token price data from oracle
@@ -145,7 +146,7 @@ library SetupLib {
         (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
 
         if (block.timestamp - lastUpdateTime > FiveFiveFiveLauncherTypes.PRICE_STALENESS_THRESHOLD) {
-            revert FiveFiveFiveLauncherTypes.StalePrice();
+            revert IFiveFiveFiveLauncher.StalePrice();
         }
 
         // Get spot price
@@ -164,7 +165,7 @@ library SetupLib {
         );
 
         if (twapPrice == 0) {
-            revert FiveFiveFiveLauncherTypes.InsufficientPriceHistory();
+            revert IFiveFiveFiveLauncher.InsufficientPriceHistory();
         }
 
         // Verify price is within acceptable bounds
@@ -172,7 +173,7 @@ library SetupLib {
         uint256 minDeviation = (twapPrice * 90) / 100;
 
         if (spotPrice > maxDeviation || spotPrice < minDeviation) {
-            revert FiveFiveFiveLauncherTypes.ExcessivePriceDeviation();
+            revert IFiveFiveFiveLauncher.ExcessivePriceDeviation();
         }
 
         return spotPrice;
@@ -185,10 +186,10 @@ library SetupLib {
     function validateLaunchState(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) external view {
-        if (launch.base.tokenAddress == address(0)) revert FiveFiveFiveLauncherTypes.LaunchNotFound();
-        if (launch.base.launched) revert FiveFiveFiveLauncherTypes.AlreadyLaunched();
-        if (block.timestamp > launch.base.launchDeadline) revert FiveFiveFiveLauncherTypes.LaunchDeadlinePassed();
-        if (launch.base.isFinalizingLaunch) revert FiveFiveFiveLauncherTypes.LaunchBeingFinalized();
+        if (launch.base.tokenAddress == address(0)) revert IFiveFiveFiveLauncher.LaunchNotFound();
+        if (launch.base.launched) revert IFiveFiveFiveLauncher.AlreadyLaunched();
+        if (block.timestamp > launch.base.launchDeadline) revert IFiveFiveFiveLauncher.LaunchDeadlinePassed();
+        if (launch.base.isFinalizingLaunch) revert IFiveFiveFiveLauncher.LaunchBeingFinalized();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -243,8 +244,8 @@ library SetupLib {
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
         // Instead of require() with a string, we use custom errors
-        if (contributorTokens > type(uint128).max) revert FiveFiveFiveLauncherTypes.ContributorTokensOverflow();
-        if (lpTokens > type(uint128).max) revert FiveFiveFiveLauncherTypes.LPTokensOverflow();
+        if (contributorTokens > type(uint128).max) revert IFiveFiveFiveLauncher.ContributorTokensOverflow();
+        if (lpTokens > type(uint128).max) revert IFiveFiveFiveLauncher.LPTokensOverflow();
 
         // Set the packed values
         launch.allocation.tokensForContributors = uint128(contributorTokens);

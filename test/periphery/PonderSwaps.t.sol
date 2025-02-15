@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+import "../../src/periphery/router/IPonderRouter.sol";
 import "../../src/core/pair/PonderPair.sol";
 import "../../src/core/token/PonderToken.sol";
 import "../../src/launch/LaunchToken.sol";
@@ -387,7 +388,7 @@ contract PonderRouterTest is Test {
         );
 
         // Step 3: Try the original swap - should revert with InsufficientOutputAmount
-        vm.expectRevert(abi.encodeWithSelector(PonderRouterTypes.InsufficientOutputAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IPonderRouter.InsufficientOutputAmount.selector));
         router.swapExactTokensForTokens(
             SWAP_AMOUNT,
             expectedOut,  // Using price from before manipulation
@@ -454,7 +455,7 @@ contract PonderRouterTest is Test {
         );
 
         // Try multi-hop swap with original amounts - should revert with InsufficientOutputAmount
-        vm.expectRevert(abi.encodeWithSelector(PonderRouterTypes.InsufficientOutputAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IPonderRouter.InsufficientOutputAmount.selector));
         router.swapExactTokensForTokens(
             SWAP_AMOUNT,
             initialAmounts[2],  // Expected output from initial calculation

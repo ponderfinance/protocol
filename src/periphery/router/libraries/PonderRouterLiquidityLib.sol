@@ -2,9 +2,10 @@
 pragma solidity 0.8.24;
 
 import { IPonderFactory } from "../../../core/factory/IPonderFactory.sol";
-import { PonderRouterTypes } from "../types/PonderRouterTypes.sol";
 import { PonderRouterMathLib } from "./PonderRouterMathLib.sol";
 import { PonderRouterSwapLib } from "./PonderRouterSwapLib.sol";
+import { IPonderRouter } from "../IPonderRouter.sol";
+
 
 /*//////////////////////////////////////////////////////////////
                     ROUTER LIQUIDITY OPERATIONS
@@ -47,7 +48,7 @@ library PonderRouterLiquidityLib {
         // Create pair if it doesn't exist
         if (factory.getPair(tokenA, tokenB) == address(0)) {
             address pair = factory.createPair(tokenA, tokenB);
-            if (pair == address(0)) revert PonderRouterTypes.PairCreationFailed();
+            if (pair == address(0)) revert IPonderRouter.PairCreationFailed();
         }
 
         // Get current reserves for both tokens
@@ -61,13 +62,13 @@ library PonderRouterLiquidityLib {
             uint256 amountBOptimal = PonderRouterMathLib.quote(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
                 // Use full amount of tokenA and calculated amount of tokenB
-                if (amountBOptimal < amountBMin) revert PonderRouterTypes.InsufficientBAmount();
+                if (amountBOptimal < amountBMin) revert IPonderRouter.InsufficientBAmount();
                 (amountA, amountB) = (amountADesired, amountBOptimal);
             } else {
                 // Calculate and use optimal amount of tokenA instead
                 uint256 amountAOptimal = PonderRouterMathLib.quote(amountBDesired, reserveB, reserveA);
                 assert(amountAOptimal <= amountADesired);
-                if (amountAOptimal < amountAMin) revert PonderRouterTypes.InsufficientAAmount();
+                if (amountAOptimal < amountAMin) revert IPonderRouter.InsufficientAAmount();
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
             }
         }

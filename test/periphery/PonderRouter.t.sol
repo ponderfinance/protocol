@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+import "../../src/periphery/router/IPonderRouter.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
 import "../../src/periphery/unwrapper/IKKUB.sol";
@@ -719,7 +720,7 @@ contract PonderRouterTest is Test {
         // Move time past deadline
         vm.warp(deadline + 1);
 
-        vm.expectRevert(PonderRouterTypes.ExpiredDeadline.selector);
+        vm.expectRevert(IPonderRouter.ExpiredDeadline.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             outputAmount,
             path,
@@ -736,7 +737,7 @@ contract PonderRouterTest is Test {
         path[1] = address(kkub);
         uint256 deadline = block.timestamp + 1;
 
-        vm.expectRevert(PonderRouterTypes.InvalidPath.selector);
+        vm.expectRevert(IPonderRouter.InvalidPath.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             outputAmount,
             path,
@@ -776,7 +777,7 @@ contract PonderRouterTest is Test {
         // Try to swap with insufficient ETH
         uint256 insufficientETH = requiredETH - 0.1 ether;
 
-        vm.expectRevert(PonderRouterTypes.ExcessiveInputAmount.selector);
+        vm.expectRevert(IPonderRouter.ExcessiveInputAmount.selector);
         router.swapETHForExactTokens{value: insufficientETH}(
             outputAmount,
             path,
@@ -854,7 +855,7 @@ contract PonderRouterTest is Test {
         path[1] = address(tokenA);
 
         // Use the router's error selector
-        vm.expectRevert(PonderRouterTypes.InsufficientOutputAmount.selector);
+        vm.expectRevert(IPonderRouter.InsufficientOutputAmount.selector);
         router.swapETHForExactTokens{value: 1 ether}(
             0,
             path,

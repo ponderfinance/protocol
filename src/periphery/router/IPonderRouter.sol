@@ -386,4 +386,67 @@ interface IPonderRouter {
     /// @dev Used for ETH<>Token operations
     /// @return KKUB contract address
     function kkub() external view returns (address);
+
+    /*//////////////////////////////////////////////////////////////
+                        TRANSACTION ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Timing and deadline errors
+    error ExpiredDeadline();              /// @dev Transaction exceeded time limit
+    error Locked();                       /// @dev Reentrancy guard triggered
+
+    /*//////////////////////////////////////////////////////////////
+                            AMOUNT ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Amount validation errors
+    error InsufficientOutputAmount();     /// @dev Output below minimum
+    error InsufficientAAmount();          /// @dev First token amount too low
+    error InsufficientBAmount();          /// @dev Second token amount too low
+    error InsufficientAmount();           /// @dev Generic amount too low
+    error InsufficientInputAmount();      /// @dev Input amount too low
+    error ExcessiveInputAmount();         /// @dev Input exceeds maximum
+    error InvalidAmount();                /// @dev Amount validation failed
+    error ZeroOutput();                   /// @dev Output calculated as zero
+
+    /*//////////////////////////////////////////////////////////////
+                            LIQUIDITY ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Pool and liquidity errors
+    error InsufficientLiquidity();        /// @dev Pool liquidity too low
+    error ExcessivePriceImpact(           /// @dev Price impact too high
+        uint256 impact                    /// @dev Impact in basis points
+    );
+
+    /*//////////////////////////////////////////////////////////////
+                            PATH ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Path validation errors
+    error InvalidPath();                  /// @dev Swap path is invalid
+    error IdenticalAddresses();           /// @dev Attempting same-token swap
+    error PairNonexistent();             /// @dev Trading pair not found
+    error PairCreationFailed();          /// @dev Failed to create pair
+
+    /*//////////////////////////////////////////////////////////////
+                            ETH HANDLING ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice ETH-specific errors
+    error InsufficientETH();             /// @dev Not enough ETH sent
+    error InvalidETHAmount();            /// @dev ETH amount invalid
+    error RefundFailed();                /// @dev ETH refund failed
+    error UnwrapFailed();                /// @dev KKUB unwrap failed
+
+    /*//////////////////////////////////////////////////////////////
+                            TOKEN ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Token operation errors
+    error ZeroAddress();                 /// @dev Invalid zero address
+    error TransferFailed();              /// @dev Token transfer failed
+    error ApprovalFailed();              /// @dev Token approval failed
+    error InsufficientKkubBalance();     /// @dev Not enough KKUB
+    error KKUBApprovalFailure();          /// @dev KKUB approval failed
 }

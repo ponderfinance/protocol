@@ -3,6 +3,7 @@ pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
 import "../../src/launch/FiveFiveFiveLauncher.sol";
+import "../../src/launch/IFiveFiveFiveLauncher.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/token/PonderToken.sol";
 import "../../src/core/oracle/PonderPriceOracle.sol";
@@ -369,7 +370,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 ponderAmount = maxPonderValue * 10 * 1e18 / PONDER_PRICE; // Convert to PONDER amount with 18 decimals
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -413,7 +414,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 ponderAmount = (remainingKub * 10) + 100 ether; // Add excess amount
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -448,7 +449,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         vm.startPrank(bob);
         ponder.approve(address(launcher), ponderAmount);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -617,7 +618,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 excessiveContribution = remainingNeeded + 100 ether;
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributeKUB{value: excessiveContribution}(launchId);
         vm.stopPrank();
     }
@@ -680,7 +681,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.startPrank(alice);
 
         // Should revert with excessive contribution error
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributeKUB{value: contribution}(launchId);
 
         // Now try with exact amount
@@ -706,7 +707,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.startPrank(bob);
 
         // Try excessive amount first - should revert
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, ponderAmount * 2);
 
         // Now try exact amount - should succeed
@@ -800,7 +801,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Bob tries to contribute while first tx processing
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributeKUB{value: 2 ether}(launchId);
         vm.stopPrank();
 
@@ -901,7 +902,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 launchId = _createTestLaunch();
 
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ContributionTooSmall.selector);
         launcher.contributeKUB{value: MIN_KUB_CONTRIBUTION - 1}(launchId);
         vm.stopPrank();
     }
@@ -910,7 +911,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 launchId = _createTestLaunch();
 
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ContributionTooSmall.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION - 1);
         vm.stopPrank();
     }
@@ -1031,7 +1032,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.contributeKUB{value: MIN_KUB_CONTRIBUTION}(launchId);
 
         // Test below minimum
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ContributionTooSmall.selector);
         launcher.contributeKUB{value: MIN_KUB_CONTRIBUTION - 1}(launchId);
         vm.stopPrank();
     }
@@ -1044,7 +1045,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION);
 
         // Test below minimum
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ContributionTooSmall.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ContributionTooSmall.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION - 1);
         vm.stopPrank();
     }
@@ -1119,7 +1120,7 @@ contract FiveFiveFiveLauncherTest is Test {
         assertEq(ponderValue, maxPonderValue, "Should accept exactly 20% in PONDER value");
 
         // Try to contribute any more PONDER
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, MIN_PONDER_CONTRIBUTION);
         vm.stopPrank();
     }
@@ -1141,7 +1142,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.createLaunch(params1);
 
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.TokenNameExists.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.TokenNameExists.selector);
         launcher.createLaunch(params2);
     }
 
@@ -1153,7 +1154,7 @@ contract FiveFiveFiveLauncherTest is Test {
         });
 
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.InvalidTokenParams.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.InvalidTokenParams.selector);
         launcher.createLaunch(params);
     }
 
@@ -1270,7 +1271,7 @@ contract FiveFiveFiveLauncherTest is Test {
         );
 
         // Try to contribute - should fail due to price deviation
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePriceDeviation.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1288,7 +1289,7 @@ contract FiveFiveFiveLauncherTest is Test {
         ponder.approve(address(launcher), 1000 ether);
 
         // Should revert with StalePrice since no recent price data
-        vm.expectRevert(FiveFiveFiveLauncherTypes.StalePrice.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.StalePrice.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1301,7 +1302,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.warp(block.timestamp + 2 hours + 1); // Using explicit time since PRICE_STALENESS_THRESHOLD = 2 hours
 
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.StalePrice.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.StalePrice.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1342,7 +1343,7 @@ contract FiveFiveFiveLauncherTest is Test {
         }
 
         // Should fail due to accumulated deviation
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePriceDeviation.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1375,7 +1376,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.contributeKUB{value: 0.6 ether}(launchId);
 
         vm.prank(alice);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributeKUB{value: 0.6 ether}(launchId);
     }
 
@@ -1414,7 +1415,7 @@ contract FiveFiveFiveLauncherTest is Test {
         uint256 skewedPonderAmount = _getPonderEquivalent(largeContribution * 3);
 
         vm.startPrank(bob);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessiveContribution.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessiveContribution.selector);
         launcher.contributePONDER(launchId, skewedPonderAmount);
         vm.stopPrank();
     }
@@ -1560,7 +1561,7 @@ contract FiveFiveFiveLauncherTest is Test {
         launcher.claimRefund(launchId);
 
         // Try to refund again
-        vm.expectRevert(FiveFiveFiveLauncherTypes.NoContributionToRefund.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.NoContributionToRefund.selector);
         launcher.claimRefund(launchId);
         vm.stopPrank();
     }
@@ -1809,7 +1810,7 @@ contract FiveFiveFiveLauncherTest is Test {
         );
 
         // Contribution should fail due to price impact
-        vm.expectRevert(FiveFiveFiveLauncherTypes.ExcessivePriceDeviation.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.ExcessivePriceDeviation.selector);
         launcher.contributePONDER(launchId, ponderAmount);
         vm.stopPrank();
     }
@@ -1852,7 +1853,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Try to complete launch - should revert
         vm.startPrank(alice);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.PriceOutOfBounds.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.PriceOutOfBounds.selector);
         launcher.contributeKUB{value: TARGET_RAISE}(launchId);
         vm.stopPrank();
 
@@ -1904,7 +1905,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
     function testCancelLaunchSecurityChecks() public {
         // Test 1: Cannot cancel non-existent launch
-        vm.expectRevert(FiveFiveFiveLauncherTypes.LaunchNotCancellable.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.LaunchNotCancellable.selector);
         launcher.cancelLaunch(999);
 
         // Create a test launch with unique name/symbol
@@ -1919,13 +1920,13 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Test 2: Only creator can cancel
         vm.prank(alice);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.Unauthorized.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.Unauthorized.selector);
         launcher.cancelLaunch(launchId);
 
         // Test 3: Cannot cancel after deadline
         vm.warp(block.timestamp + 7 days + 1);
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.LaunchDeadlinePassed.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.LaunchDeadlinePassed.selector);
         launcher.cancelLaunch(launchId);
 
         // Reset time and create new launch with different name
@@ -1949,7 +1950,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Test 4: Cannot cancel completed launch
         vm.prank(creator);
-        vm.expectRevert(FiveFiveFiveLauncherTypes.LaunchNotCancellable.selector);
+        vm.expectRevert(IFiveFiveFiveLauncher.LaunchNotCancellable.selector);
         launcher.cancelLaunch(launchId2);
     }
 
@@ -1997,6 +1998,438 @@ contract FiveFiveFiveLauncherTest is Test {
         // Cancel launch
         vm.prank(creator);
         launcher.cancelLaunch(launchId);
+    }
+
+    function testPonderContributions() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Get the PONDER-KUB pair
+        address ponderKubPair = factory.getPair(address(ponder), router.kkub());
+
+        // Warp time forward before updating oracle
+        vm.warp(block.timestamp + 1 hours);
+
+        // Update oracle
+        oracle.update(ponderKubPair);
+
+        // Warp time forward again to allow contribution
+        vm.warp(block.timestamp + 1 hours);
+
+        // Try contribution
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 1000 ether);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+
+        // Verify the contribution was successful
+        (,uint256 ponderContributed,,) = launcher.getContributorInfo(launchId, alice);
+        assertEq(ponderContributed, 1000 ether, "PONDER contribution failed");
+    }
+
+    function testExcessivePriceDeviationError() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Setup proper oracle history first
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Deal PONDER to our test accounts
+        deal(address(ponder), alice, 2000 ether);
+        deal(address(ponder), bob, 100000 ether);
+
+        // Approve spending
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 2000 ether);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        ponder.approve(address(router), 100000 ether);
+
+        // Execute price manipulation
+        address[] memory path = _getPath(address(ponder), address(weth));
+        router.swapExactTokensForTokens(
+            50000 ether, // Large swap to move price
+            0,
+            path,
+            bob,
+            block.timestamp
+        );
+
+        // Try to contribute - should fail with exact error signature 0xf7f78816
+        bytes memory expectedError = abi.encodeWithSignature("ExcessivePriceDeviation()");
+        vm.expectRevert(expectedError);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
+    function testLiquidityDepthThresholds() public {
+        // Store initial liquidity for later comparison
+        (uint112 initialReserve0, uint112 initialReserve1,) = PonderPair(ponderWethPair).getReserves();
+        console.log("Initial KOI Reserve:", initialReserve0);
+        console.log("Initial KKUB Reserve:", initialReserve1);
+
+        // Create a new launch
+        uint256 launchId = _createTestLaunch();
+
+        // Setup oracle history
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Test contribution sizes relative to pool depth
+        uint256[] memory contributionPercentages = new uint256[](5);
+        contributionPercentages[0] = 1;    // 1% of pool depth
+        contributionPercentages[1] = 5;    // 5% of pool depth
+        contributionPercentages[2] = 10;   // 10% of pool depth
+        contributionPercentages[3] = 15;   // 15% of pool depth
+        contributionPercentages[4] = 20;   // 20% of pool depth
+
+        console.log("\nTesting different contribution sizes relative to pool depth:");
+
+        for (uint i = 0; i < contributionPercentages.length; i++) {
+            uint256 percentage = contributionPercentages[i];
+            uint256 ponderAmount = (uint256(initialReserve0) * percentage) / 100;
+
+            // Fund test account
+            deal(address(ponder), alice, ponderAmount);
+
+            vm.startPrank(alice);
+            ponder.approve(address(launcher), ponderAmount);
+
+            // Try contribution and log result
+            try launcher.contributePONDER(launchId, ponderAmount) {
+                console.log("%d%% of pool depth (Amount: %d KOI) - Success", percentage, ponderAmount / 1e18);
+            } catch (bytes memory err) {
+                bytes4 errorSig = bytes4(err);
+                if (errorSig == bytes4(0xf7f78816)) { // ExcessivePriceDeviation
+                    console.log("%d%% of pool depth (Amount: %d KOI) - Failed: ExcessivePriceDeviation", percentage, ponderAmount / 1e18);
+                } else {
+                    console.log("%d%% of pool depth (Amount: %d KOI) - Failed: Other error", percentage, ponderAmount / 1e18);
+                }
+            }
+            vm.stopPrank();
+
+            // Reset pool state for next test
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Now test with increased liquidity
+        console.log("\nIncreasing pool liquidity by 10x and retesting:");
+
+        // Add significant liquidity to the pool
+        deal(address(ponder), address(this), initialReserve0 * 10);
+        deal(address(weth), address(this), initialReserve1 * 10);
+
+        ponder.approve(address(router), type(uint256).max);
+        IERC20(address(weth)).approve(address(router), type(uint256).max);
+
+        router.addLiquidity(
+            address(ponder),
+            address(weth),
+            initialReserve0 * 9,  // Add 9x more (plus existing = 10x)
+            initialReserve1 * 9,
+            0,
+            0,
+            address(this),
+            block.timestamp
+        );
+
+        // Update oracle with new liquidity
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Test same percentages with increased liquidity
+        for (uint i = 0; i < contributionPercentages.length; i++) {
+            uint256 percentage = contributionPercentages[i];
+            uint256 ponderAmount = (uint256(initialReserve0) * 10 * percentage) / 100;
+
+            deal(address(ponder), alice, ponderAmount);
+
+            vm.startPrank(alice);
+            ponder.approve(address(launcher), ponderAmount);
+
+            try launcher.contributePONDER(launchId, ponderAmount) {
+                console.log("%d%% of increased pool depth (Amount: %d KOI) - Success", percentage, ponderAmount / 1e18);
+            } catch (bytes memory err) {
+                bytes4 errorSig = bytes4(err);
+                if (errorSig == bytes4(0xf7f78816)) {
+                    console.log("%d%% of increased pool depth (Amount: %d KOI) - Failed: ExcessivePriceDeviation", percentage, ponderAmount / 1e18);
+                } else {
+                    console.log("%d%% of increased pool depth (Amount: %d KOI) - Failed: Other error", percentage, ponderAmount / 1e18);
+                }
+            }
+            vm.stopPrank();
+
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+    }
+
+    function testDebugPriceDeviationWithLiveConditions() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Set exact reserves from production
+        uint256 koiReserve = 227_582.354146170690 ether;
+        uint256 kkubReserve = 1_103.044632190 ether;
+
+        // Setup pool state
+        deal(address(ponder), ponderWethPair, koiReserve);
+        deal(address(weth), ponderWethPair, kkubReserve);
+        PonderPair(ponderWethPair).sync();
+
+        // Instead of trying to update oracle, let's check current state
+        (uint112 reserve0, uint112 reserve1, uint32 lastUpdateTime) = PonderPair(ponderWethPair).getReserves();
+        console.log("\nPool State:");
+        console.log("KOI Reserve:", reserve0 / 1e18);
+        console.log("KKUB Reserve:", reserve1 / 1e18);
+        console.log("Last Update Time:", lastUpdateTime);
+
+        // Get current prices without updating oracle
+        uint256 spotPrice = oracle.getCurrentPrice(
+            ponderWethPair,
+            address(ponder),
+            1e18
+        );
+
+        console.log("\nSpot Price in KKUB:", spotPrice / 1e18);
+
+        // Try to make contribution
+        uint256 contributionAmount = 1111 ether;
+
+        vm.startPrank(alice);
+        deal(address(ponder), alice, contributionAmount);
+        ponder.approve(address(launcher), contributionAmount);
+
+        // Get price impact for this contribution size
+        uint256 contributionSpotPrice = oracle.getCurrentPrice(
+            ponderWethPair,
+            address(ponder),
+            contributionAmount
+        );
+        console.log("\nPrice Impact Analysis:");
+        console.log("Contribution Amount:", contributionAmount / 1e18, "KOI");
+        console.log("Price for full contribution:", contributionSpotPrice / 1e18, "KKUB");
+
+        try launcher.contributePONDER(launchId, contributionAmount) {
+            console.log("\nContribution succeeded!");
+        } catch (bytes memory returnData) {
+            bytes4 errorSig = bytes4(returnData);
+            console.log("\nContribution failed with error signature:", toHexString(errorSig));
+
+            if (errorSig == bytes4(0xf7f78816)) { // ExcessivePriceDeviation
+                console.log("Failed due to ExcessivePriceDeviation");
+            }
+        }
+        vm.stopPrank();
+    }
+
+// Helper function to convert bytes4 to hex string
+    function toHexString(bytes4 data) internal pure returns (string memory) {
+        bytes memory alphabet = "0123456789abcdef";
+        bytes memory str = new bytes(10);
+        str[0] = "0";
+        str[1] = "x";
+        for (uint256 i = 0; i < 4; i++) {
+            str[2+i*2] = alphabet[uint8(data[i] >> 4)];
+            str[3+i*2] = alphabet[uint8(data[i] & 0x0f)];
+        }
+        return string(str);
+    }
+
+    function testPonderContributionWithOracleSetup() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Setup initial liquidity with similar ratios to deployment
+        uint256 kubAmount = 1000 ether;
+        uint256 ponderAmount = 200_000 ether;
+
+        // Deal tokens and KUB to this contract
+        deal(address(ponder), address(this), ponderAmount);
+        vm.deal(address(this), kubAmount * 2);
+
+        ponder.approve(address(router), ponderAmount);
+
+        // Add initial liquidity
+        router.addLiquidityETH{value: kubAmount}(
+            address(ponder),
+            ponderAmount,
+            0,
+            0,
+            address(this),
+            block.timestamp + 1
+        );
+
+        // Check pair setup
+        address ponderKubPair = factory.getPair(address(ponder), address(weth));
+        console.log("\nPair Addresses:");
+        console.log("PONDER-KUB pair:", ponderKubPair);
+
+        // Get tokens in pair
+        address token0 = PonderPair(ponderKubPair).token0();
+        address token1 = PonderPair(ponderKubPair).token1();
+        console.log("\nToken Addresses:");
+        console.log("Pair token0:", token0);
+        console.log("Pair token1:", token1);
+        console.log("PONDER token:", address(ponder));
+        console.log("WETH token:", address(weth));
+
+        // Initialize oracle history
+        console.log("\nPrice History:");
+        for (uint i = 0; i < 15; i++) {
+            vm.warp(block.timestamp + 5 minutes);
+            PonderPair(ponderKubPair).sync();
+
+            // Get cumulative prices before update
+            uint256 price0CumulativeLast = PonderPair(ponderKubPair).price0CumulativeLast();
+            uint256 price1CumulativeLast = PonderPair(ponderKubPair).price1CumulativeLast();
+            console.log("\nBefore update %s:", i);
+            console.log("price0Cumulative:", price0CumulativeLast);
+            console.log("price1Cumulative:", price1CumulativeLast);
+
+            oracle.update(ponderKubPair);
+
+            // Get reserves after update
+            (uint112 r0, uint112 r1,) = PonderPair(ponderKubPair).getReserves();
+            console.log("After update %s - Reserves:", i);
+            console.log("token0:", uint256(r0) / 1e18);
+            console.log("token1:", uint256(r1) / 1e18);
+        }
+
+        // Wait additional time to ensure we have enough history
+        vm.warp(block.timestamp + 1 hours);
+        PonderPair(ponderKubPair).sync();
+        oracle.update(ponderKubPair);
+
+        // Log the spot price and TWAP
+        uint256 spotPrice = oracle.getCurrentPrice(
+            ponderKubPair,
+            address(ponder),
+            1 ether
+        );
+        console.log("\nFinal Prices:");
+        console.log("Spot Price (KUB per PONDER):", spotPrice / 1e18);
+
+        uint256 twapPrice = oracle.consult(
+            ponderKubPair,
+            address(ponder),
+            1 ether,
+            1 hours
+        );
+        console.log("TWAP Price (KUB per PONDER):", twapPrice / 1e18);
+
+        // Try to contribute PONDER
+        uint256 ponderContribution = 1000 ether;
+        vm.startPrank(alice);
+        deal(address(ponder), alice, ponderContribution);
+        ponder.approve(address(launcher), ponderContribution);
+
+        console.log("\nAttempting PONDER contribution of:", ponderContribution / 1e18);
+        launcher.contributePONDER(launchId, ponderContribution);
+        vm.stopPrank();
+
+        // Verify contribution succeeded
+        (,uint256 ponderContributed,,) = launcher.getContributorInfo(launchId, alice);
+        assertEq(ponderContributed, ponderContribution, "PONDER contribution failed");
+    }
+
+    function testPriceCalculation() public {
+        uint256 launchId = _createTestLaunch();
+
+        uint256 kubAmount = 1000 ether;
+        uint256 ponderAmount = 200_000 ether;
+
+        deal(address(ponder), address(this), ponderAmount);
+        vm.deal(address(this), kubAmount);
+        ponder.approve(address(router), ponderAmount);
+
+        router.addLiquidityETH{value: kubAmount}(
+            address(ponder),
+            ponderAmount,
+            0,
+            0,
+            address(this),
+            block.timestamp + 1
+        );
+
+        address ponderKubPair = factory.getPair(address(ponder), address(weth));
+
+        // Get reserves
+        (uint112 r0, uint112 r1,) = PonderPair(ponderKubPair).getReserves();
+        console.log("Reserves before price check:");
+        console.log("Reserve0 (PONDER):", uint256(r0) / 1e18);
+        console.log("Reserve1 (KUB):", uint256(r1) / 1e18);
+
+        // Test price calculation directly
+        // Try for 1 PONDER
+        uint256 amountIn = 1 ether;
+        uint256 spotPrice = oracle.getCurrentPrice(
+            ponderKubPair,
+            address(ponder),
+            amountIn
+        );
+        console.log("\nPrice check for 1 PONDER:");
+        console.log("Spot Price:", spotPrice / 1e18);
+
+        // Try with larger amount
+        amountIn = 1000 ether;
+        spotPrice = oracle.getCurrentPrice(
+            ponderKubPair,
+            address(ponder),
+            amountIn
+        );
+        console.log("\nPrice check for 1000 PONDER:");
+        console.log("Spot Price:", spotPrice / 1e18);
+    }
+
+    function testPriceCalculationPrecision() public {
+        // Setup pool same as before
+        uint256 kubAmount = 1000 ether;
+        uint256 ponderAmount = 200_000 ether;
+
+        deal(address(ponder), address(this), ponderAmount);
+        vm.deal(address(this), kubAmount);
+        ponder.approve(address(router), ponderAmount);
+
+        router.addLiquidityETH{value: kubAmount}(
+            address(ponder),
+            ponderAmount,
+            0,
+            0,
+            address(this),
+            block.timestamp + 1
+        );
+
+        address ponderKubPair = factory.getPair(address(ponder), address(weth));
+
+        // Test with increasing amounts
+        uint256[] memory testAmounts = new uint256[](6);
+        testAmounts[0] = 0.1 ether;    // 0.1 PONDER
+        testAmounts[1] = 1 ether;      // 1 PONDER
+        testAmounts[2] = 10 ether;     // 10 PONDER
+        testAmounts[3] = 100 ether;    // 100 PONDER
+        testAmounts[4] = 1000 ether;   // 1000 PONDER
+        testAmounts[5] = 10000 ether;  // 10000 PONDER
+
+        console.log("Price check for different amounts:");
+        for (uint i = 0; i < testAmounts.length; i++) {
+            uint256 spotPrice = oracle.getCurrentPrice(
+                ponderKubPair,
+                address(ponder),
+                testAmounts[i]
+            );
+            console.log("Amount: %s PONDER -> Price: %s KUB", testAmounts[i] / 1e18, spotPrice / 1e18);
+        }
     }
 
     receive() external payable {}
