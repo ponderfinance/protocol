@@ -509,46 +509,6 @@ contract PonderStakingTest is Test {
         assertEq(withdrawn, PonderTokenTypes.TEAM_ALLOCATION, "Team should receive full allocation after cliff");
         vm.stopPrank();
     }
-
-    function test_PreventExcessiveShares() public {
-        // Initial stake
-        vm.startPrank(user1);
-        ponder.approve(address(staking), 1000e18);
-        staking.enter(1000e18, user1);
-        vm.stopPrank();
-
-        // Try to withdraw more than owned
-        vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSignature("InvalidSharesAmount()"));
-        staking.leave(2000e18);
-        vm.stopPrank();
-    }
-
-    function test_PreventReentrancyOnLeave() public {
-// Deploy malicious token
-ReentrantToken reentrantToken = new ReentrantToken(address(staking));
-
-// Mint tokens to attacker
-vm.startPrank(user1);
-reentrantToken.mint(user1, 1000e18);
-
-// Set up the malicious token's staking
-PonderStaking maliciousStaking = new PonderStaking(
-address(reentrantToken),
-address(router),
-address(factory)
-);
-
-        reentrantToken.approve(address(maliciousStaking), 1000e18);
-        maliciousStaking.enter(1000e18, user1);
-
-        // Attempt reentrancy attack
-        reentrantToken.setAttacking(true);
-        vm.expectRevert();  // Should revert due to reentrancy guard
-        maliciousStaking.leave(500e18);
-        vm.stopPrank();
-    }
-
     // Additional helper test for team cliff duration
     function test_TeamCliffDuration() public {
         // Get initial deployment time from the token contract
@@ -588,6 +548,45 @@ address(factory)
 
         assertEq(withdrawn, PonderTokenTypes.TEAM_ALLOCATION, "Should receive full allocation after cliff");
         assertEq(staking.balanceOf(teamReserve), 0, "Should have no remaining shares");
+    }
+
+    function test_PreventExcessiveShares() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // Try to withdraw more than owned
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSignature("InvalidSharesAmount()"));
+        staking.leave(2000e18);
+        vm.stopPrank();
+    }
+
+    function test_PreventReentrancyOnLeave() public {
+// Deploy malicious token
+ReentrantToken reentrantToken = new ReentrantToken(address(staking));
+
+// Mint tokens to attacker
+vm.startPrank(user1);
+reentrantToken.mint(user1, 1000e18);
+
+// Set up the malicious token's staking
+PonderStaking maliciousStaking = new PonderStaking(
+address(reentrantToken),
+address(router),
+address(factory)
+);
+
+        reentrantToken.approve(address(maliciousStaking), 1000e18);
+        maliciousStaking.enter(1000e18, user1);
+
+        // Attempt reentrancy attack
+        reentrantToken.setAttacking(true);
+        vm.expectRevert();  // Should revert due to reentrancy guard
+        maliciousStaking.leave(500e18);
+        vm.stopPrank();
     }
 
     // Test updates to share price from fee accumulation
@@ -644,5 +643,169 @@ address(factory)
         uint256 secondWithdraw = staking.leave(remainingShares);
         assertApproxEqRel(secondWithdraw, receivedTokens, 0.01e18, "Second withdrawal should be proportional");
         vm.stopPrank();
+    }
+
+    function test_ClaimFees() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // Simulate fee distribution
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 100e18);
+        // Advance time to allow rebase
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase(); // Update fee tracking
+        vm.stopPrank();
+
+        // Check pending fees
+        uint256 pendingFees = staking.getPendingFees(user1);
+        assertGt(pendingFees, 0, "Should have pending fees");
+
+        // Claim fees
+        vm.startPrank(user1);
+        uint256 claimed = staking.claimFees();
+        vm.stopPrank();
+
+        assertEq(claimed, pendingFees, "Should claim all pending fees");
+        assertEq(staking.getPendingFees(user1), 0, "Should have no pending fees after claim");
+    }
+
+    function test_TeamClaimFeesWhileLocked() public {
+        // Verify team stake is locked
+        vm.startPrank(teamReserve);
+        vm.expectRevert(abi.encodeWithSignature("TeamStakingLocked()"));
+        staking.leave(1); // Try to unstake minimal amount
+        vm.stopPrank();
+
+        // Simulate fee distribution
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 1000e18);
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+        vm.stopPrank();
+
+        // Team should be able to claim fees while stake is locked
+        vm.startPrank(teamReserve);
+        uint256 pendingFees = staking.getPendingFees(teamReserve);
+        uint256 claimed = staking.claimFees();
+        vm.stopPrank();
+
+        assertGt(claimed, 0, "Team should be able to claim fees");
+        assertEq(claimed, pendingFees, "Should claim all pending fees");
+    }
+
+    function test_FeeDistributionProportional() public {
+        // User1 stakes 1000
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // User2 stakes 2000
+        vm.startPrank(user2);
+        ponder.approve(address(staking), 2000e18);
+        staking.enter(2000e18, user2);
+        vm.stopPrank();
+
+        // Distribute fees
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 300e18);
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+        vm.stopPrank();
+
+        // Get pending fees
+        uint256 user1Fees = staking.getPendingFees(user1);
+        uint256 user2Fees = staking.getPendingFees(user2);
+
+        // User2 should get twice the fees of User1
+        assertApproxEqRel(user2Fees, user1Fees * 2, 0.01e18, "Fee distribution not proportional to stakes");
+    }
+
+    function test_RevertOnZeroFees() public {
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+
+        vm.expectRevert(abi.encodeWithSignature("NoFeesToClaim()"));
+        staking.claimFees();
+        vm.stopPrank();
+    }
+
+    function test_FeeAccumulationOverTime() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // Distribute fees
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 100e18);
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+        vm.stopPrank();
+
+        // Get and verify pending fees
+        vm.startPrank(user1);
+        uint256 pendingFees = staking.getPendingFees(user1);
+        uint256 claimed = staking.claimFees();
+        vm.stopPrank();
+
+        // Fees should match what contract calculates
+        assertEq(pendingFees, claimed, "Claimed amount should match pending fees");
+
+        // Get accumulated fees per share from contract
+        uint256 accumulatedFeesPerShare = staking.getAccumulatedFeesPerShare();
+        uint256 userShares = staking.balanceOf(user1);
+
+        // Calculate expected fees using same formula as contract
+        uint256 expectedFees = (userShares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+        assertEq(claimed, expectedFees, "Claimed fees should match contract calculation");
+    }
+
+    function test_FeeAccumulationMultipleUsers() public {
+        // User1 stakes
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // User2 stakes
+        vm.startPrank(user2);
+        ponder.approve(address(staking), 2000e18);
+        staking.enter(2000e18, user2);
+        vm.stopPrank();
+
+        // Distribute fees
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 300e18);
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+        vm.stopPrank();
+
+        // Users claim
+        vm.startPrank(user1);
+        uint256 claimed1 = staking.claimFees();
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        uint256 claimed2 = staking.claimFees();
+        vm.stopPrank();
+
+        // Calculate using contract's formula
+        uint256 accumulatedFeesPerShare = staking.getAccumulatedFeesPerShare();
+        uint256 user1Shares = staking.balanceOf(user1);
+        uint256 user2Shares = staking.balanceOf(user2);
+
+        uint256 expected1 = (user1Shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+        uint256 expected2 = (user2Shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+
+        assertEq(claimed1, expected1, "User1 claim incorrect");
+        assertEq(claimed2, expected2, "User2 claim incorrect");
+        assertApproxEqRel(claimed2, claimed1 * 2, 0.01e18, "User2 should receive twice User1's fees");
     }
 }

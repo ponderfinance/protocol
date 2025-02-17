@@ -23,9 +23,6 @@ import { IPonderFactory } from "../factory/IPonderFactory.sol";
 ///      Implements rebase mechanism to distribute protocol fees
 ///      Inherits storage layout and ERC20 functionality
 contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Staked KOI", "xKOI") {
-    /*//////////////////////////////////////////////////////////////
-                            DEPENDENCIES
-    //////////////////////////////////////////////////////////////*/
     using PonderStakingTypes for *;
     using SafeERC20 for IERC20;
 
@@ -34,22 +31,15 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     //////////////////////////////////////////////////////////////*/
 
     /// @notice PONDER token contract reference
-    /// @dev Immutable after deployment
-    /// @dev Users stake this token to receive xPONDER
     IERC20 public immutable PONDER;
 
     /// @notice Protocol router for performing swaps
-    /// @dev Immutable after deployment
-    /// @dev Used for protocol fee collection and distribution
     IPonderRouter public immutable ROUTER;
 
     /// @notice Protocol factory contract reference
-    /// @dev Immutable after deployment
-    /// @dev Used for pair creation and management
     IPonderFactory public immutable FACTORY;
 
     /// @notice Initializes the staking contract
-    /// @dev Sets up immutable contract references and initial state
     /// @param _ponder Address of PONDER token contract
     /// @param _router Address of protocol router
     /// @param _factory Address of protocol factory
@@ -70,23 +60,10 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     }
 
     /*//////////////////////////////////////////////////////////////
-                         VIEW FUNCTIONS
-     //////////////////////////////////////////////////////////////*/
-
-    /// @notice Returns minimum PONDER required for first stake
-    /// @dev Constant value defined in PonderStakingTypes
-    /// @return Minimum amount in PONDER tokens (18 decimals)
-    function minimumFirstStake() external pure returns (uint256) {
-        return PonderStakingTypes.MINIMUM_FIRST_STAKE;
-    }
-
-    /*//////////////////////////////////////////////////////////////
                        STAKING OPERATIONS
    //////////////////////////////////////////////////////////////*/
 
     /// @notice Stakes PONDER tokens for xPONDER shares
-    /// @dev Mints shares proportional to current share price to msg.sender
-    /// @dev First stake requires minimum amount and sets initial ratio
     /// @param amount Amount of PONDER to stake
     /// @param recipient Address to receive the xPONDER shares
     /// @return shares Amount of xPONDER shares minted
@@ -98,7 +75,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         uint256 totalPonder = PONDER.balanceOf(address(this));
         uint256 totalShares = totalSupply();
 
-        // Calculate shares
+        // Calculate shares and initialize fee debt
         if (totalShares == 0) {
             if (amount < PonderStakingTypes.MINIMUM_FIRST_STAKE)
                 revert IPonderStaking.InsufficientFirstStake();
@@ -106,6 +83,9 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         } else {
             shares = (amount * totalShares) / totalPonder;
         }
+
+        // Initialize fee debt for new stake
+        userFeeDebt[recipient] = (shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
 
         // Effects
         _mint(recipient, shares);
@@ -116,10 +96,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         emit Staked(recipient, amount, shares);
     }
 
-
     /// @notice Withdraws PONDER by burning xPONDER shares
-    /// @dev Burns shares and returns proportional PONDER amount
-    /// @dev Enforces minimum withdrawal amount
     /// @param shares Amount of xPONDER to burn
     /// @return amount Amount of PONDER tokens returned
     function leave(uint256 shares) external returns (uint256 amount) {
@@ -133,65 +110,131 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         if (shares == 0) revert IPonderStaking.InvalidAmount();
         if (shares > balanceOf(msg.sender)) revert IPonderStaking.InvalidSharesAmount();
 
+        // Calculate base withdrawal amount
         uint256 totalShares = totalSupply();
-        uint256 totalPonderBefore = PONDER.balanceOf(address(this));
-        amount = (shares * totalPonderBefore) / totalShares;
+        amount = (shares * PONDER.balanceOf(address(this))) / totalShares;
 
         if (amount < PonderStakingTypes.MINIMUM_WITHDRAW)
             revert IPonderStaking.MinimumSharesRequired();
 
+        // Handle pending fees before burn
+        uint256 pendingFees = _getPendingFees(msg.sender, shares);
+        userFeeDebt[msg.sender] = ((balanceOf(msg.sender) - shares) * accumulatedFeesPerShare)
+            / PonderStakingTypes.FEE_PRECISION;
+
         // Effects
         _burn(msg.sender, shares);
 
-        // Emit event before external interaction
         emit Withdrawn(msg.sender, amount, shares);
 
+        // Interactions - Transfer base amount
         PONDER.safeTransfer(msg.sender, amount);
+
+        // Handle fee transfer if applicable
+        if (pendingFees > 0) {
+            totalUnclaimedFees -= pendingFees;
+            PONDER.safeTransfer(msg.sender, pendingFees);
+            emit FeesClaimed(msg.sender, pendingFees);
+        }
+    }
+
+    /// @notice Claims accumulated protocol fees without unstaking
+    /// @return amount Amount of PONDER fees claimed
+    function claimFees() external returns (uint256 amount) {
+        // Calculate claimable amount
+        amount = _getPendingFees(msg.sender, balanceOf(msg.sender));
+        if (amount == 0) revert IPonderStaking.NoFeesToClaim();
+        if (amount < PonderStakingTypes.MINIMUM_FEE_CLAIM) revert IPonderStaking.InsufficientFeeAmount();
+
+        // Effects - Update fee debt
+        userFeeDebt[msg.sender] = (balanceOf(msg.sender) * accumulatedFeesPerShare)
+            / PonderStakingTypes.FEE_PRECISION;
+        totalUnclaimedFees -= amount;
+
+        // Interactions
+        PONDER.safeTransfer(msg.sender, amount);
+
+        emit FeesClaimed(msg.sender, amount);
     }
 
     /// @notice Distributes accumulated protocol fees
     /// @dev Updates share price based on current PONDER balance
-    /// @dev Can only be called after REBASE_DELAY has passed
     function rebase() external {
         if (block.timestamp < lastRebaseTime + PonderStakingTypes.REBASE_DELAY)
             revert IPonderStaking.RebaseTooFrequent();
 
         uint256 totalPonderBalance = PONDER.balanceOf(address(this));
-        lastRebaseTime = block.timestamp;
+        uint256 currentTotalShares = totalSupply();
 
-        emit RebasePerformed(totalSupply(), totalPonderBalance);
+        if (currentTotalShares > 0) {
+            uint256 newFees = totalPonderBalance - totalUnclaimedFees;
+            if (newFees > 0) {
+                accumulatedFeesPerShare += (newFees * PonderStakingTypes.FEE_PRECISION) / currentTotalShares;
+                totalUnclaimedFees += newFees;
+                emit FeesDistributed(newFees, accumulatedFeesPerShare);
+            }
+        }
+
+        lastRebaseTime = block.timestamp;
+        emit RebasePerformed(currentTotalShares, totalPonderBalance);
     }
 
     /*//////////////////////////////////////////////////////////////
-                        CONVERSION FUNCTIONS
+                        VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Gets pending protocol fees for an address
+    /// @param user Address to check pending fees for
+    /// @return Amount of PONDER fees available to claim
+    function getPendingFees(address user) external view returns (uint256) {
+        return _getPendingFees(user, balanceOf(user));
+    }
+
+    /// @notice Gets accumulated fees per share
+    /// @return Current accumulated fees per share value
+    function getAccumulatedFeesPerShare() external view returns (uint256) {
+        return accumulatedFeesPerShare;
+    }
+
     /// @notice Calculates PONDER tokens for xPONDER amount
-    /// @dev Uses current share price from total supply and balance
     /// @param shares Amount of xPONDER to calculate for
     /// @return Amount of PONDER tokens that would be received
     function getPonderAmount(uint256 shares) external view returns (uint256) {
         uint256 totalShares = totalSupply();
-
-        // Strict equality required: Special case for initial stake
-        // slither-disable-next-line dangerous-strict-equalities
         if (totalShares == 0) return shares;
-
         return (shares * PONDER.balanceOf(address(this))) / totalShares;
     }
 
     /// @notice Calculates xPONDER shares for PONDER amount
-    /// @dev Uses current share price from total supply and balance
     /// @param amount Amount of PONDER to calculate for
     /// @return Amount of xPONDER shares that would be minted
     function getSharesAmount(uint256 amount) external view returns (uint256) {
         uint256 totalShares = totalSupply();
-
-        // Strict equality required: Special case for initial stake
-        // slither-disable-next-line dangerous-strict-equalities
         if (totalShares == 0) return amount;
-
         return (amount * totalShares) / PONDER.balanceOf(address(this));
+    }
+
+    /// @notice Returns minimum PONDER required for first stake
+    /// @return Minimum amount in PONDER tokens
+    function minimumFirstStake() external pure returns (uint256) {
+        return PonderStakingTypes.MINIMUM_FIRST_STAKE;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates pending fees for a user
+    /// @param user Address to calculate fees for
+    /// @param shares Amount of shares to calculate fees for
+    /// @return Pending fees for the user
+    function _getPendingFees(address user, uint256 shares) internal view returns (uint256) {
+        if (shares == 0) return 0;
+
+        uint256 accumulated = (shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+        uint256 debt = userFeeDebt[user];
+
+        return accumulated > debt ? accumulated - debt : 0;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -199,25 +242,19 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Initiates two-step ownership transfer
-    /// @dev Sets pending owner, requires acceptance
     /// @param newOwner Address of proposed new owner
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert IPonderStaking.ZeroAddress();
-
         pendingOwner = newOwner;
         emit OwnershipTransferInitiated(owner, newOwner);
     }
 
-
     /// @notice Completes ownership transfer process
-    /// @dev Can only be called by pending owner
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert IPonderStaking.NotPendingOwner();
-
         address oldOwner = owner;
         owner = pendingOwner;
         pendingOwner = address(0);
-
         emit OwnershipTransferred(oldOwner, owner);
     }
 
@@ -226,7 +263,6 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Restricts function access to contract owner
-    /// @dev Reverts if caller is not current owner
     modifier onlyOwner() {
         if (msg.sender != owner) revert IPonderStaking.NotOwner();
         _;

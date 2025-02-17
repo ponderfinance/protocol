@@ -1039,5 +1039,213 @@ contract FeeDistributorTest is Test {
         vm.stopPrank();
     }
 
+    // Add these tests to your FeeDistributorTest contract
+
+    function test_SwapsAfterFeeCollection() public {
+        // First generate and collect fees
+        _generateTradingFees();
+        distributor.collectFeesFromPair(address(pair));
+
+        // Get reserves after fee collection
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+
+        // Try a normal swap immediately after
+        uint256 amountIn = 1e18;
+        address[] memory path = _getPath(address(testToken), address(ponder));
+
+        // Calculate expected output with 0.5% slippage
+        uint256 amountOut = router.getAmountsOut(amountIn, path)[1];
+        uint256 minOut = (amountOut * 995) / 1000; // 0.5% slippage
+
+        testToken.approve(address(router), amountIn);
+
+        // This swap should succeed
+        router.swapExactTokensForTokens(
+            amountIn,
+            minOut,
+            path,
+            address(this),
+            block.timestamp
+        );
+
+        // Verify reserves are still healthy
+        (uint112 newReserve0, uint112 newReserve1,) = pair.getReserves();
+        assertTrue(newReserve0 > 0 && newReserve1 > 0, "Reserves should be healthy");
+    }
+
+    function test_SwapsAfterDistribution() public {
+        // Complete fee cycle
+        _generateTradingFees();
+        distributor.collectFeesFromPair(address(pair));
+        distributor.convertFees(address(testToken));
+        vm.warp(block.timestamp + 1 hours);
+        distributor.distribute();
+
+        // Record reserves after distribution
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+
+        // Try swaps with different slippage values
+        uint256 amountIn = 1e18;
+
+        // Mint test tokens for the swap
+        testToken.mint(address(this), amountIn);
+
+        // Give router approval for testToken
+        testToken.approve(address(router), type(uint256).max);
+
+        address[] memory path = _getPath(address(testToken), address(ponder));
+
+        // Test with 0.5% slippage
+        uint256 amountOut = router.getAmountsOut(amountIn, path)[1];
+        uint256 minOut = (amountOut * 995) / 1000;
+
+        router.swapExactTokensForTokens(
+            amountIn,
+            minOut,
+            path,
+            address(this),
+            block.timestamp
+        );
+
+        // Mint more tokens for the second swap
+        testToken.mint(address(this), amountIn);
+
+        // Test with 1% slippage
+        minOut = (amountOut * 990) / 1000;
+        router.swapExactTokensForTokens(
+            amountIn,
+            minOut,
+            path,
+            address(this),
+            block.timestamp
+        );
+    }
+
+    function test_ReserveStabilityAfterFees() public {
+        // Get initial reserves
+        (uint112 initialReserve0, uint112 initialReserve1,) = pair.getReserves();
+
+        // Generate and collect fees
+        _generateTradingFees();
+        distributor.collectFeesFromPair(address(pair));
+
+        // Get reserves after collection
+        (uint112 afterCollectionReserve0, uint112 afterCollectionReserve1,) = pair.getReserves();
+
+        // Verify reserves haven't changed drastically
+        assertGt(afterCollectionReserve0, initialReserve0 * 90 / 100, "Reserve0 dropped too much");
+        assertGt(afterCollectionReserve1, initialReserve1 * 90 / 100, "Reserve1 dropped too much");
+
+        // Convert and distribute
+        distributor.convertFees(address(testToken));
+        vm.warp(block.timestamp + 1 hours);
+        distributor.distribute();
+
+        // Get final reserves
+        (uint112 finalReserve0, uint112 finalReserve1,) = pair.getReserves();
+
+        // Verify final reserves are healthy
+        assertGt(finalReserve0, initialReserve0 * 90 / 100, "Final reserve0 too low");
+        assertGt(finalReserve1, initialReserve1 * 90 / 100, "Final reserve1 too low");
+    }
+
+    function test_LargeSwapsAfterFees() public {
+        // Generate and process fees
+        _generateTradingFees();
+        distributor.collectFeesFromPair(address(pair));
+        distributor.convertFees(address(testToken));
+        vm.warp(block.timestamp + 1 hours);
+        distributor.distribute();
+
+        // Try a large swap (5% of reserves)
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        uint256 largeAmount = uint256(reserve0) * 5 / 100;
+
+        address[] memory path = _getPath(address(testToken), address(ponder));
+        uint256 expectedOut = router.getAmountsOut(largeAmount, path)[1];
+        uint256 minOut = (expectedOut * 995) / 1000; // 0.5% slippage
+
+        testToken.mint(address(this), largeAmount);
+        testToken.approve(address(router), largeAmount);
+
+        // Should succeed even with large amount
+        router.swapExactTokensForTokens(
+            largeAmount,
+            minOut,
+            path,
+            address(this),
+            block.timestamp
+        );
+    }
+
+    function test_ProductionScenario() public {
+        // 1. Setup initial state
+        _generateTradingFees();
+
+        // Get initial state
+        (uint112 reserve0Before, uint112 reserve1Before,) = pair.getReserves();
+
+        // 2. Collect and convert fees
+        distributor.collectFeesFromPair(address(pair));
+        distributor.convertFees(address(testToken));
+
+        // 3. Distribute fees
+        vm.warp(block.timestamp + 1 hours);
+        distributor.distribute();
+
+        // Get post-distribution state
+        (uint112 reserve0After, uint112 reserve1After,) = pair.getReserves();
+
+        // Verify reserves haven't dropped significantly (using ratios instead of multiplication)
+        assertGt(uint256(reserve0After) * 100 / uint256(reserve0Before), 90, "Reserve0 dropped too much");
+        assertGt(uint256(reserve1After) * 100 / uint256(reserve1Before), 90, "Reserve1 dropped too much");
+
+        // Test different swap sizes
+        uint256[] memory testAmounts = new uint256[](3);
+        testAmounts[0] = 0.1e18;  // Small swap
+        testAmounts[1] = 1e18;    // Medium swap
+        testAmounts[2] = 10e18;   // Large swap
+
+        address[] memory path = _getPath(address(testToken), address(ponder));
+
+        for (uint i = 0; i < testAmounts.length; i++) {
+            uint256 amountIn = testAmounts[i];
+
+            // Setup for swap
+            testToken.mint(address(this), amountIn);
+            testToken.approve(address(router), amountIn);
+
+            // Record reserves before swap
+            (uint112 preSwapReserve0, uint112 preSwapReserve1,) = pair.getReserves();
+
+            // Calculate expected output with 0.5% slippage
+            uint256[] memory amounts = router.getAmountsOut(amountIn, path);
+            uint256 expectedOut = amounts[1];
+            uint256 minOut = (expectedOut * 995) / 1000;
+
+            // Perform swap
+            uint256[] memory actualAmounts = router.swapExactTokensForTokens(
+                amountIn,
+                minOut,
+                path,
+                address(this),
+                block.timestamp
+            );
+
+            // Verify swap results
+            assertGe(actualAmounts[1], minOut, "Received less than minimum");
+            assertLe(actualAmounts[1], expectedOut, "Received more than expected");
+
+            // Verify reserves after swap are non-zero
+            (uint112 postSwapReserve0, uint112 postSwapReserve1,) = pair.getReserves();
+            assertTrue(postSwapReserve0 > 0 && postSwapReserve1 > 0, "Zero reserves after swap");
+
+            // Verify K value hasn't decreased
+            uint256 kBefore = uint256(preSwapReserve0) * uint256(preSwapReserve1);
+            uint256 kAfter = uint256(postSwapReserve0) * uint256(postSwapReserve1);
+            assertGe(kAfter, kBefore, "K value decreased");
+        }
+    }
+
 }
 

@@ -42,4 +42,23 @@ library PonderStakingTypes {
     /// @dev Prevents dust withdrawals
     /// @dev Value is in PONDER tokens with 18 decimals (0.01 PONDER)
     uint256 public constant MINIMUM_WITHDRAW = 1e16;
+
+    /*//////////////////////////////////////////////////////////////
+                            FEE CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Precision multiplier for fee calculations
+    /// @dev Used to handle division with precision
+    /// @dev Value is 1e12 to allow for very small fee amounts
+    uint256 public constant FEE_PRECISION = 1e12;
+
+    /// @notice Minimum claimable fee amount
+    /// @dev Prevents dust fee claims
+    /// @dev Value is in PONDER tokens with 18 decimals (0.01 PONDER)
+    uint256 public constant MINIMUM_FEE_CLAIM = 1e16;
+
+    /// @notice Maximum time between fee claims
+    /// @dev Encourages regular claiming to reduce contract balance
+    /// @dev Set to 30 days to ensure fees don't accumulate too long
+    uint256 public constant MAX_FEE_CLAIM_DELAY = 30 days;
 }

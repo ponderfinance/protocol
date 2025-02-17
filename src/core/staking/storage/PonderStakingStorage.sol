@@ -10,10 +10,11 @@ pragma solidity 0.8.24;
 /// @notice Storage layout for Ponder protocol's staking functionality
 /// @dev Abstract contract defining state variables for staking implementation
 ///      Must be inherited by the main staking contract
+///      All state variables are carefully ordered for optimal packing
 abstract contract PonderStakingStorage {
     /*//////////////////////////////////////////////////////////////
                     TIMING STATE
-//////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Contract deployment timestamp
     /// @dev Used for team lock period validation
@@ -51,4 +52,24 @@ abstract contract PonderStakingStorage {
     /// @dev Updated on every stake/unstake operation
     /// @dev Used for reward distribution calculations
     uint256 public totalDepositedPonder;
+
+    /*//////////////////////////////////////////////////////////////
+                        FEE TRACKING STATE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Accumulated protocol fees per staked share
+    /// @dev Increases when protocol fees are distributed
+    /// @dev Separate from staking rewards for clear accounting
+    /// @dev Scaled by FEE_PRECISION for accurate calculation
+    uint256 public accumulatedFeesPerShare;
+
+    /// @notice Maps staker address to their fee debt
+    /// @dev Used to track claimed fees and calculate pending rewards
+    /// @dev Updated on stake, unstake, and fee claim operations
+    mapping(address => uint256) public userFeeDebt;
+
+    /// @notice Total unclaimed fees in the contract
+    /// @dev Running total of fees not yet claimed by stakers
+    /// @dev Updated when fees are distributed or claimed
+    uint256 public totalUnclaimedFees;
 }
