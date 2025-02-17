@@ -81,11 +81,27 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
                 revert IPonderStaking.InsufficientFirstStake();
             shares = amount;
         } else {
-            shares = (amount * totalShares) / totalPonder;
+            // Maintain precision by checking which order of operations is safe
+            uint256 scaledAmount = amount * PonderStakingTypes.FEE_PRECISION;
+            if (scaledAmount / PonderStakingTypes.FEE_PRECISION != amount) {
+                // If scaling would overflow, fall back to original calculation
+                shares = (amount * totalShares) / totalPonder;
+            } else {
+                // Scale up, multiply, then scale down for more precision
+                shares = (scaledAmount * totalShares) / (totalPonder * PonderStakingTypes.FEE_PRECISION);
+            }
         }
 
-        // Initialize fee debt for new stake
-        userFeeDebt[recipient] = (shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+        // Calculate fee debt - use same scaling approach for consistency
+        uint256 scaledShares = shares * PonderStakingTypes.FEE_PRECISION;
+        if (scaledShares / PonderStakingTypes.FEE_PRECISION != shares) {
+            // If scaling would overflow, use original calculation
+            userFeeDebt[recipient] = (shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+        } else {
+            // Scale up for precision, then scale down
+            userFeeDebt[recipient] = (scaledShares * accumulatedFeesPerShare)
+                / (PonderStakingTypes.FEE_PRECISION * PonderStakingTypes.FEE_PRECISION);
+        }
 
         // Effects
         _mint(recipient, shares);
@@ -106,7 +122,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
             }
         }
 
-        // Checks
+        // CHECKS
         if (shares == 0) revert IPonderStaking.InvalidAmount();
         if (shares > balanceOf(msg.sender)) revert IPonderStaking.InvalidSharesAmount();
 
@@ -119,20 +135,25 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
 
         // Handle pending fees before burn
         uint256 pendingFees = _getPendingFees(msg.sender, shares);
+
+        // EFFECTS - Update all state variables before transfers
         userFeeDebt[msg.sender] = ((balanceOf(msg.sender) - shares) * accumulatedFeesPerShare)
             / PonderStakingTypes.FEE_PRECISION;
 
-        // Effects
         _burn(msg.sender, shares);
+
+        if (pendingFees > 0) {
+            totalUnclaimedFees -= pendingFees;
+        }
 
         emit Withdrawn(msg.sender, amount, shares);
 
-        // Interactions - Transfer base amount
+        // INTERACTIONS - External calls last
+        // Transfer base amount
         PONDER.safeTransfer(msg.sender, amount);
 
         // Handle fee transfer if applicable
         if (pendingFees > 0) {
-            totalUnclaimedFees -= pendingFees;
             PONDER.safeTransfer(msg.sender, pendingFees);
             emit FeesClaimed(msg.sender, pendingFees);
         }
@@ -151,10 +172,10 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
             / PonderStakingTypes.FEE_PRECISION;
         totalUnclaimedFees -= amount;
 
+        emit FeesClaimed(msg.sender, amount);
+
         // Interactions
         PONDER.safeTransfer(msg.sender, amount);
-
-        emit FeesClaimed(msg.sender, amount);
     }
 
     /// @notice Distributes accumulated protocol fees

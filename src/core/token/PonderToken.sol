@@ -138,13 +138,14 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         // Ensure staking contract is set
         if (address(_staking) == address(0)) revert PonderTokenTypes.ZeroAddress();
 
+        // Update state before external calls
+        _stakingInitialized = true;
+
         // Approve staking contract
         _approve(address(this), address(_staking), PonderTokenTypes.TEAM_ALLOCATION);
 
         // Enter staking with team allocation
         _staking.enter(PonderTokenTypes.TEAM_ALLOCATION, _teamReserve);
-
-        _stakingInitialized = true;
     }
 
     /// @notice Sets the staking contract address

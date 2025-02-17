@@ -38,6 +38,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         address _ponder,
         address _staking
     ) {
+        if (_factory == address(0)) revert IFeeDistributor.ZeroAddress();
+        if (_router == address(0)) revert IFeeDistributor.ZeroAddress();
+        if (_ponder == address(0)) revert IFeeDistributor.ZeroAddress();
+        if (_staking == address(0)) revert IFeeDistributor.ZeroAddress();
+
         factory = IPonderFactory(_factory);
         router = IPonderRouter(_router);
         ponder = _ponder;
@@ -62,30 +67,27 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (pair == address(0)) revert InvalidPairAddress();
 
         IPonderPair pairContract = IPonderPair(pair);
-        address token0 = pairContract.token0();
-        address token1 = pairContract.token1();
 
+        // Cache token addresses first
+        (address token0, address token1) = (pairContract.token0(), pairContract.token1());
+
+        // Get initial balances
         uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
         uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
 
-        // Sync first to ensure reserves are up to date
+        // Execute pair operations
         pairContract.sync();
-
-        // Then skim fees
         pairContract.skim(address(this));
 
+        // Calculate collected amounts
         uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
         uint256 finalBalance1 = IERC20(token1).balanceOf(address(this));
 
         uint256 collected0 = finalBalance0 - initialBalance0;
         uint256 collected1 = finalBalance1 - initialBalance1;
 
-        if (collected0 > 0) {
-            emit FeesCollected(token0, collected0);
-        }
-        if (collected1 > 0) {
-            emit FeesCollected(token1, collected1);
-        }
+        if (collected0 > 0) emit FeesCollected(token0, collected0);
+        if (collected1 > 0) emit FeesCollected(token1, collected1);
     }
 
     /// @notice External wrapper for collecting fees from a single pair
@@ -201,10 +203,14 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     function collectFeesFromPairs(address[] calldata pairs) internal {
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
+
+            processedPairs[currentPair] = false;
+
+            // INTERACTIONS - Make external call after state updates
             try this.collectFeesFromPair(currentPair) {
-                processedPairs[currentPair] = false;
+                // No need to update state here as we've already set it to false
             } catch {
-                processedPairs[currentPair] = false;
+                // No additional state update needed since we've already set to false
                 continue;
             }
         }
@@ -255,31 +261,27 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         // EFFECTS
         markPairsForProcessing(pairs);
 
-        // INTERACTIONS - Fee Collection
+        // Batch process pairs
+        uint256 preConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
+        bool anyFeesConverted;
+
+        // Get all unique tokens first to avoid nested loops
+        address[] memory uniqueTokens = _getUniqueTokens(pairs);
+
+        // Process all pairs first
         for (uint256 i = 0; i < pairs.length; i++) {
-            address currentPair = pairs[i];
-            bool processingState = processedPairs[currentPair];
-
-            // Collect fees
-            _collectFeesFromPair(currentPair);
-
-            // Clean up state
-            if (processingState) {
-                processedPairs[currentPair] = false;
-            }
+            _collectFeesFromPair(pairs[i]);
+            processedPairs[pairs[i]] = false;
         }
 
-        // Convert fees if we have any
-        address[] memory uniqueTokens = _getUniqueTokens(pairs);
-        bool anyFeesConverted;
-        uint256 preConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
-
-        // Try to convert each non-PONDER token
+        // Then process all unique tokens
         for (uint256 i = 0; i < uniqueTokens.length; i++) {
             address token = uniqueTokens[i];
             if (token != ponder) {
+                // Cache balance check
                 uint256 tokenBalance = IERC20(token).balanceOf(address(this));
                 if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
+                    // Pre-calculate slippage and path
                     uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
                     _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
                     anyFeesConverted = true;
@@ -287,12 +289,9 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             }
         }
 
-        // Check if we should distribute
+        // Check final state
         uint256 postConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
 
-        // We distribute if either:
-        // 1. We successfully converted fees to PONDER
-        // 2. We collected PONDER fees directly
         if (postConversionPonderBalance >= FeeDistributorTypes.MINIMUM_AMOUNT &&
             (anyFeesConverted || postConversionPonderBalance > preConversionPonderBalance)) {
             _distribute();
@@ -315,28 +314,20 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         address pair = factory.getPair(token, ponder);
         if (pair == address(0)) revert IFeeDistributor.PairNotFound();
 
-        /// @dev Third value from getReserves is block.timestamp
-        /// which we don't need for minimal output calculation
-        /// slither-disable-next-line unused-return
+        // Cache all external calls
         (uint112 reserve0, uint112 reserve1,) = IPonderPair(pair).getReserves();
+        bool isToken0 = IPonderPair(pair).token0() == token;
 
-        (uint112 tokenReserve, uint112 ponderReserve) =
-            IPonderPair(pair).token0() == token ?
-                (reserve0, reserve1) :
-                (reserve1, reserve0);
+        (uint112 tokenReserve, uint112 ponderReserve) = isToken0 ?
+            (reserve0, reserve1) :
+            (reserve1, reserve0);
 
-        // Add check for extreme reserve imbalance
         if (tokenReserve == 0 || ponderReserve == 0) revert IFeeDistributor.InvalidReserves();
 
         uint256 reserveRatio = (uint256(tokenReserve) * 1e18) / uint256(ponderReserve);
         if (reserveRatio > 100e18 || reserveRatio < 1e16) revert IFeeDistributor.SwapFailed();
 
-        uint256 amountOut = router.getAmountsOut(
-            amountIn,
-            _getPath(token, ponder)
-        )[1];
-
-        // Make slippage tolerance more strict - 0.5% instead of 1%
+        uint256 amountOut = router.getAmountsOut(amountIn, _getPath(token, ponder))[1];
         return (amountOut * 995) / 1000;
     }
 
@@ -368,7 +359,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (token == ponder) return;
         if (amountIn > type(uint96).max) revert AmountTooLarge();
 
-        // Approve router if needed
+        // Check and update approval in one step if needed
         uint256 currentAllowance = IERC20(token).allowance(address(this), address(router));
         if (currentAllowance < amountIn) {
             if (!IERC20(token).approve(address(router), type(uint256).max)) {
@@ -376,9 +367,8 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             }
         }
 
-        address[] memory path = new address[](2);
-        path[0] = token;
-        path[1] = ponder;
+        // Cache path creation
+        address[] memory path = _getPath(token, ponder);
 
         try router.swapExactTokensForTokens(
             amountIn,
@@ -444,10 +434,11 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (to == address(0)) revert IFeeDistributor.InvalidRecipient();
         if (amount == 0) revert IFeeDistributor.InvalidRecoveryAmount();
 
+        emit EmergencyTokenRecovered(token, to, amount);
+
         if (!IERC20(token).transfer(to, amount)) {
             revert IFeeDistributor.TransferFailed();
         }
-        emit EmergencyTokenRecovered(token, to, amount);
     }
 
     /*//////////////////////////////////////////////////////////////

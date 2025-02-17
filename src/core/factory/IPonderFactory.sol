@@ -128,18 +128,18 @@ interface IPonderFactory {
 
     /// @notice Updates protocol fee recipient
     /// @dev Restricted to feeToSetter
-    /// @param feeTo New fee collection address
-    function setFeeTo(address feeTo) external;
+    /// @param newFeeTo New fee collection address
+    function setFeeTo(address newFeeTo) external;
 
     /// @notice Updates fee management admin
     /// @dev Restricted to current feeToSetter
-    /// @param feeToSetter New fee admin address
-    function setFeeToSetter(address feeToSetter) external;
+    /// @param newFeeToSetter New fee admin address
+    function setFeeToSetter(address newFeeToSetter) external;
 
     /// @notice Initiates launcher update process
     /// @dev Starts timelock period for launcher change
-    /// @param launcher Proposed new launcher address
-    function setLauncher(address launcher) external;
+    /// @param newLauncher Proposed new launcher address
+    function setLauncher(address newLauncher) external;
 
     /// @notice Completes launcher update
     /// @dev Can only execute after timelock expires
@@ -147,8 +147,8 @@ interface IPonderFactory {
 
     /// @notice Updates protocol token address
     /// @dev Restricted to feeToSetter
-    /// @param ponder New PONDER token address
-    function setPonder(address ponder) external;
+    /// @param newPonder New PONDER token address
+    function setPonder(address newPonder) external;
 
     /*//////////////////////////////////////////////////////////////
                         CUSTOM ERRORS

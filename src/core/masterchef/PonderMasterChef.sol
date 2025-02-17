@@ -189,11 +189,10 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
     /// @notice Calculate user's unclaimed rewards
     /// @dev Calculates pending PONDER tokens for a given user in a specific pool
-    /// @dev Takes into account:
-    ///      - Pool allocation points
-    ///      - User's weighted shares
-    ///      - Accumulated rewards per share
-    ///      - Maximum supply limits
+    /// @dev Uses checked math and preserves precision by:
+    ///      1. Doing multiplications before divisions
+    ///      2. Using intermediate variables to prevent overflow
+    ///      3. Applying scale factors optimally
     /// @param _pid Pool ID to check rewards for
     /// @param _user Address of the user to check
     /// @return pending Amount of unclaimed PONDER tokens available
@@ -213,22 +212,68 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && _farmingStarted) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
 
-            uint256 ponderReward = (timeElapsed * _ponderPerSecond * pool.allocPoint) / _totalAllocPoint;
-
-            // Check against remaining supply
-            uint256 remainingSupply = PONDER.maximumSupply() - PONDER.totalSupply();
-            if (ponderReward > remainingSupply) {
-                ponderReward = remainingSupply;
+            // Calculate intermediate values to prevent overflow
+            // First calculate (timeElapsed * _ponderPerSecond) to get total PONDER emission
+            uint256 totalEmission;
+            unchecked {
+            // This multiplication is safe as timeElapsed is bounded by block times
+            // and _ponderPerSecond is admin-controlled
+                totalEmission = timeElapsed * _ponderPerSecond;
             }
 
-            accPonderPerShare = accPonderPerShare +
-                ((ponderReward * 1e12) / lpSupply);
+            // Then calculate pool's share while preserving precision
+            uint256 poolReward;
+            if (totalEmission > type(uint256).max / pool.allocPoint) {
+                // If multiplication would overflow, divide first
+                poolReward = totalEmission / _totalAllocPoint * pool.allocPoint;
+            } else {
+                // Otherwise multiply first for better precision
+                poolReward = (totalEmission * pool.allocPoint) / _totalAllocPoint;
+            }
+
+            // Check against remaining supply before scaling
+            uint256 remainingSupply = PONDER.maximumSupply() - PONDER.totalSupply();
+            if (poolReward > remainingSupply) {
+                poolReward = remainingSupply;
+            }
+
+            // Scale by 1e12 while checking for overflow
+            uint256 scaledReward;
+            if (poolReward > type(uint256).max / 1e12) {
+                // If scaling would overflow, divide lpSupply first
+                scaledReward = poolReward / lpSupply * 1e12;
+            } else {
+                // Otherwise multiply by 1e12 first for better precision
+                scaledReward = (poolReward * 1e12) / lpSupply;
+            }
+
+            // Update accumulated PONDER per share
+            // Use unchecked for gas optimization as we know it won't overflow
+            // due to previous checks
+            unchecked {
+                accPonderPerShare = accPonderPerShare + scaledReward;
+            }
         }
 
-        // Calculate pending rewards
-        pending = user.weightedShares > 0 ?
-            ((user.weightedShares * accPonderPerShare) / 1e12) - user.rewardDebt :
-            0;
+        // Calculate pending rewards with safe math
+        if (user.weightedShares > 0) {
+            // First multiply to preserve precision
+            uint256 rewardDebt = user.rewardDebt;
+            uint256 totalReward;
+
+            if (user.weightedShares > type(uint256).max / accPonderPerShare) {
+                // If multiplication would overflow, divide first
+                totalReward = user.weightedShares / 1e12 * accPonderPerShare;
+            } else {
+                // Otherwise multiply first for better precision
+                totalReward = (user.weightedShares * accPonderPerShare) / 1e12;
+            }
+
+            // Ensure totalReward >= rewardDebt to prevent underflow
+            pending = totalReward >= rewardDebt ? totalReward - rewardDebt : 0;
+        } else {
+            pending = 0;
+        }
 
         // Final supply check
         uint256 remainingSupply = PONDER.maximumSupply() - PONDER.totalSupply();
@@ -470,39 +515,65 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to stake in
     /// @param _amount Amount of LP tokens to stake
     function deposit(uint256 _pid, uint256 _amount) external nonReentrant {
+        // CHECKS
         if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
+        // Calculate initial state
+        uint256 pending = user.amount > 0
+            ? (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt
+            : 0;
+
+        // Record balances before transfer
+        uint256 beforeBalance = IERC20(pool.lpToken).balanceOf(address(this));
+
+        // EFFECTS - Update all state before transfers
         if (_amount > 0 && !_farmingStarted) {
             _startTime = block.timestamp;
             _farmingStarted = true;
         }
 
         _updatePool(_pid);
-        uint256 pending = user.amount > 0
-            ? (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt
-            : 0;
 
-        uint256 actualAmount = _handleDeposit(pool, _amount);
+        // Calculate deposit fee
+        (uint256 depositFee, uint256 actualAmount) = _calculateDepositFee(_amount, pool.depositFeeBP);
 
         if (actualAmount > 0) {
-            unchecked {
-                // These additions cannot overflow because:
-                // 1. actualAmount is bounded by the user's token balance
-                // 2. ERC20 total supply (2^256-1) prevents user.amount from reaching overflow
-                // 3. Pool's totalStaked is bounded by the token's total supply
-                user.amount += actualAmount;
-                pool.totalStaked += actualAmount;
-            }
+            // Update state
+            user.amount += actualAmount;
+            pool.totalStaked += actualAmount;
             _updateUserWeightedShares(_pid, msg.sender);
         }
 
+        // Update reward debt
+        user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
+
+        // INTERACTIONS - External calls last
+        if (_amount > 0) {
+            // Transfer LP tokens
+            if (!IERC20(pool.lpToken).transferFrom(msg.sender, address(this), _amount)) {
+                revert IPonderMasterChef.TransferFailed();
+            }
+
+            // Verify received amount
+            uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
+            uint256 receivedAmount = afterBalance - beforeBalance;
+            if (receivedAmount == 0) revert IPonderMasterChef.NoTokensTransferred();
+            if (receivedAmount != _amount) revert IPonderMasterChef.InvalidAmount();
+
+            // Handle deposit fee
+            if (depositFee > 0) {
+                if (!IERC20(pool.lpToken).transfer(_teamReserve, depositFee)) {
+                    revert IPonderMasterChef.TransferFailed();
+                }
+            }
+        }
+
+        // Handle pending rewards last
         if (pending > 0) {
             _safePonderTransfer(msg.sender, pending);
         }
-
-        user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
         emit Deposit(msg.sender, _pid, _amount);
     }

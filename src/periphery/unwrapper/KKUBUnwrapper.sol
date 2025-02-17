@@ -93,7 +93,7 @@ contract KKUBUnwrapper is
         uint256 amount,
         address recipient
     ) external override nonReentrant whenNotPaused returns (bool) {
-        // Checks
+        // CHECKS
         if (amount == 0) revert IKKUBUnwrapper.ZeroAmount();
         if (recipient == address(0)) revert IKKUBUnwrapper.ZeroAddressNotAllowed();
 
@@ -105,30 +105,29 @@ contract KKUBUnwrapper is
             revert IKKUBUnwrapper.BlacklistedAddress();
         }
 
+        // Record initial state
         uint256 initialBalance = address(this).balance;
 
-        // Effects - Update state before external calls
+        // EFFECTS - Update all state variables first
         _lockedBalance += amount;
 
-        // Interactions - External calls after state updates
-        // 1. Transfer KKUB tokens
+        // INTERACTIONS - External calls after state updates
+        // Transfer KKUB tokens
         IERC20(KKUB).safeTransferFrom(msg.sender, address(this), amount);
 
-        // 2. Withdraw from KKUB contract
+        // Withdraw from KKUB contract
         IKKUB(KKUB).withdraw(amount);
 
         // Verify withdrawal success
         uint256 ethReceived = address(this).balance - initialBalance;
         if (ethReceived < amount) {
-            // Effects - Revert state changes if withdrawal fails
-            _lockedBalance -= amount;
             revert IKKUBUnwrapper.WithdrawFailed();
         }
 
-        // Final state update before last external call
+        // Update state after successful operations
         _lockedBalance -= amount;
 
-        // 3. Transfer ETH to recipient
+        // Final transfer
         payable(recipient).sendValue(amount);
 
         emit UnwrappedKKUB(recipient, amount);

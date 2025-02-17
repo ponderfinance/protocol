@@ -247,7 +247,17 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         if (amount0Out == 0 && amount1Out == 0) revert IPonderPair.InsufficientOutputAmount();
         if (to == _token0 || to == _token1) revert IPonderPair.InvalidToAddress();
 
-        PonderPairTypes.SwapState memory state;
+        // Initialize state struct with default values
+        PonderPairTypes.SwapState memory state = PonderPairTypes.SwapState({
+            reserve0: 0,
+            reserve1: 0,
+            balance0: 0,
+            balance1: 0,
+            amount0In: 0,
+            amount1In: 0,
+            isPonderPair: false
+        });
+
         (state.reserve0, state.reserve1,) = getReserves();
 
         if (amount0Out >= state.reserve0 || amount1Out >= state.reserve1) {
