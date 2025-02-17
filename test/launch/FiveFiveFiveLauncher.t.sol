@@ -2451,6 +2451,82 @@ contract FiveFiveFiveLauncherTest is Test {
         }
     }
 
+    function testSmallCompletionContributions() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Fund alice with enough ETH for the large contribution
+        vm.deal(alice, TARGET_RAISE); // Give alice 5555 ETH
+
+        // First test KUB completion
+        // Contribute everything except 0.005 ETH (below MIN_KUB_CONTRIBUTION of 0.01)
+        uint256 kubAmount = TARGET_RAISE - 0.005 ether;
+        vm.prank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+
+        // Fund bob for the completion amount
+        vm.deal(bob, 0.005 ether);
+
+        // Now try to complete with amount below minimum
+        vm.prank(bob);
+        launcher.contributeKUB{value: 0.005 ether}(launchId);
+
+        // Verify launch completed
+        (,,,,,bool launched,) = launcher.getLaunchInfo(launchId);
+        assertTrue(launched, "Launch should complete with small KUB contribution");
+
+        // Now test PONDER completion on a new launch with different name/symbol
+        FiveFiveFiveLauncherTypes.LaunchParams memory params = FiveFiveFiveLauncherTypes.LaunchParams({
+            name: "Test Token 2",  // Different name
+            symbol: "TEST2",       // Different symbol
+            imageURI: "ipfs://test"
+        });
+
+        vm.prank(creator);
+        launchId = launcher.createLaunch(params);
+
+        // Setup proper oracle history first
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Reset alice's ETH balance for the second launch
+        vm.deal(alice, TARGET_RAISE);
+
+        // First contribute most in KUB
+        // Leave exactly 0.2 ETH worth of space (requires 2 PONDER at 0.1 ETH/PONDER rate)
+        kubAmount = TARGET_RAISE - 0.2 ether;
+        vm.prank(alice);
+        launcher.contributeKUB{value: kubAmount}(launchId);
+
+        // Try to complete with PONDER amount below minimum
+        // MIN_PONDER_CONTRIBUTION is 0.1 ETH worth (1 PONDER)
+        // We need 2 PONDER to complete but this is below minimum
+        uint256 completionAmount = 2 ether; // 2 PONDER = 0.2 ETH value
+
+        // Give bob enough PONDER for completion
+        deal(address(ponder), bob, completionAmount);
+
+        vm.startPrank(bob);
+        ponder.approve(address(launcher), completionAmount);
+        launcher.contributePONDER(launchId, completionAmount);
+        vm.stopPrank();
+
+        // Verify launch completed
+        (,,,,,launched,) = launcher.getLaunchInfo(launchId);
+        assertTrue(launched, "Launch should complete with small PONDER contribution");
+
+        // Verify exact contribution amounts
+        (uint256 kubCollected, uint256 ponderCollected, uint256 ponderValueCollected, uint256 totalValue) =
+                            launcher.getContributionInfo(launchId);
+
+        assertEq(totalValue, TARGET_RAISE, "Total value should equal target");
+        assertEq(kubCollected, kubAmount, "KUB collected should match contribution");
+        assertEq(ponderCollected, completionAmount, "PONDER collected should match contribution");
+        assertEq(ponderValueCollected, 0.2 ether, "PONDER value should match remaining amount");
+    }
+
     receive() external payable {}
 }
 

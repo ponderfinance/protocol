@@ -149,7 +149,6 @@ contract FiveFiveFiveLauncher is
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch = launches[launchId];
         SetupLib.validateLaunchState(launch);
 
-        // Initialize contribution context
         FiveFiveFiveLauncherTypes.ContributionContext memory context = FiveFiveFiveLauncherTypes.ContributionContext({
             ponderAmount: amount,
             tokensToDistribute: 0,
@@ -162,7 +161,6 @@ contract FiveFiveFiveLauncher is
         })
         });
 
-        // Process contribution with caching logic
         bool shouldFinalize = FundsLib.processPonderContribution(
             launch,
             launchId,

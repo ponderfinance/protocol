@@ -488,7 +488,10 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         if (actualAmount > 0) {
             unchecked {
-            // These additions cannot overflow due to prior balance checks
+                // These additions cannot overflow because:
+                // 1. actualAmount is bounded by the user's token balance
+                // 2. ERC20 total supply (2^256-1) prevents user.amount from reaching overflow
+                // 3. Pool's totalStaked is bounded by the token's total supply
                 user.amount += actualAmount;
                 pool.totalStaked += actualAmount;
             }

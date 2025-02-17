@@ -31,11 +31,11 @@ interface IFiveFiveFiveLauncher {
     /// @param amount Amount of KUB contributed (in wei)
     event KUBContributed(uint256 indexed launchId, address contributor, uint256 amount);
 
-    /// @notice Emitted when PONDER is contributed to a launch
-    /// @param launchId Identifier of the launch
+    /// @notice Emitted when PONDER tokens are contributed
+    /// @param launchId Unique identifier of the launch
     /// @param contributor Address making the contribution
-    /// @param amount Amount of PONDER contributed
-    /// @param kubValue KUB value of the PONDER contribution
+    /// @param amount Amount of PONDER contributed, in wei (1e18)
+    /// @param kubValue KUB equivalent value of contributed PONDER
     event PonderContributed(uint256 indexed launchId, address contributor, uint256 amount, uint256 kubValue);
 
     /// @notice Emitted when launch tokens are distributed

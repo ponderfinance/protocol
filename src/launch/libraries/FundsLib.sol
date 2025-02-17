@@ -32,54 +32,6 @@ library FundsLib {
     using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
     /*//////////////////////////////////////////////////////////////
-                            EVENTS
-    //////////////////////////////////////////////////////////////*/
-    /// @notice Emitted when launch tokens are distributed to contributors
-    /// @param launchId Unique identifier of the launch
-    /// @param recipient Address receiving the tokens
-    /// @param amount Number of tokens distributed, in wei (1e18)
-    event TokensDistributed(uint256 indexed launchId, address indexed recipient, uint256 amount);
-
-    /// @notice Emitted when KUB is contributed to a launch
-    /// @param launchId Unique identifier of the launch
-    /// @param contributor Address making the contribution
-    /// @param amount Amount of KUB contributed, in wei (1e18)
-    event KUBContributed(uint256 indexed launchId, address contributor, uint256 amount);
-
-    /// @notice Emitted when PONDER tokens are contributed
-    /// @param launchId Unique identifier of the launch
-    /// @param contributor Address making the contribution
-    /// @param amount Amount of PONDER contributed, in wei (1e18)
-    /// @param kubValue KUB equivalent value of contributed PONDER
-    event PonderContributed(uint256 indexed launchId, address contributor, uint256 amount, uint256 kubValue);
-
-    /// @notice Emitted when a refund is processed for a contributor
-    /// @param user Address receiving the refund
-    /// @param kubAmount Amount of KUB refunded, in wei (1e18)
-    /// @param ponderAmount Amount of PONDER refunded, in wei (1e18)
-    /// @param tokenAmount Amount of launch tokens returned, in wei (1e18)
-    event RefundProcessed(address indexed user, uint256 kubAmount, uint256 ponderAmount, uint256 tokenAmount);
-
-    /// @notice Emitted when a launch is cancelled by creator
-    /// @param launchId Unique identifier of the cancelled launch
-    /// @param creator Address of launch creator
-    /// @param kubCollected Total KUB collected before cancellation
-    /// @param ponderCollected Total PONDER collected before cancellation
-    event LaunchCancelled(
-        uint256 indexed launchId,
-        address indexed creator,
-        uint256 kubCollected,
-        uint256 ponderCollected
-    );
-
-    /// @notice Emitted when LP tokens are withdrawn from a launch
-    /// @param launchId Unique identifier of the launch
-    /// @param creator Address of launch creator receiving LP tokens
-    /// @param timestamp Block timestamp of withdrawal
-    event LPTokensWithdrawn(uint256 indexed launchId, address indexed creator, uint256 timestamp);
-
-
-    /*//////////////////////////////////////////////////////////////
                        EXTERNAL FUNCTIONS
    //////////////////////////////////////////////////////////////*/
 
@@ -98,44 +50,36 @@ library FundsLib {
         uint256 amount,
         address contributor
     ) external returns (bool) {
-        // Calculate remaining amount needed
         uint256 currentTotal = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
         uint256 remaining = FiveFiveFiveLauncherTypes.TARGET_RAISE - currentTotal;
 
-        // Skip minimum check if this would complete the launch
         if (amount != remaining) {
             if (amount < FiveFiveFiveLauncherTypes.MIN_KUB_CONTRIBUTION)
                 revert IFiveFiveFiveLauncher.ContributionTooSmall();
         }
 
-        unchecked {
-        // Safe math: contributions are bounded by TARGET_RAISE
-            uint256 newTotal = currentTotal + amount;
-            if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE)
-                revert IFiveFiveFiveLauncher.ExcessiveContribution();
+        uint256 newTotal = currentTotal + amount;
+        if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE)
+            revert IFiveFiveFiveLauncher.ExcessiveContribution();
 
-        // Calculate tokens using packed uint128 allocation
-            uint256 tokensToDistribute = (amount * uint256(launch.allocation.tokensForContributors)) /
-                            FiveFiveFiveLauncherTypes.TARGET_RAISE;
+        uint256 tokensToDistribute = (amount * uint256(launch.allocation.tokensForContributors)) /
+                        FiveFiveFiveLauncherTypes.TARGET_RAISE;
 
-        // Update packed contribution values
-            launch.contributions.kubCollected += amount;
-            launch.contributions.tokensDistributed += tokensToDistribute;
+        launch.contributions.kubCollected += amount;
+        launch.contributions.tokensDistributed += tokensToDistribute;
 
-        // Update packed contributor info
-            FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
-            info.kubContributed = uint128(uint256(info.kubContributed) + amount);
-            info.tokensReceived = uint128(uint256(info.tokensReceived) + tokensToDistribute);
+        FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
+        info.kubContributed = uint128(uint256(info.kubContributed) + amount);
+        info.tokensReceived = uint128(uint256(info.tokensReceived) + tokensToDistribute);
 
-            emit TokensDistributed(launchId, contributor, tokensToDistribute);
-            emit KUBContributed(launchId, contributor, amount);
+        emit IFiveFiveFiveLauncher.TokensDistributed(launchId, contributor, tokensToDistribute);
+        emit IFiveFiveFiveLauncher.KUBContributed(launchId, contributor, amount);
 
-            if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
-                revert IFiveFiveFiveLauncher.TokenTransferFailed();
-            }
-
-            return newTotal == FiveFiveFiveLauncherTypes.TARGET_RAISE;
+        if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
+            revert IFiveFiveFiveLauncher.TokenTransferFailed();
         }
+
+        return newTotal == FiveFiveFiveLauncherTypes.TARGET_RAISE;
     }
 
     /// @notice Processes refund for a contributor
@@ -150,21 +94,17 @@ library FundsLib {
         address claimer,
         PonderToken ponder
     ) external {
-        // Validate refund conditions
         _validateRefund(launch, claimer);
 
-        // Get packed values before clearing storage
         FiveFiveFiveLauncherTypes.ContributorInfo memory info = launch.contributors[claimer];
         uint256 kubToRefund = uint256(info.kubContributed);
         uint256 ponderToRefund = uint256(info.ponderContributed);
         uint256 tokensToReturn = uint256(info.tokensReceived);
 
-        // Clear storage in single operation
         delete launch.contributors[claimer];
 
-        emit RefundProcessed(claimer, kubToRefund, ponderToRefund, tokensToReturn);
+        emit IFiveFiveFiveLauncher.RefundProcessed(claimer, kubToRefund, ponderToRefund, tokensToReturn);
 
-        // Process returns and refunds
         _processTokenReturn(launch.base.tokenAddress, claimer, tokensToReturn);
         _processRefundTransfers(claimer, kubToRefund, ponderToRefund, ponder);
     }
@@ -187,14 +127,12 @@ library FundsLib {
     ) external {
         _validateCancellation(launch, caller);
 
-        // Free name and symbol
         usedNames[launch.base.name] = false;
         usedSymbols[launch.base.symbol] = false;
 
-        // Update packed state
         launch.base.cancelled = true;
 
-        emit LaunchCancelled(
+        emit IFiveFiveFiveLauncher.LaunchCancelled(
             launchId,
             caller,
             launch.contributions.kubCollected,
@@ -216,13 +154,10 @@ library FundsLib {
     ) external {
         if(sender != launch.base.creator) revert IFiveFiveFiveLauncher.Unauthorized();
 
-        unchecked {
-        // Safe comparison: timestamps are uint40
-            if(block.timestamp < launch.base.lpUnlockTime)
-                revert IFiveFiveFiveLauncher.LaunchNotCancellable();
-        }
+        if(block.timestamp < launch.base.lpUnlockTime)
+            revert IFiveFiveFiveLauncher.LaunchNotCancellable();
 
-        emit LPTokensWithdrawn(launchId, launch.base.creator, block.timestamp);
+        emit IFiveFiveFiveLauncher.LPTokensWithdrawn(launchId, launch.base.creator, block.timestamp);
 
         _withdrawPairLP(launch.pools.memeKubPair, launch.base.creator);
         _withdrawPairLP(launch.pools.memePonderPair, launch.base.creator);
@@ -242,11 +177,8 @@ library FundsLib {
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         address claimer
     ) private view {
-        unchecked {
-        // Safe comparison: launchDeadline is uint40
-            if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
-                revert IFiveFiveFiveLauncher.LaunchStillActive();
-            }
+        if (!launch.base.cancelled && block.timestamp <= launch.base.launchDeadline) {
+            revert IFiveFiveFiveLauncher.LaunchStillActive();
         }
 
         if (launch.base.launched ||
@@ -326,11 +258,8 @@ library FundsLib {
         if (launch.base.isFinalizingLaunch)
             revert IFiveFiveFiveLauncher.LaunchBeingFinalized();
 
-        unchecked {
-        // Safe comparison: launchDeadline is uint40
-            if (block.timestamp > launch.base.launchDeadline)
-                revert IFiveFiveFiveLauncher.LaunchDeadlinePassed();
-        }
+        if (block.timestamp > launch.base.launchDeadline)
+            revert IFiveFiveFiveLauncher.LaunchDeadlinePassed();
     }
 
     /// @notice Withdraws LP tokens from trading pairs
@@ -349,27 +278,29 @@ library FundsLib {
         }
     }
 
-    /// @notice Validates or uses cached PONDER price validation
-    /// @dev Performs full validation only if cache is stale
+    /// @notice Validates current PONDER price against cached values or triggers full validation
+    /// @dev Uses a caching mechanism to reduce oracle calls and gas costs
+    /// @param context The contribution context containing price and validation state
+    /// @param pair Address of the PONDER-KUB trading pair
+    /// @param oracle Reference to the price oracle contract
+    /// @param ponder Address of the PONDER token
+    /// @return needsTwapValidation True if a full TWAP validation is required, false if cache is valid
     function validatePonderPrice(
         FiveFiveFiveLauncherTypes.ContributionContext memory context,
         address pair,
         PonderPriceOracle oracle,
         address ponder
     ) internal view returns (bool needsTwapValidation) {
-        // Always get current spot price
         context.priceInfo.spotPrice = oracle.getCurrentPrice(
             pair,
             ponder,
             context.ponderAmount
         );
 
-        // If no previous validation or validation is stale, need full TWAP check
         if (!context.priceInfo.isValidated || isPriceValidationStale(context.priceInfo.validatedAt)) {
             return true;
         }
 
-        // Use cached TWAP for validation
         uint256 maxDeviation = (context.priceInfo.twapPrice * 110) / 100;
         uint256 minDeviation = (context.priceInfo.twapPrice * 90) / 100;
 
@@ -377,19 +308,25 @@ library FundsLib {
             revert IFiveFiveFiveLauncher.ExcessivePriceDeviation();
         }
 
-        // Update KUB value with new spot price
         context.priceInfo.kubValue = context.priceInfo.spotPrice;
         return false;
     }
 
-    /// @notice Checks if cached price validation has expired
-    /// @dev Pure helper function for validation state
+    /// @notice Determines if a cached price validation has expired
+    /// @dev Uses PRICE_VALIDATION_PERIOD constant to define staleness
+    /// @param validatedAt Timestamp of the last price validation
+    /// @return bool True if the cached validation is stale and needs updating
     function isPriceValidationStale(uint32 validatedAt) internal view returns (bool) {
         return block.timestamp > validatedAt + FiveFiveFiveLauncherTypes.PRICE_VALIDATION_PERIOD;
     }
 
-    /// @notice Performs full TWAP validation and updates cache
-/// @dev Called only when cache is stale or non-existent
+    /// @notice Performs a complete TWAP price validation with oracle
+    /// @dev Called when cache is invalid or non-existent
+    /// @dev Updates the price cache upon successful validation
+    /// @param context The contribution context to update with new validation
+    /// @param pair Address of the PONDER-KUB trading pair
+    /// @param oracle Reference to the price oracle contract
+    /// @param ponder Address of the PONDER token
     function performTwapValidation(
         FiveFiveFiveLauncherTypes.ContributionContext memory context,
         address pair,
@@ -407,7 +344,6 @@ library FundsLib {
             revert IFiveFiveFiveLauncher.InsufficientPriceHistory();
         }
 
-        // Validate spot price against TWAP
         uint256 maxDeviation = (twapPrice * 110) / 100;
         uint256 minDeviation = (twapPrice * 90) / 100;
 
@@ -415,15 +351,23 @@ library FundsLib {
             revert IFiveFiveFiveLauncher.ExcessivePriceDeviation();
         }
 
-        // Update cache
         context.priceInfo.twapPrice = twapPrice;
         context.priceInfo.kubValue = context.priceInfo.spotPrice;
         context.priceInfo.validatedAt = uint32(block.timestamp);
         context.priceInfo.isValidated = true;
     }
 
-    /// @notice Process PONDER contribution with cached validation
-    /// @dev Main entry point for PONDER contributions
+    /// @notice Main entry point for processing PONDER contributions
+    /// @dev Handles price validation, contribution limits, and state updates
+    /// @param launch The launch information storage
+    /// @param launchId Unique identifier of the launch
+    /// @param context The contribution context with amount and price data
+    /// @param contributor Address making the contribution
+    /// @param ponder Reference to the PONDER token contract
+    /// @param factory Reference to the factory contract for pair lookup
+    /// @param router Reference to the router contract for KUB wrapping
+    /// @param oracle Reference to the price oracle contract
+    /// @return bool True if the launch should be finalized after this contribution
     function processPonderContribution(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -434,10 +378,8 @@ library FundsLib {
         IPonderRouter router,
         PonderPriceOracle oracle
     ) internal returns (bool) {
-        // Get PONDER-KUB pair
         address pair = factory.getPair(address(ponder), router.kkub());
 
-        // Validate price using cache when possible
         bool needsTwapValidation = validatePonderPrice(
             context,
             pair,
@@ -445,52 +387,51 @@ library FundsLib {
             address(ponder)
         );
 
-        // Perform full TWAP validation if needed
         if (needsTwapValidation) {
             performTwapValidation(context, pair, oracle, address(ponder));
         }
 
-        // Validate contribution limits
         validateContributionLimits(launch, context);
 
-        // Process contribution
         return processValidatedContribution(launch, launchId, context, contributor, ponder);
     }
 
-    // Helper function to validate contribution limits
+    /// @notice Validates contribution amounts against launch limits
+    /// @dev Checks minimum contribution, maximum PONDER allocation, and total raise limits
+    /// @param launch The launch information storage
+    /// @param context The contribution context containing amount and price data
     function validateContributionLimits(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.ContributionContext memory context
     ) internal view {
-        // Calculate remaining amounts
-        uint256 currentTotal = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
-        uint256 remaining = FiveFiveFiveLauncherTypes.TARGET_RAISE - currentTotal;
-
-        // Calculate total PONDER value after this contribution
         uint256 totalPonderValue = launch.contributions.ponderValueCollected + context.priceInfo.kubValue;
         uint256 maxPonderValue = (FiveFiveFiveLauncherTypes.TARGET_RAISE *
             FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
-        // Skip minimum check if this would complete the PONDER allocation
         if (totalPonderValue != maxPonderValue) {
             if (context.ponderAmount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
                 revert IFiveFiveFiveLauncher.ContributionTooSmall();
         }
 
-        // Check PONDER contribution limit (20%)
         if (totalPonderValue > maxPonderValue) {
             revert IFiveFiveFiveLauncher.ExcessiveContribution();
         }
 
-        // Check total raise limit
         uint256 newTotal = launch.contributions.kubCollected + totalPonderValue;
         if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE) {
             revert IFiveFiveFiveLauncher.ExcessiveContribution();
         }
     }
 
-// Process contribution after validation
+    /// @notice Processes a validated PONDER contribution
+    /// @dev Updates state, handles token transfers, and emits events
+    /// @param launch The launch information storage
+    /// @param launchId Unique identifier of the launch
+    /// @param context The validated contribution context
+    /// @param contributor Address making the contribution
+    /// @param ponder Reference to the PONDER token contract
+    /// @return bool True if the launch should be finalized after this contribution
     function processValidatedContribution(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -498,28 +439,23 @@ library FundsLib {
         address contributor,
         PonderToken ponder
     ) internal returns (bool) {
-        // Calculate tokens to distribute
         context.tokensToDistribute = (context.priceInfo.kubValue *
             uint256(launch.allocation.tokensForContributors)) /
                         FiveFiveFiveLauncherTypes.TARGET_RAISE;
 
-        // Check allowance
         if (ponder.allowance(contributor, address(this)) < context.ponderAmount) {
             revert IFiveFiveFiveLauncher.TokenApprovalRequired();
         }
 
-        // Update state
         launch.contributions.ponderCollected += context.ponderAmount;
         launch.contributions.ponderValueCollected += context.priceInfo.kubValue;
         launch.contributions.tokensDistributed += context.tokensToDistribute;
 
-        // Update contributor info
         FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
         info.ponderContributed = uint128(uint256(info.ponderContributed) + context.ponderAmount);
         info.ponderValue = uint128(uint256(info.ponderValue) + context.priceInfo.kubValue);
         info.tokensReceived = uint128(uint256(info.tokensReceived) + context.tokensToDistribute);
 
-        // Execute transfers
         if (!ponder.transferFrom(contributor, address(this), context.ponderAmount)) {
             revert IFiveFiveFiveLauncher.TokenTransferFailed();
         }
@@ -528,11 +464,9 @@ library FundsLib {
             revert IFiveFiveFiveLauncher.TokenTransferFailed();
         }
 
-        // Emit events
-        emit TokensDistributed(launchId, contributor, context.tokensToDistribute);
-        emit PonderContributed(launchId, contributor, context.ponderAmount, context.priceInfo.kubValue);
+        emit IFiveFiveFiveLauncher.TokensDistributed(launchId, contributor, context.tokensToDistribute);
+        emit IFiveFiveFiveLauncher.PonderContributed(launchId, contributor, context.ponderAmount, context.priceInfo.kubValue);
 
-        // Check if launch should be finalized
         return launch.contributions.kubCollected + launch.contributions.ponderValueCollected ==
             FiveFiveFiveLauncherTypes.TARGET_RAISE;
     }

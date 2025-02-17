@@ -39,32 +39,32 @@ library LaunchTokenTypes {
     //////////////////////////////////////////////////////////////*/
 
     // Permission Errors
-    error Unauthorized();               /// @dev Caller lacks required permission
-    error InvalidCreator();            /// @dev Invalid creator address specified
-    error NotPendingLauncher();        /// @dev Caller not pending launcher
+    error Unauthorized();                 /// @dev Caller lacks required permission
+    error InvalidCreator();               /// @dev Invalid creator address specified
+    error NotPendingLauncher();           /// @dev Caller not pending launcher
 
     // Token State Errors
-    error TransfersDisabled();         /// @dev Token transfers not yet enabled
-    error TradingRestricted();         /// @dev Within trading restriction period
-    error PairAlreadySet();            /// @dev Trading pairs already configured
+    error TransfersDisabled();            /// @dev Token transfers not yet enabled
+    error TradingRestricted();            /// @dev Within trading restriction period
+    error PairAlreadySet();               /// @dev Trading pairs already configured
 
     // Transfer Errors
-    error InsufficientAllowance();     /// @dev Spender allowance too low
-    error MaxTransferExceeded();       /// @dev Transfer exceeds size limit
-    error ContractBuyingRestricted();  /// @dev Contract purchases restricted
+    error InsufficientAllowance();        /// @dev Spender allowance too low
+    error MaxTransferExceeded();          /// @dev Transfer exceeds size limit
+    error ContractBuyingRestricted();     /// @dev Contract purchases restricted
 
     // Vesting Errors
-    error NoTokensAvailable();         /// @dev No tokens available to claim
-    error VestingNotStarted();         /// @dev Vesting period not started
-    error VestingNotInitialized();     /// @dev Vesting not set up
-    error VestingAlreadyInitialized(); /// @dev Vesting already configured
-    error ClaimTooFrequent();         /// @dev Claim within cooldown period
+    error NoTokensAvailable();            /// @dev No tokens available to claim
+    error VestingNotStarted();            /// @dev Vesting period not started
+    error VestingNotInitialized();        /// @dev Vesting not set up
+    error VestingAlreadyInitialized();    /// @dev Vesting already configured
+    error ClaimTooFrequent();             /// @dev Claim within cooldown period
 
     // Balance Errors
-    error InvalidAmount();             /// @dev Invalid transfer amount
-    error ExcessiveAmount();           /// @dev Amount exceeds limits
-    error InsufficientLauncherBalance(); /// @dev Launcher lacks tokens
+    error InvalidAmount();                /// @dev Invalid transfer amount
+    error ExcessiveAmount();              /// @dev Amount exceeds limits
+    error InsufficientLauncherBalance();  /// @dev Launcher lacks tokens
 
     // Parameter Errors
-    error ZeroAddress();               /// @dev Invalid zero address provided
+    error ZeroAddress();                  /// @dev Invalid zero address provided
 }

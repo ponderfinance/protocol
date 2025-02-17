@@ -41,22 +41,19 @@ library PonderRouterSwapLib {
         bool supportingFee,
         IPonderFactory factory
     ) internal {
-        for (uint256 i; i < path.length - 1;) {
+        for (uint256 i; i < path.length - 1; i++) {
             IPonderPair pair = IPonderPair(factory.getPair(path[i], path[i + 1]));
 
-            // Calculate next recipient
-            address recipient;
-            unchecked {
-                recipient = i < path.length - 2 ? factory.getPair(path[i + 1], path[i + 2]) : to;
-                ++i;
-            }
+            address recipient = i < path.length - 2
+                ? factory.getPair(path[i + 1], path[i + 2])
+                : to;
 
             _handleSwap(
                 pair,
                 SwapParams({
-                    input: path[i - 1],
-                    output: path[i],
-                    amountOut: supportingFee ? 0 : amounts[i],
+                    input: path[i],
+                    output: path[i + 1],
+                    amountOut: supportingFee ? 0 : amounts[i + 1],
                     recipient: recipient,
                     supportingFee: supportingFee
                 })

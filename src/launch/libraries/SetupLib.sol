@@ -48,7 +48,6 @@ library SetupLib {
         PonderToken ponder,
         address caller
     ) external returns (address token) {
-        // Create token
         LaunchToken launchToken = new LaunchToken(
             params.name,
             params.symbol,
@@ -59,13 +58,10 @@ library SetupLib {
         );
         token = address(launchToken);
 
-        // Pack base info into minimal storage writes
         _setBaseInfo(launch, token, params, creator);
 
-        // Pack allocation values and set in single write
         _setAllocations(launch, launchToken, creator);
 
-        // Initialize state with packed values
         _initializeState(launch);
 
         return token;
@@ -203,21 +199,17 @@ library SetupLib {
     ) private {
         uint256 totalSupply = LaunchTokenTypes.TOTAL_SUPPLY;
 
-        // Calculate allocations using uint256 for precision, then safely cast to uint128
         uint256 contributorTokens = (totalSupply * FiveFiveFiveLauncherTypes.CONTRIBUTOR_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
         uint256 lpTokens = (totalSupply * FiveFiveFiveLauncherTypes.LP_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
-        // Instead of require() with a string, we use custom errors
         if (contributorTokens > type(uint128).max) revert IFiveFiveFiveLauncher.ContributorTokensOverflow();
         if (lpTokens > type(uint128).max) revert IFiveFiveFiveLauncher.LPTokensOverflow();
 
-        // Set the packed values
         launch.allocation.tokensForContributors = uint128(contributorTokens);
         launch.allocation.tokensForLP = uint128(lpTokens);
 
-        // Calculate creator allocation
         uint256 creatorTokens = (totalSupply * FiveFiveFiveLauncherTypes.CREATOR_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
         launchToken.setupVesting(creator, creatorTokens);
@@ -228,13 +220,11 @@ library SetupLib {
     function _initializeState(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch
     ) private {
-        // Clear contributions in single write with zero values
         launch.contributions.kubCollected = 0;
         launch.contributions.ponderCollected = 0;
         launch.contributions.ponderValueCollected = 0;
         launch.contributions.tokensDistributed = 0;
 
-        // Clear pool addresses in single write
         launch.pools.memeKubPair = address(0);
         launch.pools.memePonderPair = address(0);
     }
