@@ -94,6 +94,19 @@ export const ponderstakingAbi = [
   },
   {
     "type": "function",
+    "name": "accumulatedFeesPerShare",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "allowance",
     "inputs": [
       {
@@ -161,6 +174,19 @@ export const ponderstakingAbi = [
   },
   {
     "type": "function",
+    "name": "claimFees",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "decimals",
     "inputs": [],
     "outputs": [
@@ -208,6 +234,38 @@ export const ponderstakingAbi = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getAccumulatedFeesPerShare",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPendingFees",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -454,6 +512,19 @@ export const ponderstakingAbi = [
   },
   {
     "type": "function",
+    "name": "totalUnclaimedFees",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "transfer",
     "inputs": [
       {
@@ -519,6 +590,25 @@ export const ponderstakingAbi = [
     "stateMutability": "nonpayable"
   },
   {
+    "type": "function",
+    "name": "userFeeDebt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
     "type": "event",
     "name": "Approval",
     "inputs": [
@@ -536,6 +626,44 @@ export const ponderstakingAbi = [
       },
       {
         "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeesClaimed",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeesDistributed",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "accumulatedFeesPerShare",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -699,6 +827,11 @@ export const ponderstakingAbi = [
   },
   {
     "type": "error",
+    "name": "AlreadyInitialized",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ECDSAInvalidSignature",
     "inputs": []
   },
@@ -812,7 +945,42 @@ export const ponderstakingAbi = [
   },
   {
     "type": "error",
+    "name": "ExcessiveFeeAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExcessiveShareRatio",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "FailedInnerCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeeAccountingError",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeeDistributionFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeePrecisionLoss",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeeTransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFeeAmount",
     "inputs": []
   },
   {
@@ -823,6 +991,16 @@ export const ponderstakingAbi = [
   {
     "type": "error",
     "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidShareRatio",
     "inputs": []
   },
   {
@@ -838,6 +1016,11 @@ export const ponderstakingAbi = [
   {
     "type": "error",
     "name": "MinimumSharesRequired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoFeesToClaim",
     "inputs": []
   },
   {
@@ -874,6 +1057,11 @@ export const ponderstakingAbi = [
   {
     "type": "error",
     "name": "TeamStakingLocked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
     "inputs": []
   },
   {

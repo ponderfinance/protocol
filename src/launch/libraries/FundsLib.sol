@@ -98,26 +98,31 @@ library FundsLib {
         uint256 amount,
         address contributor
     ) external returns (bool) {
-        if (amount < FiveFiveFiveLauncherTypes.MIN_KUB_CONTRIBUTION)
-            revert IFiveFiveFiveLauncher.ContributionTooSmall();
+        // Calculate remaining amount needed
+        uint256 currentTotal = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
+        uint256 remaining = FiveFiveFiveLauncherTypes.TARGET_RAISE - currentTotal;
+
+        // Skip minimum check if this would complete the launch
+        if (amount != remaining) {
+            if (amount < FiveFiveFiveLauncherTypes.MIN_KUB_CONTRIBUTION)
+                revert IFiveFiveFiveLauncher.ContributionTooSmall();
+        }
 
         unchecked {
-            // Safe math: contributions are bounded by TARGET_RAISE
-            uint256 newTotal = launch.contributions.kubCollected +
-                                launch.contributions.ponderValueCollected +
-                        amount;
+        // Safe math: contributions are bounded by TARGET_RAISE
+            uint256 newTotal = currentTotal + amount;
             if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE)
                 revert IFiveFiveFiveLauncher.ExcessiveContribution();
 
-            // Calculate tokens using packed uint128 allocation
+        // Calculate tokens using packed uint128 allocation
             uint256 tokensToDistribute = (amount * uint256(launch.allocation.tokensForContributors)) /
                             FiveFiveFiveLauncherTypes.TARGET_RAISE;
 
-            // Update packed contribution values
+        // Update packed contribution values
             launch.contributions.kubCollected += amount;
             launch.contributions.tokensDistributed += tokensToDistribute;
 
-            // Update packed contributor info
+        // Update packed contributor info
             FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
             info.kubContributed = uint128(uint256(info.kubContributed) + amount);
             info.tokensReceived = uint128(uint256(info.tokensReceived) + tokensToDistribute);
@@ -131,72 +136,6 @@ library FundsLib {
 
             return newTotal == FiveFiveFiveLauncherTypes.TARGET_RAISE;
         }
-    }
-
-    /// @notice Processes a PONDER token contribution
-    /// @dev Handles PONDER contributions with KUB value equivalence
-    /// @dev Enforces maximum PONDER contribution percentage
-    /// @dev Updates packed storage values atomically
-    /// @param launch Launch information storage
-    /// @param launchId Unique identifier of the launch
-    /// @param amount Amount of PONDER to contribute, in wei (1e18)
-    /// @param kubValue KUB equivalent value of PONDER contribution
-    /// @param contributor Address making the contribution
-    /// @param ponder PONDER token contract reference
-    /// @return success True if target raise is reached after contribution
-    function processPonderContribution(
-        FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
-        uint256 launchId,
-        uint256 amount,
-        uint256 kubValue,
-        address contributor,
-        PonderToken ponder
-    ) external returns (bool) {
-        if (amount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
-            revert IFiveFiveFiveLauncher.ContributionTooSmall();
-
-            uint256 totalPonderValue = launch.contributions.ponderValueCollected + kubValue;
-            uint256 maxPonderValue = (FiveFiveFiveLauncherTypes.TARGET_RAISE *
-                FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) / FiveFiveFiveLauncherTypes.BASIS_POINTS;
-
-            if (totalPonderValue > maxPonderValue)
-                revert IFiveFiveFiveLauncher.ExcessiveContribution();
-
-            uint256 newTotal = launch.contributions.kubCollected + totalPonderValue;
-            if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE)
-                revert IFiveFiveFiveLauncher.ExcessiveContribution();
-
-            // Calculate tokens using packed allocation
-            uint256 tokensToDistribute = (kubValue * uint256(launch.allocation.tokensForContributors)) /
-                            FiveFiveFiveLauncherTypes.TARGET_RAISE;
-
-            if (ponder.allowance(contributor, address(this)) < amount) {
-                revert IFiveFiveFiveLauncher.TokenApprovalRequired();
-            }
-
-            emit TokensDistributed(launchId, contributor, tokensToDistribute);
-            emit PonderContributed(launchId, contributor, amount, kubValue);
-
-            if (!ponder.transferFrom(contributor, address(this), amount)) {
-                revert IFiveFiveFiveLauncher.TokenTransferFailed();
-            }
-
-            // Update packed storage values
-            launch.contributions.ponderCollected += amount;
-            launch.contributions.ponderValueCollected += kubValue;
-            launch.contributions.tokensDistributed += tokensToDistribute;
-
-            // Update packed contributor info
-            FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
-            info.ponderContributed = uint128(uint256(info.ponderContributed) + amount);
-            info.ponderValue = uint128(uint256(info.ponderValue) + kubValue);
-            info.tokensReceived = uint128(uint256(info.tokensReceived) + tokensToDistribute);
-
-            if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, tokensToDistribute)) {
-                revert IFiveFiveFiveLauncher.TokenTransferFailed();
-            }
-
-            return newTotal == FiveFiveFiveLauncherTypes.TARGET_RAISE;
     }
 
     /// @notice Processes refund for a contributor
@@ -413,7 +352,6 @@ library FundsLib {
     /// @notice Validates or uses cached PONDER price validation
     /// @dev Performs full validation only if cache is stale
     function validatePonderPrice(
-        FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.ContributionContext memory context,
         address pair,
         PonderPriceOracle oracle,
@@ -484,8 +422,8 @@ library FundsLib {
         context.priceInfo.isValidated = true;
     }
 
-/// @notice Process PONDER contribution with cached validation
-/// @dev Main entry point for PONDER contributions
+    /// @notice Process PONDER contribution with cached validation
+    /// @dev Main entry point for PONDER contributions
     function processPonderContribution(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         uint256 launchId,
@@ -501,7 +439,6 @@ library FundsLib {
 
         // Validate price using cache when possible
         bool needsTwapValidation = validatePonderPrice(
-            launch,
             context,
             pair,
             oracle,
@@ -520,17 +457,28 @@ library FundsLib {
         return processValidatedContribution(launch, launchId, context, contributor, ponder);
     }
 
-// Helper function to validate contribution limits
+    // Helper function to validate contribution limits
     function validateContributionLimits(
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
         FiveFiveFiveLauncherTypes.ContributionContext memory context
     ) internal view {
-        // Check PONDER contribution limit (20%)
+        // Calculate remaining amounts
+        uint256 currentTotal = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
+        uint256 remaining = FiveFiveFiveLauncherTypes.TARGET_RAISE - currentTotal;
+
+        // Calculate total PONDER value after this contribution
         uint256 totalPonderValue = launch.contributions.ponderValueCollected + context.priceInfo.kubValue;
         uint256 maxPonderValue = (FiveFiveFiveLauncherTypes.TARGET_RAISE *
             FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
+        // Skip minimum check if this would complete the PONDER allocation
+        if (totalPonderValue != maxPonderValue) {
+            if (context.ponderAmount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
+                revert IFiveFiveFiveLauncher.ContributionTooSmall();
+        }
+
+        // Check PONDER contribution limit (20%)
         if (totalPonderValue > maxPonderValue) {
             revert IFiveFiveFiveLauncher.ExcessiveContribution();
         }

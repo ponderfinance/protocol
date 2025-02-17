@@ -210,12 +210,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /// @notice Converts collected fees from multiple tokens to PONDER
-    /// @dev Returns pre and post conversion balances for verification
-    /// @param uniqueTokens Array of unique token addresses to convert
-    /// @return preBalance PONDER balance before conversions
-    /// @return postBalance PONDER balance after conversions
-
     /// @notice Converts collected fees with extra validation
     /// @param uniqueTokens Array of unique token addresses to convert
     /// @return preBalance PONDER balance before conversions
@@ -251,7 +245,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
 
         postBalance = IERC20(ponder).balanceOf(address(this));
     }
-
 
     /// @notice Processes complete fee distribution cycle for multiple pairs
     /// @param pairs Array of pair addresses to process
@@ -346,7 +339,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         // Make slippage tolerance more strict - 0.5% instead of 1%
         return (amountOut * 995) / 1000;
     }
-
 
     /// @notice Creates token swap path for router
     /// @dev Generates direct path from input token to PONDER
@@ -457,7 +449,6 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
         emit EmergencyTokenRecovered(token, to, amount);
     }
-
 
     /*//////////////////////////////////////////////////////////////
                         OWNERSHIP MANAGEMENT

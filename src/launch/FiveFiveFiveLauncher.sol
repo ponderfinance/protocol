@@ -145,11 +145,7 @@ contract FiveFiveFiveLauncher is
     /// @param launchId ID of the launch to contribute to
     /// @param amount Amount of PONDER tokens to contribute
     /// @dev Requires prior approval of PONDER tokens
-// 4. FiveFiveFiveLauncher.sol modifications
     function contributePONDER(uint256 launchId, uint256 amount) external nonReentrant {
-        if (amount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
-            revert IFiveFiveFiveLauncher.ContributionTooSmall();
-
         FiveFiveFiveLauncherTypes.LaunchInfo storage launch = launches[launchId];
         SetupLib.validateLaunchState(launch);
 

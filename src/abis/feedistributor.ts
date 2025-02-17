@@ -336,12 +336,37 @@ export const feedistributorAbi = [
   },
   {
     "type": "error",
+    "name": "FeeCollectionFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientAccumulation",
     "inputs": []
   },
   {
     "type": "error",
+    "name": "InsufficientLiquidity",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientOutputAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCollectionState",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidFeeState",
     "inputs": []
   },
   {
@@ -361,12 +386,22 @@ export const feedistributorAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidRatio",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidRecipient",
     "inputs": []
   },
   {
     "type": "error",
     "name": "InvalidRecoveryAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidReserveState",
     "inputs": []
   },
   {
@@ -391,12 +426,22 @@ export const feedistributorAbi = [
   },
   {
     "type": "error",
+    "name": "RatioSumIncorrect",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
   {
     "type": "error",
     "name": "SwapFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SyncValidationFailed",
     "inputs": []
   },
   {

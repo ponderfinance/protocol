@@ -818,7 +818,17 @@ export const ponderpairAbi = [
   },
   {
     "type": "error",
+    "name": "ExcessiveAccumulatedFees",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "FailedInnerCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeeStateInvalid",
     "inputs": []
   },
   {
@@ -853,7 +863,22 @@ export const ponderpairAbi = [
   },
   {
     "type": "error",
+    "name": "InsufficientLiquiditySwap",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientOutput",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientOutputAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidRecipient",
     "inputs": []
   },
   {
@@ -868,7 +893,17 @@ export const ponderpairAbi = [
   },
   {
     "type": "error",
+    "name": "InvariantViolation",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "KValueCheckFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Locked",
     "inputs": []
   },
   {
@@ -888,6 +923,11 @@ export const ponderpairAbi = [
   },
   {
     "type": "error",
+    "name": "ReserveValidationFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "SafeERC20FailedOperation",
     "inputs": [
       {
@@ -896,6 +936,16 @@ export const ponderpairAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "SyncValidationFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
   },
   {
     "type": "error",

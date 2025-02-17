@@ -7,7 +7,6 @@ import { PonderToken } from "../../core/token/PonderToken.sol";
 import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
 import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
 import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
-import { PonderPair } from "../../core/pair/PonderPair.sol";
 import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.sol";
 import { IFiveFiveFiveLauncher } from "../IFiveFiveFiveLauncher.sol";
 

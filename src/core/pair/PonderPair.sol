@@ -296,7 +296,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         }
 
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
-        _handleFees(state, amount0Out, amount1Out);
+        _handleFees(state);
 
         _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
 
@@ -440,15 +440,13 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
 
         // External interactions last
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
-        _handleFees(state, amount0Out, amount1Out);
+        _handleFees(state);
     }
 
     /// @notice Handles token fees in swap operations
     /// @dev Updates accumulated fees and validates state
     function _handleFees(
-        PonderPairTypes.SwapState memory state,
-        uint256 amount0Out,
-        uint256 amount1Out
+        PonderPairTypes.SwapState memory state
     ) private {
         if (state.amount0In > 0) {
             uint256 protocolFeeAmount = 0;
@@ -534,46 +532,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
                 }
             }
         }
-    }
-
-    /// @notice Calculates fee amount for token swap
-    /// @dev Internal helper for fee calculation
-    function _calculateFee(
-        uint256 amountIn,
-        bool isPonderPair,
-        address token,
-        address pairToken,
-        uint256 amountOut,
-        uint256 pairAmountOut
-    ) private view returns (uint256) {
-        if (amountIn == 0) return 0;
-
-        uint256 protocolFeeAmount = 0;
-        uint256 creatorFeeAmount = 0;
-
-        try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
-            if (isLaunch && ILaunchToken(token).launcher() == launcher()) {
-                if (isPonderPair) {
-                    protocolFeeAmount = (amountIn * PonderPairTypes.PONDER_PROTOCOL_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                    creatorFeeAmount = (amountIn * PonderPairTypes.PONDER_CREATOR_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                } else {
-                    protocolFeeAmount = (amountIn * PonderPairTypes.KUB_PROTOCOL_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                    creatorFeeAmount = (amountIn * PonderPairTypes.KUB_CREATOR_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                }
-            } else {
-                protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                                PonderPairTypes.FEE_DENOMINATOR;
-            }
-        } catch {
-            protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                            PonderPairTypes.FEE_DENOMINATOR;
-        }
-
-        return protocolFeeAmount + creatorFeeAmount;
     }
 
     /// @notice Validates constant product invariant
@@ -666,8 +624,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
 
         address feeTo = IPonderFactory(_FACTORY).feeTo();
 
-        uint256 balance0 = IERC20(_token0).balanceOf(address(this));
-        uint256 balance1 = IERC20(_token1).balanceOf(address(this));
         (uint112 reserve0Current, uint112 reserve1Current,) = getReserves();
 
         // Handle protocol fees first
