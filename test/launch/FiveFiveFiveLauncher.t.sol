@@ -1289,7 +1289,7 @@ contract FiveFiveFiveLauncherTest is Test {
         ponder.approve(address(launcher), 1000 ether);
 
         // Should revert with StalePrice since no recent price data
-        vm.expectRevert(IFiveFiveFiveLauncher.StalePrice.selector);
+        vm.expectRevert(IPonderPriceOracle.InvalidTimeElapsed.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -1302,7 +1302,7 @@ contract FiveFiveFiveLauncherTest is Test {
         vm.warp(block.timestamp + 2 hours + 1); // Using explicit time since PRICE_STALENESS_THRESHOLD = 2 hours
 
         vm.startPrank(alice);
-        vm.expectRevert(IFiveFiveFiveLauncher.StalePrice.selector);
+        vm.expectRevert(IPonderPriceOracle.InvalidTimeElapsed.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -2341,6 +2341,25 @@ contract FiveFiveFiveLauncherTest is Test {
         // Verify contribution succeeded
         (,uint256 ponderContributed,,) = launcher.getContributorInfo(launchId, alice);
         assertEq(ponderContributed, ponderContribution, "PONDER contribution failed");
+    }
+
+    function testOracleStalePriceRevert() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Initialize oracle history so there is data to work with
+        _initializeOracleHistory();
+
+        // Step 1: Advance time to just below MAX_TIME_ELAPSED so InvalidTimeElapsed() doesn't trigger
+        vm.warp(block.timestamp + 1 hours + 59 minutes);
+
+        // Step 2: Trigger StalePrice() by exceeding oracle's PERIOD
+        uint256 staleTimeThreshold = PonderOracleTypes.PERIOD + 1;
+        vm.warp(block.timestamp + staleTimeThreshold); // Move forward past the oracle's staleness period
+
+        vm.startPrank(alice);
+        vm.expectRevert(IFiveFiveFiveLauncher.StalePrice.selector); // Now correctly expect StalePrice()
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
     }
 
     function testPriceCalculation() public {

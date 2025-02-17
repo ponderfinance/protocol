@@ -3,6 +3,9 @@ pragma solidity 0.8.24;
 
 import { IPonderPair } from "../../core/pair/IPonderPair.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";
+import { IPonderPriceOracle } from "../../core/oracle/IPonderPriceOracle.sol";
+
+
 /*//////////////////////////////////////////////////////////////
                     PONDER ORACLE LIBRARY
 //////////////////////////////////////////////////////////////*/
@@ -29,17 +32,6 @@ library PonderOracleLibrary {
     uint256 private constant MAX_TIME_ELAPSED = 2 hours;
 
 
-    /*//////////////////////////////////////////////////////////////
-                            CUSTOM ERRORS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Zero time elapsed between prices
-    /// @dev Prevents division by zero in TWAP
-    error ElapsedTimeZero();
-
-    /// @notice Time elapsed exceeds safety threshold
-    /// @dev Prevents manipulation via long delays
-    error InvalidTimeElapsed();
 
     /*//////////////////////////////////////////////////////////////
                     PRICE CALCULATIONS
@@ -81,7 +73,7 @@ library PonderOracleLibrary {
 
             // Ensure time elapsed is reasonable
             if (timeElapsed > MAX_TIME_ELAPSED) {
-                revert InvalidTimeElapsed();
+                revert IPonderPriceOracle.InvalidTimeElapsed();
             }
 
             // Calculate cumulative prices if reserves are valid
@@ -108,7 +100,7 @@ library PonderOracleLibrary {
         uint32 timeElapsed,
         uint256 amountIn
     ) internal pure returns (uint256 amountOut) {
-        if (timeElapsed == 0) revert ElapsedTimeZero();
+        if (timeElapsed == 0) revert IPonderPriceOracle.ElapsedTimeZero();
 
         // Calculate price difference
         uint256 priceDiff = priceCumulativeEnd - priceCumulativeStart;

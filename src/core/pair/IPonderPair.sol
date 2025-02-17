@@ -221,4 +221,16 @@ interface IPonderPair is IERC20 {
 
     /// @notice Thrown when address is zero
     error ZeroAddress();
+
+    /// @notice Thrown when reserve state validation fails
+    error ReserveValidationFailed();
+
+    /// @notice Thrown when fee accounting state is invalid
+    error FeeStateInvalid();
+
+    /// @notice Thrown when sync operation fails validation
+    error SyncValidationFailed();
+
+    /// @notice Thrown when accumulated fees exceed reserves
+    error ExcessiveAccumulatedFees();
 }

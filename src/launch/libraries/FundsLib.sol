@@ -8,6 +8,9 @@ import { LaunchToken } from "../LaunchToken.sol";
 import { IFiveFiveFiveLauncher } from "../IFiveFiveFiveLauncher.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
 import { PonderERC20 } from "../../core/token/PonderERC20.sol";
+import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
+import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
+import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
 
 /*//////////////////////////////////////////////////////////////
                         FUNDS LIBRARY
@@ -405,5 +408,184 @@ library FundsLib {
         if (balance > 0) {
             PonderERC20(pair).safeTransfer(recipient, balance);
         }
+    }
+
+    /// @notice Validates or uses cached PONDER price validation
+    /// @dev Performs full validation only if cache is stale
+    function validatePonderPrice(
+        FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
+        FiveFiveFiveLauncherTypes.ContributionContext memory context,
+        address pair,
+        PonderPriceOracle oracle,
+        address ponder
+    ) internal view returns (bool needsTwapValidation) {
+        // Always get current spot price
+        context.priceInfo.spotPrice = oracle.getCurrentPrice(
+            pair,
+            ponder,
+            context.ponderAmount
+        );
+
+        // If no previous validation or validation is stale, need full TWAP check
+        if (!context.priceInfo.isValidated || isPriceValidationStale(context.priceInfo.validatedAt)) {
+            return true;
+        }
+
+        // Use cached TWAP for validation
+        uint256 maxDeviation = (context.priceInfo.twapPrice * 110) / 100;
+        uint256 minDeviation = (context.priceInfo.twapPrice * 90) / 100;
+
+        if (context.priceInfo.spotPrice > maxDeviation || context.priceInfo.spotPrice < minDeviation) {
+            revert IFiveFiveFiveLauncher.ExcessivePriceDeviation();
+        }
+
+        // Update KUB value with new spot price
+        context.priceInfo.kubValue = context.priceInfo.spotPrice;
+        return false;
+    }
+
+    /// @notice Checks if cached price validation has expired
+    /// @dev Pure helper function for validation state
+    function isPriceValidationStale(uint32 validatedAt) internal view returns (bool) {
+        return block.timestamp > validatedAt + FiveFiveFiveLauncherTypes.PRICE_VALIDATION_PERIOD;
+    }
+
+    /// @notice Performs full TWAP validation and updates cache
+/// @dev Called only when cache is stale or non-existent
+    function performTwapValidation(
+        FiveFiveFiveLauncherTypes.ContributionContext memory context,
+        address pair,
+        PonderPriceOracle oracle,
+        address ponder
+    ) internal view {
+        uint256 twapPrice = oracle.consult(
+            pair,
+            ponder,
+            context.ponderAmount,
+            1 hours
+        );
+
+        if (twapPrice == 0) {
+            revert IFiveFiveFiveLauncher.InsufficientPriceHistory();
+        }
+
+        // Validate spot price against TWAP
+        uint256 maxDeviation = (twapPrice * 110) / 100;
+        uint256 minDeviation = (twapPrice * 90) / 100;
+
+        if (context.priceInfo.spotPrice > maxDeviation || context.priceInfo.spotPrice < minDeviation) {
+            revert IFiveFiveFiveLauncher.ExcessivePriceDeviation();
+        }
+
+        // Update cache
+        context.priceInfo.twapPrice = twapPrice;
+        context.priceInfo.kubValue = context.priceInfo.spotPrice;
+        context.priceInfo.validatedAt = uint32(block.timestamp);
+        context.priceInfo.isValidated = true;
+    }
+
+/// @notice Process PONDER contribution with cached validation
+/// @dev Main entry point for PONDER contributions
+    function processPonderContribution(
+        FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
+        uint256 launchId,
+        FiveFiveFiveLauncherTypes.ContributionContext memory context,
+        address contributor,
+        PonderToken ponder,
+        IPonderFactory factory,
+        IPonderRouter router,
+        PonderPriceOracle oracle
+    ) internal returns (bool) {
+        // Get PONDER-KUB pair
+        address pair = factory.getPair(address(ponder), router.kkub());
+
+        // Validate price using cache when possible
+        bool needsTwapValidation = validatePonderPrice(
+            launch,
+            context,
+            pair,
+            oracle,
+            address(ponder)
+        );
+
+        // Perform full TWAP validation if needed
+        if (needsTwapValidation) {
+            performTwapValidation(context, pair, oracle, address(ponder));
+        }
+
+        // Validate contribution limits
+        validateContributionLimits(launch, context);
+
+        // Process contribution
+        return processValidatedContribution(launch, launchId, context, contributor, ponder);
+    }
+
+// Helper function to validate contribution limits
+    function validateContributionLimits(
+        FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
+        FiveFiveFiveLauncherTypes.ContributionContext memory context
+    ) internal view {
+        // Check PONDER contribution limit (20%)
+        uint256 totalPonderValue = launch.contributions.ponderValueCollected + context.priceInfo.kubValue;
+        uint256 maxPonderValue = (FiveFiveFiveLauncherTypes.TARGET_RAISE *
+            FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) /
+                        FiveFiveFiveLauncherTypes.BASIS_POINTS;
+
+        if (totalPonderValue > maxPonderValue) {
+            revert IFiveFiveFiveLauncher.ExcessiveContribution();
+        }
+
+        // Check total raise limit
+        uint256 newTotal = launch.contributions.kubCollected + totalPonderValue;
+        if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE) {
+            revert IFiveFiveFiveLauncher.ExcessiveContribution();
+        }
+    }
+
+// Process contribution after validation
+    function processValidatedContribution(
+        FiveFiveFiveLauncherTypes.LaunchInfo storage launch,
+        uint256 launchId,
+        FiveFiveFiveLauncherTypes.ContributionContext memory context,
+        address contributor,
+        PonderToken ponder
+    ) internal returns (bool) {
+        // Calculate tokens to distribute
+        context.tokensToDistribute = (context.priceInfo.kubValue *
+            uint256(launch.allocation.tokensForContributors)) /
+                        FiveFiveFiveLauncherTypes.TARGET_RAISE;
+
+        // Check allowance
+        if (ponder.allowance(contributor, address(this)) < context.ponderAmount) {
+            revert IFiveFiveFiveLauncher.TokenApprovalRequired();
+        }
+
+        // Update state
+        launch.contributions.ponderCollected += context.ponderAmount;
+        launch.contributions.ponderValueCollected += context.priceInfo.kubValue;
+        launch.contributions.tokensDistributed += context.tokensToDistribute;
+
+        // Update contributor info
+        FiveFiveFiveLauncherTypes.ContributorInfo storage info = launch.contributors[contributor];
+        info.ponderContributed = uint128(uint256(info.ponderContributed) + context.ponderAmount);
+        info.ponderValue = uint128(uint256(info.ponderValue) + context.priceInfo.kubValue);
+        info.tokensReceived = uint128(uint256(info.tokensReceived) + context.tokensToDistribute);
+
+        // Execute transfers
+        if (!ponder.transferFrom(contributor, address(this), context.ponderAmount)) {
+            revert IFiveFiveFiveLauncher.TokenTransferFailed();
+        }
+
+        if (!LaunchToken(launch.base.tokenAddress).transfer(contributor, context.tokensToDistribute)) {
+            revert IFiveFiveFiveLauncher.TokenTransferFailed();
+        }
+
+        // Emit events
+        emit TokensDistributed(launchId, contributor, context.tokensToDistribute);
+        emit PonderContributed(launchId, contributor, context.ponderAmount, context.priceInfo.kubValue);
+
+        // Check if launch should be finalized
+        return launch.contributions.kubCollected + launch.contributions.ponderValueCollected ==
+            FiveFiveFiveLauncherTypes.TARGET_RAISE;
     }
 }

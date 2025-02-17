@@ -104,6 +104,14 @@ library FiveFiveFiveLauncherTypes {
     /// @dev 2000 = 20% in basis points
     uint16 public constant PONDER_TO_BURN = 2000;
 
+    /*//////////////////////////////////////////////////////////////
+                PRICE VALIDATION CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice How long a price validation remains valid
+    /// @dev After this period, TWAP must be rechecked
+    uint256 public constant PRICE_VALIDATION_PERIOD = 30 minutes;
+
 
     /*//////////////////////////////////////////////////////////////
                             DATA STRUCTURES
@@ -198,5 +206,27 @@ library FiveFiveFiveLauncherTypes {
         TokenAllocation allocation;         // Token allocations
         PoolInfo pools;                    // Pool addresses
         mapping(address => ContributorInfo) contributors;  // Per-contributor data
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    CONTRIBUTION TYPES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Cached price validation information
+    /// @dev Reduces oracle calls by storing TWAP validation
+    struct PonderPriceInfo {
+        uint256 spotPrice;          // Current spot price
+        uint256 twapPrice;          // Cached TWAP price from oracle
+        uint256 kubValue;           // KUB equivalent value
+        uint32 validatedAt;         // Timestamp of last full validation
+        bool isValidated;           // Whether price is validated
+    }
+
+    /// @notice Context for contribution processing
+    /// @dev Groups all data needed for contribution handling
+    struct ContributionContext {
+        uint256 ponderAmount;        // Amount of PONDER to contribute
+        uint256 tokensToDistribute;  // Amount of launch tokens to give
+        PonderPriceInfo priceInfo;   // Cached price validation data
     }
 }

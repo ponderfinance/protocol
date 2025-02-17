@@ -653,10 +653,14 @@ contract FeeDistributorTest is Test {
 
         uint256 preStakingBalance = ponder.balanceOf(address(staking));
 
+        // Add this to clear any pending state
+        vm.warp(block.timestamp + DISTRIBUTION_COOLDOWN);
+        pair.sync();  // Ensure pair state is clean
+
+        // Now try distribution
         distributor.distributePairFees(pairs);
 
         uint256 postStakingBalance = ponder.balanceOf(address(staking));
-
         assertTrue(postStakingBalance > preStakingBalance, "Staking balance should increase");
     }
 
@@ -735,40 +739,34 @@ contract FeeDistributorTest is Test {
         address[] memory pairs = new address[](1);
         pairs[0] = address(pair);
 
+        // Create extreme imbalance
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
-
-        // Create extreme price impact - trying to create >100x imbalance
-        uint256 extremeAmount = uint256(reserve0) * 150; // 150x the current reserve
+        uint256 extremeAmount = uint256(reserve0) * 200;  // 200x reserves
         testToken.mint(address(this), extremeAmount);
         testToken.approve(address(router), extremeAmount);
 
-        // Do multiple trades to create extreme imbalance
-        address[] memory path = new address[](2);
-        path[0] = address(testToken);
-        path[1] = address(ponder);
+        // Log initial state
+        console.log("Initial reserves:", reserve0, reserve1);
 
-        // First big trade
+        // Do massive swap to create imbalance
+        address[] memory path = _getPath(address(testToken), address(ponder));
         router.swapExactTokensForTokens(
-            extremeAmount / 2,
+            extremeAmount,
             0,
             path,
             address(this),
             block.timestamp
         );
 
-        // Second big trade to really push the ratio
-        router.swapExactTokensForTokens(
-            extremeAmount / 2,
-            0,
-            path,
-            address(this),
-            block.timestamp
-        );
-
+        // Force sync and wait
         pair.sync();
-        vm.warp(block.timestamp + 1 hours);
+        vm.warp(block.timestamp + DISTRIBUTION_COOLDOWN);
 
-        // Now should fail due to extreme reserve ratio
+        // Get post-swap reserves
+        (uint112 newReserve0, uint112 newReserve1,) = pair.getReserves();
+        console.log("Post-swap reserves:", newReserve0, newReserve1);
+
+        // Should now fail due to reserve ratio exceeding threshold
         vm.expectRevert(abi.encodeWithSignature("SwapFailed()"));
         distributor.distributePairFees(pairs);
     }
@@ -1247,5 +1245,96 @@ contract FeeDistributorTest is Test {
         }
     }
 
+    function test_SwapsAfterFeeDistribution() public {
+        _generateTradingFees();
+
+        // Setup for fee distribution
+        address[] memory pairs = new address[](1);
+        pairs[0] = address(pair);
+
+        // Record initial states
+        (uint112 initialReserve0, uint112 initialReserve1,) = pair.getReserves();
+        uint256 initialStakingBalance = ponder.balanceOf(address(staking));
+
+        // Distribute fees
+        vm.warp(block.timestamp + DISTRIBUTION_COOLDOWN);
+        distributor.distributePairFees(pairs);
+
+        // Verify distribution
+        uint256 postStakingBalance = ponder.balanceOf(address(staking));
+        assertGt(postStakingBalance, initialStakingBalance, "Fee distribution failed");
+
+        // Test different swap sizes
+        _testSwapAfterFees(1e18, initialReserve0, initialReserve1);    // Small swap
+        _testSwapAfterFees(10e18, initialReserve0, initialReserve1);   // Medium swap
+        _testSwapAfterFees(100e18, initialReserve0, initialReserve1);  // Large swap
+
+        // Verify system stability with another distribution
+        vm.warp(block.timestamp + DISTRIBUTION_COOLDOWN);
+        distributor.distributePairFees(pairs);
+    }
+
+    function _testSwapAfterFees(
+        uint256 swapAmount,
+        uint112 initialReserve0,
+        uint112 initialReserve1
+    ) internal {
+        // Setup
+        testToken.mint(address(this), swapAmount);
+        testToken.approve(address(router), swapAmount);
+
+        // Get pre-swap state
+        (uint112 preSwapReserve0, uint112 preSwapReserve1,) = pair.getReserves();
+
+        // Calculate expected output
+        address[] memory path = new address[](2);
+        path[0] = address(testToken);
+        path[1] = address(ponder);
+
+        uint256[] memory expectedAmounts = router.getAmountsOut(swapAmount, path);
+        uint256 expectedOut = expectedAmounts[1];
+        uint256 minOut = (expectedOut * 995) / 1000; // 0.5% slippage
+
+        // Execute swap
+        uint256[] memory amounts = router.swapExactTokensForTokens(
+            swapAmount,
+            minOut,
+            path,
+            address(this),
+            block.timestamp
+        );
+
+        // Get post-swap state
+        (uint112 postSwapReserve0, uint112 postSwapReserve1,) = pair.getReserves();
+
+        // Verify swap success
+        assertTrue(amounts[1] >= minOut, "Swap output below minimum");
+        assertTrue(amounts[1] <= expectedOut, "Swap output above expected");
+
+        // Verify reserve health
+        assertTrue(postSwapReserve0 > 0 && postSwapReserve1 > 0, "Zero reserves after swap");
+
+        // Verify k value
+        uint256 kBefore = uint256(preSwapReserve0) * uint256(preSwapReserve1);
+        uint256 kAfter = uint256(postSwapReserve0) * uint256(postSwapReserve1);
+        assertGe(kAfter, kBefore, "K value decreased");
+
+        // Verify reasonable reserve changes
+        _validateReserveChanges(postSwapReserve0, postSwapReserve1, initialReserve0, initialReserve1);
+    }
+
+    function _validateReserveChanges(
+        uint112 currentReserve0,
+        uint112 currentReserve1,
+        uint112 initialReserve0,
+        uint112 initialReserve1
+    ) internal pure {
+        uint256 reserve0Ratio = (uint256(currentReserve0) * 100) / uint256(initialReserve0);
+        uint256 reserve1Ratio = (uint256(currentReserve1) * 100) / uint256(initialReserve1);
+
+        // Allow for up to 20% deviation
+        assertTrue(reserve0Ratio >= 80 && reserve0Ratio <= 120, "Reserve0 deviated too much");
+        assertTrue(reserve1Ratio >= 80 && reserve1Ratio <= 120, "Reserve1 deviated too much");
+    }
 }
 

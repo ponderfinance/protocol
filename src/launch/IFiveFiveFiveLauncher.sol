@@ -243,6 +243,7 @@ interface IFiveFiveFiveLauncher {
     error TokenNameExists();            /// @dev Name already used
     error TokenSymbolExists();          /// @dev Symbol already used
     error InsufficientLPTokens();       /// @dev Not enough LP tokens
+    error PairNotFound();               /// @dev LP Pair does not exist
 
     // Token Operation Errors
     error TokenApprovalRequired();      /// @dev Missing token approval

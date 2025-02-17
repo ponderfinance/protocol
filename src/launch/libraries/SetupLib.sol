@@ -131,52 +131,19 @@ library SetupLib {
     /// @dev Checks for price staleness and manipulation
     ///      Compares spot price against TWAP to detect manipulation
     ///      Enforces maximum price deviation thresholds
-    /// @param ponderKubPair Address of PONDER-KUB pair
+    /// @param pair Address of PONDER-KUB pair
     /// @param priceOracle Oracle contract for price checks
     /// @param ponder Address of PONDER token
     /// @param amount Amount of PONDER to price
     /// @return spotPrice Current spot price of PONDER in KUB
     function validatePonderPrice(
-        address ponderKubPair,
+        address pair,
         PonderPriceOracle priceOracle,
         address ponder,
         uint256 amount
-    ) external view returns (uint256 spotPrice) {
-        // Only need lastUpdateTime from getReserves for staleness check
-        (, , uint32 lastUpdateTime) = PonderPair(ponderKubPair).getReserves();
-
-        if (block.timestamp - lastUpdateTime > FiveFiveFiveLauncherTypes.PRICE_STALENESS_THRESHOLD) {
-            revert IFiveFiveFiveLauncher.StalePrice();
-        }
-
-        // Get spot price
-        spotPrice = priceOracle.getCurrentPrice(
-            ponderKubPair,
-            ponder,
-            amount
-        );
-
-        // Get TWAP for manipulation check
-        uint256 twapPrice = priceOracle.consult(
-            ponderKubPair,
-            ponder,
-            amount,
-            1 hours
-        );
-
-        if (twapPrice == 0) {
-            revert IFiveFiveFiveLauncher.InsufficientPriceHistory();
-        }
-
-        // Verify price is within acceptable bounds
-        uint256 maxDeviation = (twapPrice * 110) / 100;
-        uint256 minDeviation = (twapPrice * 90) / 100;
-
-        if (spotPrice > maxDeviation || spotPrice < minDeviation) {
-            revert IFiveFiveFiveLauncher.ExcessivePriceDeviation();
-        }
-
-        return spotPrice;
+    ) internal view returns (uint256) {
+        if (pair == address(0)) revert IFiveFiveFiveLauncher.PairNotFound();
+        return priceOracle.getCurrentPrice(pair, ponder, amount);
     }
 
     /// @notice Validates the current state of a launch

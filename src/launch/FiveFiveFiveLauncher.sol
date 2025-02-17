@@ -145,16 +145,37 @@ contract FiveFiveFiveLauncher is
     /// @param launchId ID of the launch to contribute to
     /// @param amount Amount of PONDER tokens to contribute
     /// @dev Requires prior approval of PONDER tokens
-    function contributePONDER(uint256 launchId, uint256 amount) external {
-        FiveFiveFiveLauncherTypes.LaunchInfo storage launch = launches[launchId];
+// 4. FiveFiveFiveLauncher.sol modifications
+    function contributePONDER(uint256 launchId, uint256 amount) external nonReentrant {
+        if (amount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
+            revert IFiveFiveFiveLauncher.ContributionTooSmall();
 
+        FiveFiveFiveLauncherTypes.LaunchInfo storage launch = launches[launchId];
+        SetupLib.validateLaunchState(launch);
+
+        // Initialize contribution context
+        FiveFiveFiveLauncherTypes.ContributionContext memory context = FiveFiveFiveLauncherTypes.ContributionContext({
+            ponderAmount: amount,
+            tokensToDistribute: 0,
+            priceInfo: FiveFiveFiveLauncherTypes.PonderPriceInfo({
+            spotPrice: 0,
+            twapPrice: 0,
+            kubValue: 0,
+            validatedAt: 0,
+            isValidated: false
+        })
+        });
+
+        // Process contribution with caching logic
         bool shouldFinalize = FundsLib.processPonderContribution(
             launch,
             launchId,
-            amount,
-            _getPonderValue(amount),
+            context,
             msg.sender,
-            PONDER
+            PONDER,
+            FACTORY,
+            ROUTER,
+            PRICE_ORACLE
         );
 
         if (shouldFinalize) {

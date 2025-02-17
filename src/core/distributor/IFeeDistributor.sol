@@ -156,4 +156,27 @@ interface IFeeDistributor {
     /// @notice Error thrown when amount exceeds uint96
     /// @dev Prevents overflow in certain operations
     error AmountTooLarge();
+
+    /// @notice Error thrown when pair reserves are in invalid state
+    /// @dev Prevents operations when reserves don't match balances
+    error InvalidReserveState();
+
+    /// @notice Error thrown when fee collection fails
+    /// @dev Indicates atomic fee collection operation failed
+    error FeeCollectionFailed();
+
+    /// @notice Error thrown when sync validation fails
+    /// @dev Prevents operations with invalid reserve states
+    error SyncValidationFailed();
+
+    /// @notice Error thrown when fee state is invalid
+    /// @dev Indicates inconsistency in fee accounting
+    error InvalidFeeState();
+
+    /// @notice Error thrown when collection state is invalid
+    /// @dev Prevents fee collection with invalid state
+    error InvalidCollectionState();
+
+    /// @dev Not enough liquidity
+    error InsufficientLiquidity();
 }

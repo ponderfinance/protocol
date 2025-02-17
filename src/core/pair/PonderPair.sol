@@ -443,35 +443,137 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         _handleFees(state, amount0Out, amount1Out);
     }
 
-    /// @notice Fee handling for swap operations
-    /// @dev Processes multiple fee types per swap
+    /// @notice Handles token fees in swap operations
+    /// @dev Updates accumulated fees and validates state
     function _handleFees(
         PonderPairTypes.SwapState memory state,
         uint256 amount0Out,
         uint256 amount1Out
     ) private {
         if (state.amount0In > 0) {
-            _handleTokenFees(
-                _token0,
-                state.amount0In,
-                state.isPonderPair,
-                _token0,
-                _token1,
-                amount0Out,
-                amount1Out
-            );
+            uint256 protocolFeeAmount = 0;
+            uint256 creatorFeeAmount = 0;
+
+            // Calculate fees first
+            try ILaunchToken(_token0).isLaunchToken() returns (bool isLaunch) {
+                if (isLaunch && ILaunchToken(_token0).launcher() == launcher()) {
+                    if (state.isPonderPair) {
+                        protocolFeeAmount = (state.amount0In * PonderPairTypes.PONDER_PROTOCOL_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                        creatorFeeAmount = (state.amount0In * PonderPairTypes.PONDER_CREATOR_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                    } else {
+                        protocolFeeAmount = (state.amount0In * PonderPairTypes.KUB_PROTOCOL_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                        creatorFeeAmount = (state.amount0In * PonderPairTypes.KUB_CREATOR_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                    }
+                } else {
+                    protocolFeeAmount = (state.amount0In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                }
+            } catch {
+                protocolFeeAmount = (state.amount0In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                                PonderPairTypes.FEE_DENOMINATOR;
+            }
+
+            // Update accumulated fees
+            _accumulatedFee0 += protocolFeeAmount;
+
+            // Handle creator fee transfer immediately
+            if (creatorFeeAmount > 0) {
+                try ILaunchToken(_token0).creator() returns (address creator) {
+                    if (creator != address(0)) {
+                        _safeTransfer(_token0, creator, creatorFeeAmount);
+                    }
+                } catch {
+                    // If creator call fails, add to protocol fee
+                    _accumulatedFee0 += creatorFeeAmount;
+                }
+            }
         }
+
         if (state.amount1In > 0) {
-            _handleTokenFees(
-                _token1,
-                state.amount1In,
-                state.isPonderPair,
-                _token0,
-                _token1,
-                amount0Out,
-                amount1Out
-            );
+            uint256 protocolFeeAmount = 0;
+            uint256 creatorFeeAmount = 0;
+
+            try ILaunchToken(_token1).isLaunchToken() returns (bool isLaunch) {
+                if (isLaunch && ILaunchToken(_token1).launcher() == launcher()) {
+                    if (state.isPonderPair) {
+                        protocolFeeAmount = (state.amount1In * PonderPairTypes.PONDER_PROTOCOL_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                        creatorFeeAmount = (state.amount1In * PonderPairTypes.PONDER_CREATOR_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                    } else {
+                        protocolFeeAmount = (state.amount1In * PonderPairTypes.KUB_PROTOCOL_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                        creatorFeeAmount = (state.amount1In * PonderPairTypes.KUB_CREATOR_FEE) /
+                                        PonderPairTypes.FEE_DENOMINATOR;
+                    }
+                } else {
+                    protocolFeeAmount = (state.amount1In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                }
+            } catch {
+                protocolFeeAmount = (state.amount1In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                                PonderPairTypes.FEE_DENOMINATOR;
+            }
+
+            // Update accumulated fees
+            _accumulatedFee1 += protocolFeeAmount;
+
+            // Handle creator fee transfer immediately
+            if (creatorFeeAmount > 0) {
+                try ILaunchToken(_token1).creator() returns (address creator) {
+                    if (creator != address(0)) {
+                        _safeTransfer(_token1, creator, creatorFeeAmount);
+                    }
+                } catch {
+                    // If creator call fails, add to protocol fee
+                    _accumulatedFee1 += creatorFeeAmount;
+                }
+            }
         }
+    }
+
+    /// @notice Calculates fee amount for token swap
+    /// @dev Internal helper for fee calculation
+    function _calculateFee(
+        uint256 amountIn,
+        bool isPonderPair,
+        address token,
+        address pairToken,
+        uint256 amountOut,
+        uint256 pairAmountOut
+    ) private view returns (uint256) {
+        if (amountIn == 0) return 0;
+
+        uint256 protocolFeeAmount = 0;
+        uint256 creatorFeeAmount = 0;
+
+        try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
+            if (isLaunch && ILaunchToken(token).launcher() == launcher()) {
+                if (isPonderPair) {
+                    protocolFeeAmount = (amountIn * PonderPairTypes.PONDER_PROTOCOL_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                    creatorFeeAmount = (amountIn * PonderPairTypes.PONDER_CREATOR_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                } else {
+                    protocolFeeAmount = (amountIn * PonderPairTypes.KUB_PROTOCOL_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                    creatorFeeAmount = (amountIn * PonderPairTypes.KUB_CREATOR_FEE) /
+                                    PonderPairTypes.FEE_DENOMINATOR;
+                }
+            } else {
+                protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                                PonderPairTypes.FEE_DENOMINATOR;
+            }
+        } catch {
+            protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
+                            PonderPairTypes.FEE_DENOMINATOR;
+        }
+
+        return protocolFeeAmount + creatorFeeAmount;
     }
 
     /// @notice Validates constant product invariant
@@ -495,9 +597,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint112 _reserve1Old
     ) private {
         if (balance0 > type(uint112).max || balance1 > type(uint112).max) {
-            revert IPonderPair.Overflow();
+            revert Overflow();
         }
-
 
         // The block.timestamp is used here for calculating elapsed
         // time and is wrapped to a 32-bit integer to handle overflow.
@@ -514,9 +615,11 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             _price0CumulativeLast += uint256(UQ112x112.encode(_reserve1Old).uqdiv(_reserve0Old)) * timeElapsed;
             _price1CumulativeLast += uint256(UQ112x112.encode(_reserve0Old).uqdiv(_reserve1Old)) * timeElapsed;
         }
+
         _reserve0 = uint112(balance0);
         _reserve1 = uint112(balance1);
         _blockTimestampLast = blockTimestamp;
+
         emit Sync(_reserve0, _reserve1);
     }
 
@@ -526,15 +629,24 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         address feeTo = IPonderFactory(_FACTORY).feeTo();
         feeOn = feeTo != address(0);
         uint256 _kLastOld = _kLast;
+
         if (feeOn) {
             if (_kLastOld != 0) {
                 uint256 rootK = Math.sqrt(uint256(reserve0_) * uint256(reserve1_));
                 uint256 rootKLast = Math.sqrt(_kLastOld);
+
                 if (rootK > rootKLast) {
                     uint256 numerator = totalSupply() * (rootK - rootKLast);
                     uint256 denominator = rootK * 5 + rootKLast;
                     uint256 liquidity = numerator / denominator;
-                    if (liquidity > 0) _mint(feeTo, liquidity);
+
+                    if (liquidity > 0) {
+                        // Validate mint won't exceed total supply limits
+                        if (totalSupply() + liquidity > type(uint256).max) {
+                            revert Overflow();
+                        }
+                        _mint(feeTo, liquidity);
+                    }
                 }
             }
         } else if (_kLastOld != 0) {
@@ -550,40 +662,70 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /// @dev Handles excess tokens and fee collection
     /// @param to Recipient of excess tokens
     function skim(address to) external override nonReentrant {
+        if (to == address(0)) revert InvalidRecipient();
+
         address feeTo = IPonderFactory(_FACTORY).feeTo();
 
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));
+        (uint112 reserve0Current, uint112 reserve1Current,) = getReserves();
 
-        uint256 excess0 = balance0 > _reserve0 + _accumulatedFee0 ?
-            balance0 - _reserve0 - _accumulatedFee0 : 0;
-        uint256 excess1 = balance1 > _reserve1 + _accumulatedFee1 ?
-            balance1 - _reserve1 - _accumulatedFee1 : 0;
-
-        if (excess0 > 0) _safeTransfer(_token0, to, excess0);
-        if (excess1 > 0) _safeTransfer(_token1, to, excess1);
+        // Handle protocol fees first
+        uint256 fee0 = _accumulatedFee0;
+        uint256 fee1 = _accumulatedFee1;
 
         if (feeTo != address(0)) {
-            if (_accumulatedFee0 > 0) {
-                _safeTransfer(_token0, feeTo, _accumulatedFee0);
+            if (fee0 > 0) {
+                _safeTransfer(_token0, feeTo, fee0);
                 _accumulatedFee0 = 0;
             }
-            if (_accumulatedFee1 > 0) {
-                _safeTransfer(_token1, feeTo, _accumulatedFee1);
+            if (fee1 > 0) {
+                _safeTransfer(_token1, feeTo, fee1);
                 _accumulatedFee1 = 0;
             }
         }
+
+        // Calculate excess after fees
+        uint256 balance0After = IERC20(_token0).balanceOf(address(this));
+        uint256 balance1After = IERC20(_token1).balanceOf(address(this));
+
+        uint256 excess0 = balance0After > reserve0Current ? balance0After - reserve0Current : 0;
+        uint256 excess1 = balance1After > reserve1Current ? balance1After - reserve1Current : 0;
+
+        if (excess0 > 0) {
+            _safeTransfer(_token0, to, excess0);
+        }
+        if (excess1 > 0) {
+            _safeTransfer(_token1, to, excess1);
+        }
+
+        _update(
+            IERC20(_token0).balanceOf(address(this)),
+            IERC20(_token1).balanceOf(address(this)),
+            reserve0Current,
+            reserve1Current
+        );
     }
 
 
     /// @notice Forces reserves to match balances
     /// @dev Updates reserves without moving tokens
     function sync() external override nonReentrant {
-        _update(
-            IERC20(_token0).balanceOf(address(this)),
-            IERC20(_token1).balanceOf(address(this)),
-            _reserve0,
-            _reserve1
-        );
+        // Get current state
+        uint256 balance0 = IERC20(_token0).balanceOf(address(this));
+        uint256 balance1 = IERC20(_token1).balanceOf(address(this));
+        (uint112 reserve0Current, uint112 reserve1Current,) = getReserves();
+
+        // Validate balances cover fees but don't enforce strict reserve comparison
+        if (balance0 < _accumulatedFee0 || balance1 < _accumulatedFee1) {
+            revert FeeStateInvalid();
+        }
+
+        // Don't allow zero balances
+        if (balance0 == 0 || balance1 == 0) {
+            revert InsufficientLiquidity();
+        }
+
+        _update(balance0, balance1, reserve0Current, reserve1Current);
     }
 }

@@ -139,4 +139,12 @@ interface IPonderPriceOracle {
 
     /// @notice Zero address provided
     error ZeroAddress();
+    
+    /// @notice Zero time elapsed between prices
+    /// @dev Prevents division by zero in TWAP
+    error ElapsedTimeZero();
+
+    /// @notice Time elapsed exceeds safety threshold
+    /// @dev Prevents manipulation via long delays
+    error InvalidTimeElapsed();
 }

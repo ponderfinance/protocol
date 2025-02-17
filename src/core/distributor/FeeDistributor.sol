@@ -58,8 +58,8 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
 
     /// @notice Collects fees from a specific trading pair
     /// @param pair Address of the trading pair to collect fees from
-    function collectFeesFromPair(address pair) public nonReentrant {
-        if (pair == address(0)) revert IFeeDistributor.InvalidPairAddress();
+    function _collectFeesFromPair(address pair) internal {
+        if (pair == address(0)) revert InvalidPairAddress();
 
         IPonderPair pairContract = IPonderPair(pair);
         address token0 = pairContract.token0();
@@ -68,7 +68,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
         uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
 
+        // Sync first to ensure reserves are up to date
         pairContract.sync();
+
+        // Then skim fees
         pairContract.skim(address(this));
 
         uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
@@ -83,6 +86,12 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (collected1 > 0) {
             emit FeesCollected(token1, collected1);
         }
+    }
+
+    /// @notice External wrapper for collecting fees from a single pair
+    /// @param pair Address of the trading pair to collect fees from
+    function collectFeesFromPair(address pair) external nonReentrant {
+        _collectFeesFromPair(pair);
     }
 
     /// @notice Converts collected token fees into PONDER tokens
@@ -206,52 +215,96 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @param uniqueTokens Array of unique token addresses to convert
     /// @return preBalance PONDER balance before conversions
     /// @return postBalance PONDER balance after conversions
+
+    /// @notice Converts collected fees with extra validation
+    /// @param uniqueTokens Array of unique token addresses to convert
+    /// @return preBalance PONDER balance before conversions
+    /// @return postBalance PONDER balance after conversions
     function convertCollectedFees(address[] memory uniqueTokens)
-        internal
-        returns
-    (uint256 preBalance, uint256 postBalance) {
+    internal
+    returns (uint256 preBalance, uint256 postBalance)
+    {
         preBalance = IERC20(ponder).balanceOf(address(this));
 
         for (uint256 i = 0; i < uniqueTokens.length; i++) {
             address token = uniqueTokens[i];
-            uint256 tokenBalance = IERC20(token).balanceOf(address(this));
+            if (token == ponder) continue;
 
+            uint256 tokenBalance = IERC20(token).balanceOf(address(this));
             if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
-                uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
-                _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
+                // Get pre-conversion pair state
+                address pair = factory.getPair(token, ponder);
+                if (pair != address(0)) {
+                    (uint112 reserveBefore,,) = IPonderPair(pair).getReserves();
+
+                    uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
+                    _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
+
+                    // Validate post-conversion state
+                    (uint112 reserveAfter,,) = IPonderPair(pair).getReserves();
+                    if (reserveAfter < reserveBefore) {
+                        revert InvalidReserveState();
+                    }
+                }
             }
         }
 
         postBalance = IERC20(ponder).balanceOf(address(this));
     }
 
+
     /// @notice Processes complete fee distribution cycle for multiple pairs
-    /// @dev Coordinates validation, collection, conversion, and distribution
     /// @param pairs Array of pair addresses to process
     function distributePairFees(address[] calldata pairs) external nonReentrant {
-        // Step 1: Validate pairs
+        // CHECKS
         validatePairs(pairs);
 
-        // Step 2: Mark pairs for processing
+        // EFFECTS
         markPairsForProcessing(pairs);
 
-        // Step 3: Collect fees
-        collectFeesFromPairs(pairs);
+        // INTERACTIONS - Fee Collection
+        for (uint256 i = 0; i < pairs.length; i++) {
+            address currentPair = pairs[i];
+            bool processingState = processedPairs[currentPair];
 
-        // Step 4: Get unique tokens and convert fees
-        address[] memory uniqueTokens = _getUniqueTokens(pairs);
-        (uint256 preBalance, uint256 postBalance) = convertCollectedFees(uniqueTokens);
+            // Collect fees
+            _collectFeesFromPair(currentPair);
 
-        // Step 5: Verify and distribute
-        if (postBalance - preBalance < FeeDistributorTypes.MINIMUM_AMOUNT) {
-            revert IFeeDistributor.InsufficientAccumulation();
+            // Clean up state
+            if (processingState) {
+                processedPairs[currentPair] = false;
+            }
         }
 
-        if (IERC20(ponder).balanceOf(address(this)) >= FeeDistributorTypes.MINIMUM_AMOUNT) {
+        // Convert fees if we have any
+        address[] memory uniqueTokens = _getUniqueTokens(pairs);
+        bool anyFeesConverted;
+        uint256 preConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
+
+        // Try to convert each non-PONDER token
+        for (uint256 i = 0; i < uniqueTokens.length; i++) {
+            address token = uniqueTokens[i];
+            if (token != ponder) {
+                uint256 tokenBalance = IERC20(token).balanceOf(address(this));
+                if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
+                    uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
+                    _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
+                    anyFeesConverted = true;
+                }
+            }
+        }
+
+        // Check if we should distribute
+        uint256 postConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
+
+        // We distribute if either:
+        // 1. We successfully converted fees to PONDER
+        // 2. We collected PONDER fees directly
+        if (postConversionPonderBalance >= FeeDistributorTypes.MINIMUM_AMOUNT &&
+            (anyFeesConverted || postConversionPonderBalance > preConversionPonderBalance)) {
             _distribute();
         }
     }
-
 
     /*//////////////////////////////////////////////////////////////
                         CALCULATION HELPERS
@@ -321,18 +374,16 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 minOutAmount
     ) internal {
         if (token == ponder) return;
-
-        if (amountIn > type(uint96).max) revert IFeeDistributor.AmountTooLarge();
+        if (amountIn > type(uint96).max) revert AmountTooLarge();
 
         // Approve router if needed
         uint256 currentAllowance = IERC20(token).allowance(address(this), address(router));
         if (currentAllowance < amountIn) {
             if (!IERC20(token).approve(address(router), type(uint256).max)) {
-                revert IFeeDistributor.ApprovalFailed();
+                revert ApprovalFailed();
             }
         }
 
-        // Setup path for swap
         address[] memory path = new address[](2);
         path[0] = token;
         path[1] = ponder;
@@ -346,7 +397,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         ) returns (uint256[] memory amounts) {
             emit FeesConverted(token, amountIn, amounts[1]);
         } catch {
-            revert IFeeDistributor.SwapFailed();
+            revert SwapFailed();
         }
     }
 
