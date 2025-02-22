@@ -150,15 +150,15 @@ contract FiveFiveFiveLauncher is
         SetupLib.validateLaunchState(launch);
 
         FiveFiveFiveLauncherTypes.ContributionContext memory context = FiveFiveFiveLauncherTypes.ContributionContext({
-            ponderAmount: amount,
-            tokensToDistribute: 0,
-            priceInfo: FiveFiveFiveLauncherTypes.PonderPriceInfo({
-            spotPrice: 0,
-            twapPrice: 0,
-            kubValue: 0,
-            validatedAt: 0,
-            isValidated: false
-        })
+                ponderAmount: amount,
+                tokensToDistribute: 0,
+                priceInfo: FiveFiveFiveLauncherTypes.PonderPriceInfo({
+                spotPrice: 0,
+                twapPrice: 0,
+                kubValue: 0,
+                validatedAt: 0,
+                isValidated: false
+            })
         });
 
         bool shouldFinalize = FundsLib.processPonderContribution(

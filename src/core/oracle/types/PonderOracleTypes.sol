@@ -30,6 +30,36 @@ library PonderOracleTypes {
         uint224 price1Cumulative;
     }
 
+
+    /// @notice Data structure for Time Weighted Average Price calculations
+    /// @dev Packed structure used in interpolation calculations
+    struct TWAPData {
+        /// @notice First observation timestamp
+        /// @dev Timestamp of the earlier price point
+        uint32 firstObs;
+
+        /// @notice Second observation timestamp
+        /// @dev Timestamp of the later price point
+        uint32 secondObs;
+
+        /// @notice First token0 cumulative price
+        /// @dev Earlier cumulative price for token0
+        uint224 firstPrice0;
+
+        /// @notice Second token0 cumulative price
+        /// @dev Later cumulative price for token0
+        uint224 secondPrice0;
+
+        /// @notice First token1 cumulative price
+        /// @dev Earlier cumulative price for token1
+        uint224 firstPrice1;
+
+        /// @notice Second token1 cumulative price
+        /// @dev Later cumulative price for token1
+        uint224 secondPrice1;
+    }
+
+
     /*//////////////////////////////////////////////////////////////
                             CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -40,7 +70,7 @@ library PonderOracleTypes {
 
     /// @notice Update frequency limit
     /// @dev Minimum delay between price updates
-    uint256 public constant MIN_UPDATE_DELAY = 5 minutes;
+    uint256 public constant MIN_UPDATE_DELAY = 2 minutes;
 
     /// @notice Observation buffer size
     /// @dev Stores 24 observations (2 hours at 5-min updates)

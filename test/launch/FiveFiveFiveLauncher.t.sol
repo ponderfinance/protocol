@@ -2343,21 +2343,22 @@ contract FiveFiveFiveLauncherTest is Test {
         assertEq(ponderContributed, ponderContribution, "PONDER contribution failed");
     }
 
-    function testOracleStalePriceRevert() public {
+    function testPriceValidationFailure() public {
         uint256 launchId = _createTestLaunch();
 
-        // Initialize oracle history so there is data to work with
-        _initializeOracleHistory();
+        // Initialize oracle history
+        for (uint i = 0; i < 3; i++) {
+            vm.warp(block.timestamp + 3 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
 
-        // Step 1: Advance time to just below MAX_TIME_ELAPSED so InvalidTimeElapsed() doesn't trigger
-        vm.warp(block.timestamp + 1 hours + 59 minutes);
-
-        // Step 2: Trigger StalePrice() by exceeding oracle's PERIOD
-        uint256 staleTimeThreshold = PonderOracleTypes.PERIOD + 1;
-        vm.warp(block.timestamp + staleTimeThreshold); // Move forward past the oracle's staleness period
+        // Get last update time and advance significantly
+        uint256 lastUpdateTime = oracle.lastUpdateTime(ponderWethPair);
+        vm.warp(lastUpdateTime + 24 hours);
 
         vm.startPrank(alice);
-        vm.expectRevert(IFiveFiveFiveLauncher.StalePrice.selector); // Now correctly expect StalePrice()
+        vm.expectRevert(IPonderPriceOracle.InvalidTimeElapsed.selector);
         launcher.contributePONDER(launchId, 1000 ether);
         vm.stopPrank();
     }
@@ -2526,6 +2527,101 @@ contract FiveFiveFiveLauncherTest is Test {
         assertEq(ponderCollected, completionAmount, "PONDER collected should match contribution");
         assertEq(ponderValueCollected, 0.2 ether, "PONDER value should match remaining amount");
     }
+
+    function testPriceInterpolation() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Initialize oracle history first with proper time gaps
+        for (uint i = 0; i < 12; i++) {  // Build up sufficient history
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        // Record current update time and allow for TWAP period
+        uint256 lastUpdate = oracle.lastUpdateTime(ponderWethPair);
+        vm.warp(lastUpdate + 1 hours);  // Move forward enough for TWAP
+
+        // Test contribution at interpolated time
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 1000 ether);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
+    function testPriceInterpolationEdgeCases() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Build up proper oracle history
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        uint256 lastUpdate = oracle.lastUpdateTime(ponderWethPair);
+
+        // Test cases at different points after sufficient history
+
+        // Test 1: Shortly after last update
+        vm.warp(lastUpdate + 30 minutes);
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 1000 ether);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+
+        // Test 2: Mid-way between updates
+        vm.warp(lastUpdate + 45 minutes);
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 1000 ether);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+    }
+
+    function testPriceInterpolationWithPriceMovement() public {
+        uint256 launchId = _createTestLaunch();
+
+        // Build up proper oracle history
+        for (uint i = 0; i < 12; i++) {
+            vm.warp(block.timestamp + 6 minutes);
+            PonderPair(ponderWethPair).sync();
+            oracle.update(ponderWethPair);
+        }
+
+        uint256 lastUpdate = oracle.lastUpdateTime(ponderWethPair);
+
+        // Create price movement
+        deal(address(ponder), address(this), 10000 ether);
+        vm.deal(address(this), 1000 ether);
+        ponder.approve(address(router), 10000 ether);
+
+        router.addLiquidityETH{value: 1000 ether}(
+            address(ponder),
+            10000 ether,
+            0,
+            0,
+            address(this),
+            block.timestamp + 1
+        );
+
+        // Allow enough time for TWAP after price movement
+        vm.warp(lastUpdate + 1 hours);
+        PonderPair(ponderWethPair).sync();
+        oracle.update(ponderWethPair);
+
+        // Wait enough time for valid contribution
+        vm.warp(block.timestamp + 30 minutes);
+
+        vm.startPrank(alice);
+        ponder.approve(address(launcher), 1000 ether);
+        launcher.contributePONDER(launchId, 1000 ether);
+        vm.stopPrank();
+
+        // Verify contribution was successful
+        (,uint256 ponderContributed,,) = launcher.getContributorInfo(launchId, alice);
+        assertEq(ponderContributed, 1000 ether, "Contribution failed with price movement");
+    }
+
 
     receive() external payable {}
 }

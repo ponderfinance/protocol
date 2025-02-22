@@ -143,11 +143,9 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         // Check observation array is initialized
         if (_observations[pair].length == 0) revert IPonderPriceOracle.InsufficientData();
 
-        // Check oracle has recent data
-        // - TWAP mechanism inherently resistant to short-term manipulation
-        // - Price staleness check is much longer than possible timestamp manipulation
-        // slither-disable-next-line block-timestamp
-        if (block.timestamp > _lastUpdateTime[pair] + PonderOracleTypes.PERIOD) {
+        // Ensure oracle has **recent** data
+        uint256 lastUpdate = _lastUpdateTime[pair];
+        if (block.timestamp > lastUpdate + PonderOracleTypes.PERIOD) {
             revert IPonderPriceOracle.StalePrice();
         }
 
@@ -159,10 +157,12 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         (uint256 oldPrice0Cumulative, uint256 oldPrice1Cumulative, uint256 oldTimestamp) =
                         _getHistoricalPrices(pair, blockTimestamp - period);
 
-        // Verify have enough elapsed time for accurate TWAP
+        // Calculate time elapsed
         uint32 timeElapsed = blockTimestamp - uint32(oldTimestamp);
-        if (timeElapsed < PonderOracleTypes.MIN_UPDATE_DELAY || timeElapsed > period) {
-            revert IPonderPriceOracle.InsufficientData();
+
+        // Ensure enough time has passed for accurate TWAP
+        if (timeElapsed < PonderOracleTypes.MIN_UPDATE_DELAY) {
+            revert IPonderPriceOracle.InvalidTimeElapsed();
         }
 
         IPonderPair pairContract = IPonderPair(pair);
@@ -185,6 +185,8 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
 
         revert IPonderPriceOracle.InvalidToken();
     }
+
+
 
     /// @notice Get current spot price
     /// @dev Uses current reserves without TWAP
@@ -229,6 +231,7 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         return quote;
     }
 
+
     /*//////////////////////////////////////////////////////////////
                        INTERNAL HELPERS
    //////////////////////////////////////////////////////////////*/
@@ -240,31 +243,62 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
     /// @return price0Cumulative Historical price0 accumulator
     /// @return price1Cumulative Historical price1 accumulator
     /// @return timestamp Actual observation timestamp
-    function _getHistoricalPrices(
-        address pair,
-        uint256 targetTimestamp
-    ) internal view returns (uint256, uint256, uint256) {
+    function _getHistoricalPrices(address pair, uint256 targetTimestamp)
+    internal view returns (uint256 price0Cumulative, uint256 price1Cumulative, uint256 timestamp)
+    {
         PonderOracleTypes.Observation[] storage history = _observations[pair];
         uint256 currentIdx = _currentIndex[pair];
+
+        uint256 beforeIdx;
+        uint256 afterIdx;
+        bool foundBefore;
+        bool foundAfter;
 
         for (uint16 i = 0; i < PonderOracleTypes.OBSERVATION_CARDINALITY; i++) {
             uint256 index = (currentIdx + PonderOracleTypes.OBSERVATION_CARDINALITY - i) %
                             PonderOracleTypes.OBSERVATION_CARDINALITY;
-            if (history[index].timestamp <= targetTimestamp) {
-                return (
-                    history[index].price0Cumulative,
-                    history[index].price1Cumulative,
-                    history[index].timestamp
-                );
+            uint32 obsTimestamp = history[index].timestamp;
+
+            if (obsTimestamp <= targetTimestamp && !foundBefore) {
+                beforeIdx = index;
+                foundBefore = true;
             }
+            if (obsTimestamp > targetTimestamp && !foundAfter) {
+                afterIdx = index;
+                foundAfter = true;
+            }
+            if (foundBefore && foundAfter) break;
         }
 
-        // If no observation found, return oldest
-        uint256 oldestIndex = (currentIdx + 1) % PonderOracleTypes.OBSERVATION_CARDINALITY;
+        if (!foundBefore) {
+            return (
+                history[afterIdx].price0Cumulative,
+                history[afterIdx].price1Cumulative,
+                history[afterIdx].timestamp
+            );
+        }
+        if (!foundAfter) {
+            return (
+                history[beforeIdx].price0Cumulative,
+                history[beforeIdx].price1Cumulative,
+                history[beforeIdx].timestamp
+            );
+        }
+
+        PonderOracleTypes.TWAPData memory data;
+        data.firstObs = history[beforeIdx].timestamp;
+        data.secondObs = history[afterIdx].timestamp;
+        data.firstPrice0 = history[beforeIdx].price0Cumulative;
+        data.secondPrice0 = history[afterIdx].price0Cumulative;
+        data.firstPrice1 = history[beforeIdx].price1Cumulative;
+        data.secondPrice1 = history[afterIdx].price1Cumulative;
+
+        uint256 weight = ((targetTimestamp - data.firstObs) * 1e18) / (data.secondObs - data.firstObs);
+
         return (
-            history[oldestIndex].price0Cumulative,
-            history[oldestIndex].price1Cumulative,
-            history[oldestIndex].timestamp
+            data.firstPrice0 + ((data.secondPrice0 - data.firstPrice0) * weight) / 1e18,
+            data.firstPrice1 + ((data.secondPrice1 - data.firstPrice1) * weight) / 1e18,
+            targetTimestamp
         );
     }
 

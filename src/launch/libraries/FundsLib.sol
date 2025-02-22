@@ -388,10 +388,18 @@ library FundsLib {
         );
 
         if (needsTwapValidation) {
+            uint256 lastUpdate = oracle.lastUpdateTime(pair);
+
+            // Only update if enough time has passed
+            if (block.timestamp >= lastUpdate + 120) {
+                oracle.update(pair);
+            }
+
             performTwapValidation(context, pair, oracle, address(ponder));
         }
 
-        validateContributionLimits(launch, context);
+
+    validateContributionLimits(launch, context);
 
         return processValidatedContribution(launch, launchId, context, contributor, ponder);
     }
@@ -409,15 +417,22 @@ library FundsLib {
             FiveFiveFiveLauncherTypes.MAX_PONDER_PERCENT) /
                         FiveFiveFiveLauncherTypes.BASIS_POINTS;
 
-        if (totalPonderValue != maxPonderValue) {
+        // Calculate remaining to hit total target raise
+        uint256 currentTotal = launch.contributions.kubCollected + launch.contributions.ponderValueCollected;
+        uint256 remaining = FiveFiveFiveLauncherTypes.TARGET_RAISE - currentTotal;
+
+        // Only enforce minimum if not completing the raise
+        if (context.priceInfo.kubValue != remaining) {
             if (context.ponderAmount < FiveFiveFiveLauncherTypes.MIN_PONDER_CONTRIBUTION)
                 revert IFiveFiveFiveLauncher.ContributionTooSmall();
         }
 
+        // Check max PONDER allocation
         if (totalPonderValue > maxPonderValue) {
             revert IFiveFiveFiveLauncher.ExcessiveContribution();
         }
 
+        // Check total raise limit
         uint256 newTotal = launch.contributions.kubCollected + totalPonderValue;
         if (newTotal > FiveFiveFiveLauncherTypes.TARGET_RAISE) {
             revert IFiveFiveFiveLauncher.ExcessiveContribution();
@@ -464,8 +479,17 @@ library FundsLib {
             revert IFiveFiveFiveLauncher.TokenTransferFailed();
         }
 
-        emit IFiveFiveFiveLauncher.TokensDistributed(launchId, contributor, context.tokensToDistribute);
-        emit IFiveFiveFiveLauncher.PonderContributed(launchId, contributor, context.ponderAmount, context.priceInfo.kubValue);
+        emit IFiveFiveFiveLauncher.TokensDistributed(
+            launchId,
+            contributor,
+            context.tokensToDistribute
+        );
+
+        emit IFiveFiveFiveLauncher.PonderContributed(
+            launchId, contributor,
+            context.ponderAmount,
+            context.priceInfo.kubValue
+        );
 
         return launch.contributions.kubCollected + launch.contributions.ponderValueCollected ==
             FiveFiveFiveLauncherTypes.TARGET_RAISE;

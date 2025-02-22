@@ -203,16 +203,22 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     function collectFeesFromPairs(address[] calldata pairs) internal {
         for (uint256 i = 0; i < pairs.length; i++) {
             address currentPair = pairs[i];
-
             processedPairs[currentPair] = false;
 
             // INTERACTIONS - Make external call after state updates
-            try this.collectFeesFromPair(currentPair) {
-                // No need to update state here as we've already set it to false
-            } catch {
-                // No additional state update needed since we've already set to false
-                continue;
-            }
+            // If collection fails for a pair, continue to next one
+            if (!_tryCollectFees(currentPair)) continue;
+        }
+    }
+
+    /// @dev Attempts to collect fees from a single pair, returns success status
+    /// @param pair Address of the pair to collect from
+    /// @return success True if collection succeeded, false otherwise
+    function _tryCollectFees(address pair) private returns (bool) {
+        try this.collectFeesFromPair(pair) {
+            return true;
+        } catch {
+            return false;
         }
     }
 
