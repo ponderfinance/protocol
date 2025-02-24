@@ -50,7 +50,7 @@ library PonderStakingTypes {
     /// @notice Precision multiplier for fee calculations
     /// @dev Used to handle division with precision
     /// @dev Value is 1e12 to allow for very small fee amounts
-    uint256 public constant FEE_PRECISION = 1e12;
+    uint256 public constant FEE_PRECISION = 1e18;
 
     /// @notice Minimum claimable fee amount
     /// @dev Prevents dust fee claims

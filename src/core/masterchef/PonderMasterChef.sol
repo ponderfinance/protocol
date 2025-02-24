@@ -694,7 +694,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to remove boost from
     /// @param _amount Amount of PONDER to unstake
     function boostUnstake(uint256 _pid, uint256 _amount) external nonReentrant {
-        // CHECKS
         if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         if (_amount == 0) revert IPonderMasterChef.ZeroAmount();
 
@@ -703,40 +702,27 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         if (user.ponderStaked < _amount) revert IPonderMasterChef.InsufficientAmount();
 
-        // Calculate pending rewards before any state changes
         _updatePool(_pid);
         uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
 
-        // Record initial PONDER balance for validation
-        uint256 initialBalance = PONDER.balanceOf(address(this));
-
-        // EFFECTS - Update state variables
         user.ponderStaked -= _amount;
-
-        // Update weighted shares
         _updateUserWeightedShares(_pid, msg.sender);
-
-        // Update reward debt
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
+        emit BoostUnstake(msg.sender, _pid, _amount);
 
-        // INTERACTIONS - Handle token transfers after all state updates
-        // First handle pending rewards if any
-        if (pending > 0) {
-            _safePonderTransfer(msg.sender, pending);
-        }
-
-        // Then handle the unstaked PONDER tokens
+        uint256 balanceBeforeUnstake = PONDER.balanceOf(address(this));
         if (!PONDER.transfer(msg.sender, _amount)) {
             revert IPonderMasterChef.TransferFailed();
         }
 
-        // Validate final balance
-        uint256 finalBalance = PONDER.balanceOf(address(this));
-        if (initialBalance - finalBalance != _amount) {
+        uint256 balanceAfterUnstake = PONDER.balanceOf(address(this));
+        if (balanceBeforeUnstake - balanceAfterUnstake != _amount) {
             revert IPonderMasterChef.InvalidAmount();
         }
 
-        emit BoostUnstake(msg.sender, _pid, _amount);
+        if (pending > 0) {
+            _safePonderTransfer(msg.sender, pending);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////

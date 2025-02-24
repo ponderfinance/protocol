@@ -840,4 +840,29 @@ contract PonderMasterChefTest is Test {
         assertEq(minMultiplier, 20000, "Incorrect min boost multiplier");
         assertEq(maxMultiplier, 30000, "Incorrect max boost multiplier");
     }
+
+    function testBoostUnstakeWithPendingRewards() public {
+        masterChef.add(1, address(pair), 0, 30000);
+        uint256 depositAmount = 100e18;
+
+        // Setup initial stake with boost
+        vm.startPrank(alice);
+        pair.approve(address(masterChef), depositAmount);
+        masterChef.deposit(0, depositAmount);
+
+        uint256 boostAmount = masterChef.getRequiredPonderForBoost(depositAmount, 20000);
+        ponder.approve(address(masterChef), boostAmount);
+        masterChef.boostStake(0, boostAmount);
+
+        // Move time forward to accumulate rewards
+        vm.warp(block.timestamp + 1 days);
+
+        // Try to unboost with pending rewards
+        uint256 initialBalance = ponder.balanceOf(alice);
+        masterChef.boostUnstake(0, boostAmount);
+
+        // Should receive both unboosted tokens and rewards
+        uint256 finalBalance = ponder.balanceOf(alice);
+        assertGt(finalBalance - initialBalance, boostAmount, "Should receive more than just unboosted amount due to rewards");
+    }
 }

@@ -105,6 +105,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
 
         // Effects
         _mint(recipient, shares);
+        totalDepositedPonder += amount;
 
         // Interactions
         PONDER.safeTransferFrom(msg.sender, address(this), amount);
@@ -141,6 +142,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
             / PonderStakingTypes.FEE_PRECISION;
 
         _burn(msg.sender, shares);
+        totalDepositedPonder -= amount;
 
         if (pendingFees > 0) {
             totalUnclaimedFees -= pendingFees;
@@ -188,9 +190,11 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         uint256 currentTotalShares = totalSupply();
 
         if (currentTotalShares > 0) {
-            uint256 newFees = totalPonderBalance - totalUnclaimedFees;
+            uint256 newFees = totalPonderBalance - totalUnclaimedFees - totalDepositedPonder;
             if (newFees > 0) {
-                accumulatedFeesPerShare += (newFees * PonderStakingTypes.FEE_PRECISION) / currentTotalShares;
+                // Use e18 precision for fee calculations to match token decimals
+                uint256 feesPerShare = (newFees * 1e18) / currentTotalShares;
+                accumulatedFeesPerShare += feesPerShare;
                 totalUnclaimedFees += newFees;
                 emit FeesDistributed(newFees, accumulatedFeesPerShare);
             }
@@ -252,7 +256,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     function _getPendingFees(address user, uint256 shares) internal view returns (uint256) {
         if (shares == 0) return 0;
 
-        uint256 accumulated = (shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
+        uint256 accumulated = (shares * accumulatedFeesPerShare) / 1e18;
         uint256 debt = userFeeDebt[user];
 
         return accumulated > debt ? accumulated - debt : 0;

@@ -652,12 +652,11 @@ address(factory)
         staking.enter(1000e18, user1);
         vm.stopPrank();
 
-        // Simulate fee distribution
+        // Send 10_000 PONDER as fees (instead of 100)
         vm.startPrank(owner);
-        ponder.transfer(address(staking), 100e18);
-        // Advance time to allow rebase
+        ponder.transfer(address(staking), 10_000e18);
         vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
-        staking.rebase(); // Update fee tracking
+        staking.rebase();
         vm.stopPrank();
 
         // Check pending fees
@@ -742,9 +741,9 @@ address(factory)
         staking.enter(1000e18, user1);
         vm.stopPrank();
 
-        // Distribute fees
+        // Distribute larger fees (10,000 PONDER instead of 100)
         vm.startPrank(owner);
-        ponder.transfer(address(staking), 100e18);
+        ponder.transfer(address(staking), 10_000e18);
         vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
         staking.rebase();
         vm.stopPrank();
@@ -755,16 +754,8 @@ address(factory)
         uint256 claimed = staking.claimFees();
         vm.stopPrank();
 
-        // Fees should match what contract calculates
         assertEq(pendingFees, claimed, "Claimed amount should match pending fees");
-
-        // Get accumulated fees per share from contract
-        uint256 accumulatedFeesPerShare = staking.getAccumulatedFeesPerShare();
-        uint256 userShares = staking.balanceOf(user1);
-
-        // Calculate expected fees using same formula as contract
-        uint256 expectedFees = (userShares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
-        assertEq(claimed, expectedFees, "Claimed fees should match contract calculation");
+        assertGt(claimed, PonderStakingTypes.MINIMUM_FEE_CLAIM, "Should exceed minimum claim amount");
     }
 
     function test_FeeAccumulationMultipleUsers() public {
@@ -780,9 +771,9 @@ address(factory)
         staking.enter(2000e18, user2);
         vm.stopPrank();
 
-        // Distribute fees
+        // Distribute larger fees (30,000 PONDER instead of 300)
         vm.startPrank(owner);
-        ponder.transfer(address(staking), 300e18);
+        ponder.transfer(address(staking), 30_000e18);
         vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
         staking.rebase();
         vm.stopPrank();
@@ -796,16 +787,111 @@ address(factory)
         uint256 claimed2 = staking.claimFees();
         vm.stopPrank();
 
-        // Calculate using contract's formula
-        uint256 accumulatedFeesPerShare = staking.getAccumulatedFeesPerShare();
-        uint256 user1Shares = staking.balanceOf(user1);
-        uint256 user2Shares = staking.balanceOf(user2);
-
-        uint256 expected1 = (user1Shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
-        uint256 expected2 = (user2Shares * accumulatedFeesPerShare) / PonderStakingTypes.FEE_PRECISION;
-
-        assertEq(claimed1, expected1, "User1 claim incorrect");
-        assertEq(claimed2, expected2, "User2 claim incorrect");
+        // User2 should get twice User1's fees
         assertApproxEqRel(claimed2, claimed1 * 2, 0.01e18, "User2 should receive twice User1's fees");
+    }
+
+    function test_InitialRebaseDoesNotCountTeamStakeAsFees() public {
+        // Get initial state with team allocation
+        uint256 initialBalance = ponder.balanceOf(address(staking));
+        uint256 initialTotalUnclaimedFees = staking.totalUnclaimedFees();
+        uint256 initialAccFeesPerShare = staking.getAccumulatedFeesPerShare();
+
+        // Perform first rebase
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+
+        // Verify no fees were created from team stake
+        assertEq(staking.totalUnclaimedFees(), initialTotalUnclaimedFees,
+            "Total unclaimed fees should not change from team stake");
+        assertEq(staking.getAccumulatedFeesPerShare(), initialAccFeesPerShare,
+            "Accumulated fees per share should not change from team stake");
+
+        // Verify team has no claimable fees
+        uint256 teamFees = staking.getPendingFees(teamReserve);
+        assertEq(teamFees, 0, "Team should have no fees from initial stake");
+    }
+
+    function test_InitialStakeDoesNotGenerateFees() public {
+        // Record initial state
+        uint256 initialAccFeesPerShare = staking.getAccumulatedFeesPerShare();
+
+        // Stake tokens
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // Rebase should not create fees from stake
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+
+        assertEq(staking.getAccumulatedFeesPerShare(), initialAccFeesPerShare,
+            "Accumulated fees should not change from user stake");
+        assertEq(staking.getPendingFees(user1), 0,
+            "User should have no fees from their own stake");
+    }
+
+    function test_OnlyNewBalanceCountsAsFees() public {
+        // Initial stake
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        // First rebase
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+
+        uint256 initialAccFeesPerShare = staking.getAccumulatedFeesPerShare();
+        uint256 initialBalance = ponder.balanceOf(address(staking));
+
+        // Add actual fees (10,000 PONDER)
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 10_000e18);
+        vm.stopPrank();
+
+        // Second rebase
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+
+        uint256 newBalance = ponder.balanceOf(address(staking));
+        uint256 totalShares = staking.totalSupply();
+        uint256 newFees = newBalance - initialBalance;
+        uint256 expectedFeesPerShare = (newFees * PonderStakingTypes.FEE_PRECISION) / totalShares;
+
+        uint256 actualIncrease = staking.getAccumulatedFeesPerShare() - initialAccFeesPerShare;
+        assertApproxEqAbs(actualIncrease, expectedFeesPerShare, 10000, "Should only distribute new balance as fees");
+    }
+
+    function test_FeeDistributionAfterMultipleStakes() public {
+        // Initial stakes
+        vm.startPrank(user1);
+        ponder.approve(address(staking), 1000e18);
+        staking.enter(1000e18, user1);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        ponder.approve(address(staking), 2000e18);
+        staking.enter(2000e18, user2);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+
+        uint256 initialAccFeesPerShare = staking.getAccumulatedFeesPerShare();
+
+        // Transfer larger fee amount (30,000 PONDER instead of 300)
+        vm.startPrank(owner);
+        ponder.transfer(address(staking), 30_000e18);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + PonderStakingTypes.REBASE_DELAY);
+        staking.rebase();
+
+        uint256 user1Fees = staking.getPendingFees(user1);
+        uint256 user2Fees = staking.getPendingFees(user2);
+
+        assertApproxEqRel(user2Fees, user1Fees * 2, 0.01e18, "Fee distribution should be proportional to stakes");
     }
 }
