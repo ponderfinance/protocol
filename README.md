@@ -27,9 +27,23 @@ Ponder is a decentralized exchange protocol built specifically for Bitkub Chain,
 
 ### 2. xKOI Staking
 - Stake KOI to receive xKOI
-- Earn 80% of all protocol fees
+- 100% of protocol fees distributed via FeeDistributor contract
 - Daily automatic rebasing mechanism
 - Real yield from protocol revenue
+- Minimum first stake requirement: 1000 KOI
+- Minimum withdrawal: 0.01 KOI
+- 24-hour cooldown between reward distributions
+
+### 3. Fee Distribution System
+- Dedicated FeeDistributor contract that collects, converts, and distributes fees
+- All protocol fees (0.05% of trades) are:
+  - Collected and aggregated by FeeDistributor
+  - Converted to KOI tokens for stakers
+  - Distributed to xKOI staking contract
+- Holders of xKOI automatically receive their share of fees through rebasing
+- Fee distribution occurs at least once per day
+- Optimized batch operations for gas efficiency
+- Emergency recovery functions for contract safety
 
 ## Launch Platform
 
@@ -67,10 +81,10 @@ The 555 Launch platform introduces a novel token launch mechanism designed to cr
 - KUB contributions (example: 5,000 KUB):
   - 60% (3,000 KUB) to launch token/KUB LP
   - 20% (1,000 KUB) to KOI/KUB LP
-  - 20% (1,000 KUB) to launch token/KOI LP
+  - 20% (1,000 KUB) allocated according to the KUB_TO_MEME_PONDER_LP constant
 
 - KOI contributions (example: 555 KUB worth):
-  - 80% to launch token/KOI LP
+  - 80% to launch token/KOI LP (this is the primary source of KOI for the launch token/KOI pool)
   - 20% burned permanently
 
 4. LP Token Distribution:
@@ -122,50 +136,46 @@ The 555 Launch platform introduces a novel token launch mechanism designed to cr
 - Pool-specific multipliers up to 3x
 
 3. Protocol Fees:
-- 0.05% of all trades distributed to xKOI (80%) and team (20%)
+- 0.05% of all trades distributed to xKOI holders
 - LP rewards via 0.25% direct fee
 - Launch creator incentives through fees
 
 ### Token Distribution
 **Total Supply: 1,000,000,000 KOI**
 
-Initial Distribution (60%):
-- 25% (250M) - Team/Reserve (Vested)
-  - 180-day linear vesting
-  - Strategic partnerships
-  - Long-term development
-
-- 20% (200M) - Initial Liquidity
+- 40% (400M) - Initial Liquidity
   - KUB/KOI trading pair
   - Market depth and stability
 
-- 15% (150M) - Marketing/Growth
-  - Community growth
-  - User acquisition
-  - Brand development
+- 40% (400M) - Community Rewards
+  - Farming incentives
+  - Distributed through MasterChef
+  - 3.168 KOI per second emission over 4 years
 
-Farming Distribution (40%):
-- 400M tokens over 4 years
-- 3.168 KOI per second emission
-- Adjustable pool weights
-- Boost multipliers up to 3x
+- 20% (200M) - Team/Reserve (Locked)
+  - 730-day (2-year) lock period via force-stake into xKOI
+  - No withdrawal possible before lock period expiration
+  - Automatically receives yield from protocol fees during lock
 
 ### Value Accrual Mechanisms
 
 1. xKOI Staking:
-- 80% of all protocol fees
+- 100% of protocol fees (0.05% of all trades)
 - Daily automatic rebasing
 - Protocol-owned liquidity growth
+- Minimum entry requirement of 1000 KOI for first-time stakers
+- Fee distribution occurs at regular intervals via FeeDistributor
 
 2. Launch Platform:
 - KOI required for launches
 - LP pair creation
 - Launch token creator fees
+- Automatic 20% burn of KOI contributions
 
 3. Protocol Growth:
 - Sustainable fee structure
 - Deep initial liquidity
-- Team alignment through fee sharing
+- Long-term team alignment through 2-year lock
 
 ## System Architecture
 
@@ -189,13 +199,22 @@ Farming Distribution (40%):
 
 4. KOI Token:
 - Supply management
-- Team vesting
+- Team locking (730-day force-stake)
 - Transfer controls
+- Maximum supply cap: 1 billion KOI
 
 5. FeeDistributor:
 - Fee collection from pairs
-- Conversion to KOI
-- Distribution to xKOI and team
+- Pair sync and skim operations
+- Batch processing for gas efficiency
+- Conversion of fees to KOI
+- Distribution to xKOI staking contract
+
+6. PonderStaking:
+- KOI staking for xKOI tokens
+- Fee distribution via rebasing
+- Team stake locking for 730 days
+- Minimum entry requirement (1000 KOI)
 
 ### Integration Guide
 
@@ -233,7 +252,33 @@ masterChef.deposit(pid, 0);
 masterChef.withdraw(pid, amount);
 ```
 
+Fee Distribution Integration:
+```solidity
+// Distribute fees from specific pairs
+feeDistributor.distributePairFees([pair1, pair2, ...]);
+
+// Convert collected fees to KOI
+feeDistributor.convertFees(tokenAddress);
+
+// Trigger fee distribution to xKOI
+feeDistributor.distribute();
+```
+
+Staking Integration:
+```solidity
+// Stake KOI tokens for xKOI
+staking.enter(amount, recipient);
+
+// Withdraw KOI tokens (burn xKOI)
+staking.leave(shareAmount);
+
+// Claim accumulated fees without unstaking
+staking.claimFees();
+
+// Trigger reward distribution
+staking.rebase();
+```
+
 ## License
 
 MIT License - see [LICENSE](LICENSE)
-
