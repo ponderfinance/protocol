@@ -16,10 +16,24 @@ import { IPonderRouter } from "../../src/periphery/router/IPonderRouter.sol";
 import { FiveFiveFiveLauncher } from "../../src/launch/FiveFiveFiveLauncher.sol";
 
 contract DeployBitkubScript is Script {
-    address constant public KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
     uint256 constant public INITIAL_PONDER_PER_SECOND = 3168000000000000000;
     uint256 constant public INITIAL_KUB_AMOUNT = 1000 ether;
     uint256 constant public INITIAL_LIQUIDITY_ALLOCATION = 200_000_000 ether;
+
+    // KAP20 specific parameters - Bitkub Mainnet checksummed addresses
+//    address constant public ADMIN_PROJECT_ROUTER = 0x15122c945763da4435b45E082234108361B64eBA;
+//    address constant public COMMITTEE = 0xA755a1F6a35ba92835c0A23d3e5292e101d32716;
+//    address constant public KYC = 0x409CF41ee862Df7024f289E9F2Ea2F5d0D7f3eb4;
+    address constant public TRANSFER_ROUTER = 0xFbf5b70ef07AE6F64D3796f8a0fE83A3579FAb6f;
+    uint256 constant public ACCEPTED_KYC_LEVEL = 4;
+
+    //// TEST NET Bitkub Chain
+    address constant public ADMIN_PROJECT_ROUTER = 0xE4088E1f199287B1146832352aE5Fc3726171d41;
+    address constant public COMMITTEE = 0xEE4464a2055d2346FacF7813E862B92ffa91dcaE;
+    address constant public KYC = 0x2C8aBd9c61D4E973CA8db5545C54c90E44A2445c;
+    address constant public KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
+
+
 
     struct CoreAddresses {
         address ponder;
@@ -87,6 +101,16 @@ contract DeployBitkubScript is Script {
             address(1)  // temporary staking address
         ));
         emit ContractDeployed("PONDER", state.core.ponder);
+
+        // Set KAP20 parameters for the token
+        console.log("Setting KAP20 parameters...");
+        PonderToken ponderToken = PonderToken(state.core.ponder);
+        ponderToken.setAdminProjectRouter(ADMIN_PROJECT_ROUTER);
+        ponderToken.setCommittee(COMMITTEE);
+        ponderToken.setKYC(KYC);
+        ponderToken.setTransferRouter(TRANSFER_ROUTER);
+        ponderToken.setAcceptedKYCLevel(ACCEPTED_KYC_LEVEL);
+        console.log("KAP20 parameters set successfully");
 
         // Deploy Factory
         console.log("Deploying Factory...");
@@ -223,6 +247,12 @@ contract DeployBitkubScript is Script {
         console.log("Launcher:", state.core.launcher);
         console.log("KKUBUnwrapper:", state.core.kkubUnwrapper);
         console.log("PONDER-KUB Pair:", state.core.ponderKubPair);
+        console.log("=== KAP20 Configuration ===");
+        console.log("Admin Project Router:", ADMIN_PROJECT_ROUTER);
+        console.log("Committee:", COMMITTEE);
+        console.log("KYC:", KYC);
+        console.log("Transfer Router:", TRANSFER_ROUTER);
+        console.log("Accepted KYC Level:", ACCEPTED_KYC_LEVEL);
     }
 
     function run() external {

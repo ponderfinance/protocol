@@ -78,16 +78,6 @@ interface IPonderFactory {
     /// @return Address of the PONDER token contract
     function ponder() external view returns (address);
 
-    /// @notice Returns pending launcher during timelock
-    /// @dev Part of launcher update safety mechanism
-    /// @return Address queued to become new launcher
-    function pendingLauncher() external view returns (address);
-
-    /// @notice Returns launcher update timelock expiry
-    /// @dev Timestamp when launcher can be updated
-    /// @return Unix timestamp of timelock expiration
-    function launcherDelay() external view returns (uint256);
-
     /*//////////////////////////////////////////////////////////////
                             PAIR MANAGEMENT
     //////////////////////////////////////////////////////////////*/
@@ -145,11 +135,6 @@ interface IPonderFactory {
     /// @dev Can only execute after timelock expires
     function applyLauncher() external;
 
-    /// @notice Updates protocol token address
-    /// @dev Restricted to feeToSetter
-    /// @param newPonder New PONDER token address
-    function setPonder(address newPonder) external;
-
     /*//////////////////////////////////////////////////////////////
                         CUSTOM ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -180,5 +165,5 @@ interface IPonderFactory {
 
     /// @notice Error thrown when attempting launcher update before timelock expires
     /// @dev Enforces timelock delay for launcher updates
-    error TimelockNotFinished();
+    error TimeLocked();
 }

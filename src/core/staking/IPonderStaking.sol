@@ -47,10 +47,6 @@ interface IPonderStaking {
     /// @param pendingOwner Address of the proposed new owner
     event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
 
-    /// @notice Emitted when ownership transfer is completed
-    /// @param previousOwner Address of the previous owner
-    /// @param newOwner Address of the new owner
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /*//////////////////////////////////////////////////////////////
                         STAKING OPERATIONS
@@ -123,14 +119,8 @@ interface IPonderStaking {
     /// @notice Thrown when attempting to rebase before delay period
     error RebaseTooFrequent();
 
-    /// @notice Thrown when non-owner attempts privileged operation
-    error NotOwner();
-
     /// @notice Thrown when caller isn't the pending owner
     error NotPendingOwner();
-
-    /// @notice Thrown when zero address is provided
-    error ZeroAddress();
 
     /// @notice Thrown when share ratio exceeds maximum
     error ExcessiveShareRatio();

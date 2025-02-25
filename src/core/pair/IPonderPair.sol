@@ -169,13 +169,13 @@ interface IPonderPair is IERC20 {
 
     /*//////////////////////////////////////////////////////////////
                          CUSTOM ERRORS
- //////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Thrown when reentrancy lock is active
     error Locked();
 
     /// @notice Thrown when caller lacks permissions
-    error Forbidden();
+    error Auth();
 
     /// @notice Thrown when token transfer fails
     error TransferFailed();
@@ -218,9 +218,6 @@ interface IPonderPair is IERC20 {
 
     /// @notice Thrown on arithmetic overflow
     error Overflow();
-
-    /// @notice Thrown when address is zero
-    error ZeroAddress();
 
     /// @notice Thrown when reserve state validation fails
     error ReserveValidationFailed();

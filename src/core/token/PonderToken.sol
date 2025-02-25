@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import { PonderERC20 } from "./PonderERC20.sol";
+import { PonderKAP20 } from "./PonderKAP20.sol";
 import { PonderTokenStorage } from "./storage/PonderTokenStorage.sol";
 import { IPonderToken } from "./IPonderToken.sol";
 import { IPonderStaking } from "../staking/IPonderStaking.sol";
@@ -16,7 +16,7 @@ import { PonderTokenTypes } from "./types/PonderTokenTypes.sol";
 /// @notice Main implementation of Ponder protocol's token
 /// @dev ERC20 token with team vesting and governance features
 ///      Manages token distribution, vesting, and access control
-contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
+contract PonderToken is PonderKAP20, PonderTokenStorage, IPonderToken {
     using PonderTokenTypes for *;
 
     /*//////////////////////////////////////////////////////////////
@@ -46,7 +46,7 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
         address teamReserve_,
         address launcher_,
         address staking_
-    ) PonderERC20("Koi", "KOI") {
+    ) PonderKAP20("Koi", "KOI") {
         if (teamReserve_ == address(0)) {
             revert PonderTokenTypes.ZeroAddress();
         }
@@ -164,7 +164,7 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
     /// @dev Sets pending owner for acceptance
     /// @param newOwner Address to receive ownership
     /// @dev Emits OwnershipTransferStarted event
-    function transferOwnership(address newOwner) external {
+    function transferOwnership(address newOwner) public override(IPonderToken, PonderKAP20) {
         if (msg.sender != _owner) revert PonderTokenTypes.Forbidden();
         if (newOwner == address(0)) revert PonderTokenTypes.ZeroAddress();
 
@@ -197,7 +197,7 @@ contract PonderToken is PonderERC20, PonderTokenStorage, IPonderToken {
 
     /// @notice Current owner address
     /// @return Address with admin privileges
-    function owner() external view returns (address) {
+    function owner() public view override(IPonderToken, PonderKAP20) returns (address) {
         return _owner;
     }
 

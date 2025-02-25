@@ -7,12 +7,12 @@ import { LaunchTokenTypes } from "./types/LaunchTokenTypes.sol";
 import { IPonderFactory} from "../core/factory/IPonderFactory.sol";
 import { IPonderRouter } from "../periphery/router/IPonderRouter.sol";
 import { PonderToken } from "../core/token/PonderToken.sol";
-import { PonderERC20 } from "../core/token/PonderERC20.sol";
+import { PonderKAP20 } from "../core/token/PonderKAP20.sol";
 
 /// @title LaunchToken
 /// @notice Implements a token with vesting, trading restrictions, and fee mechanisms
-/// @dev Inherits from PonderERC20 and implements ILaunchToken interface
-contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
+/// @dev Inherits from PonderKAP20 and implements ILaunchToken interface
+contract LaunchToken is ILaunchToken, PonderKAP20, ReentrancyGuard {
     using LaunchTokenTypes for *;
 
     /// @notice Core protocol immutable addresses
@@ -59,7 +59,7 @@ contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
         address _factory,
         address payable _router,
         address _ponder
-    ) PonderERC20(_name, _symbol) {
+    ) PonderKAP20(_name, _symbol) {
         if (_launcher == address(0)) revert LaunchTokenTypes.ZeroAddress();
         if (_factory == address(0)) revert LaunchTokenTypes.ZeroAddress();
         if (_router == address(0)) revert LaunchTokenTypes.ZeroAddress();
@@ -73,7 +73,7 @@ contract LaunchToken is ILaunchToken, PonderERC20, ReentrancyGuard {
     }
 
     /// @notice Manages token transfers with trading restrictions and fee handling
-    /// @dev Overrides PonderERC20._update
+    /// @dev Overrides PonderKAP20._update
     /// @param from Source address
     /// @param to Destination address
     /// @param amount Transfer amount

@@ -6,7 +6,7 @@ import { IPonderToken } from "../token/IPonderToken.sol";
 
 import { PonderStakingStorage } from "./storage/PonderStakingStorage.sol";
 import { PonderStakingTypes } from "./types/PonderStakingTypes.sol";
-import { PonderERC20 } from "../token/PonderERC20.sol";
+import { PonderKAP20 } from "../token/PonderKAP20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
@@ -22,7 +22,7 @@ import { IPonderFactory } from "../factory/IPonderFactory.sol";
 /// @dev Handles staking of PONDER tokens for xPONDER shares
 ///      Implements rebase mechanism to distribute protocol fees
 ///      Inherits storage layout and ERC20 functionality
-contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Staked KOI", "xKOI") {
+contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderKAP20("Staked KOI", "xKOI") {
     using PonderStakingTypes for *;
     using SafeERC20 for IERC20;
 
@@ -49,12 +49,12 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
         address _factory
     ) {
         if (_ponder == address(0) || _router == address(0) || _factory == address(0))
-            revert IPonderStaking.ZeroAddress();
+            revert PonderKAP20.ZeroAddress();
 
         PONDER = IERC20(_ponder);
         ROUTER = IPonderRouter(_router);
         FACTORY = IPonderFactory(_factory);
-        owner = msg.sender;
+        stakingOwner = msg.sender;
         lastRebaseTime = block.timestamp;
         DEPLOYMENT_TIME = block.timestamp;
     }
@@ -70,7 +70,7 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     function enter(uint256 amount, address recipient) external returns (uint256 shares) {
         // Checks
         if (amount == 0) revert IPonderStaking.InvalidAmount();
-        if (recipient == address(0)) revert IPonderStaking.ZeroAddress();
+        if (recipient == address(0)) revert PonderKAP20.ZeroAddress();
 
         uint256 totalPonder = PONDER.balanceOf(address(this));
         uint256 totalShares = totalSupply();
@@ -268,19 +268,19 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
 
     /// @notice Initiates two-step ownership transfer
     /// @param newOwner Address of proposed new owner
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert IPonderStaking.ZeroAddress();
+    function transferOwnership(address newOwner) public override(IPonderStaking, PonderKAP20) onlyOwner {
+        if (newOwner == address(0)) revert PonderKAP20.ZeroAddress();
         pendingOwner = newOwner;
-        emit OwnershipTransferInitiated(owner, newOwner);
+        emit OwnershipTransferInitiated(stakingOwner, newOwner);
     }
 
     /// @notice Completes ownership transfer process
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert IPonderStaking.NotPendingOwner();
-        address oldOwner = owner;
-        owner = pendingOwner;
+        address oldOwner = stakingOwner;
+        stakingOwner = pendingOwner;
         pendingOwner = address(0);
-        emit OwnershipTransferred(oldOwner, owner);
+        emit OwnershipTransferred(oldOwner, stakingOwner);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -288,8 +288,8 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderERC20("Sta
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Restricts function access to contract owner
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert IPonderStaking.NotOwner();
+    modifier onlyOwner() override {
+        if (msg.sender != stakingOwner) revert PonderKAP20.NotOwner();
         _;
     }
 }

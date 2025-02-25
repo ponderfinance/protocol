@@ -24,7 +24,7 @@ contract PonderGasTest is Test {
     uint256 constant SWAP_AMOUNT = 1_000e18;
 
     // Gas limits adjusted based on actual measurements
-    uint256 constant GAS_LIMIT_PAIR_CREATION = 4_500_000;
+    uint256 constant GAS_LIMIT_PAIR_CREATION = 4_600_000;
     uint256 constant GAS_LIMIT_INITIAL_LIQUIDITY = 280_000;
     uint256 constant GAS_LIMIT_ADDITIONAL_LIQUIDITY = 270_000;
     uint256 constant GAS_LIMIT_SWAP = 280_000;

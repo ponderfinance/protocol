@@ -7,11 +7,11 @@ import "../../src/core/token/PonderToken.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/periphery/router/PonderRouter.sol";
 
-contract ReentrantToken is PonderERC20 {
+contract ReentrantToken is PonderKAP20 {
     PonderStaking public immutable stakingContract;
     bool private _isAttacking;
 
-    constructor(address _stakingContract) PonderERC20("Reentrant", "REKT") {
+    constructor(address _stakingContract) PonderKAP20("Reentrant", "REKT") {
         stakingContract = PonderStaking(_stakingContract);
     }
 
@@ -191,7 +191,7 @@ contract PonderStakingTest is Test {
         assertEq(address(staking.PONDER()), address(ponder));
         assertEq(address(staking.ROUTER()), address(router));
         assertEq(address(staking.FACTORY()), address(factory));
-        assertEq(staking.owner(), owner);
+        assertEq(staking.stakingOwner(), owner);
 
         // Verify team allocation is staked
         uint256 teamAllocation = PonderTokenTypes.TEAM_ALLOCATION;
@@ -272,7 +272,7 @@ contract PonderStakingTest is Test {
         staking.acceptOwnership();
         vm.stopPrank();
 
-        assertEq(staking.owner(), newOwner);
+        assertEq(staking.stakingOwner(), newOwner);
         assertEq(staking.pendingOwner(), address(0));
     }
 

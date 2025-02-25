@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "../../src/core/token/PonderERC20.sol";
+import "../../src/core/token/PonderKAP20.sol";
 
-contract TestPonderERC20 is PonderERC20 {
-    constructor() PonderERC20("Ponder LP Token", "PONDER-LP") {}
+contract TestPonderKAP20 is PonderKAP20 {
+    constructor() PonderKAP20("Ponder LP Token", "PONDER-LP") {}
 
     function mint(address to, uint256 value) public {
         _mint(to, value);

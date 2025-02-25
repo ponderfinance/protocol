@@ -7,7 +7,7 @@ import { FiveFiveFiveLauncherTypes } from "../types/FiveFiveFiveLauncherTypes.so
 import { LaunchToken } from "../LaunchToken.sol";
 import { IFiveFiveFiveLauncher } from "../IFiveFiveFiveLauncher.sol";
 import { PonderToken } from "../../core/token/PonderToken.sol";
-import { PonderERC20 } from "../../core/token/PonderERC20.sol";
+import { PonderKAP20 } from "../../core/token/PonderKAP20.sol";
 import { PonderPriceOracle } from "../../core/oracle/PonderPriceOracle.sol";
 import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
 import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
@@ -27,7 +27,7 @@ library FundsLib {
                         DEPENDENCIES
     //////////////////////////////////////////////////////////////*/
     using Address for address payable;
-    using SafeERC20 for PonderERC20;
+    using SafeERC20 for PonderKAP20;
     using SafeERC20 for PonderToken;
     using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
@@ -272,9 +272,9 @@ library FundsLib {
         address recipient
     ) private {
         if (pair == address(0)) return;
-        uint256 balance = PonderERC20(pair).balanceOf(address(this));
+        uint256 balance = PonderKAP20(pair).balanceOf(address(this));
         if (balance > 0) {
-            PonderERC20(pair).safeTransfer(recipient, balance);
+            PonderKAP20(pair).safeTransfer(recipient, balance);
         }
     }
 

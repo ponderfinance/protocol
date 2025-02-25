@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { PonderPair } from "../../core/pair/PonderPair.sol";
-import { PonderERC20 } from "../../core/token/PonderERC20.sol";
+import { PonderKAP20 } from "../../core/token/PonderKAP20.sol";
 import { IPonderFactory } from "../../core/factory/IPonderFactory.sol";
 import { IPonderRouter } from "../../periphery/router/IPonderRouter.sol";
 import { LaunchToken } from "../LaunchToken.sol";
@@ -24,7 +24,7 @@ import { LaunchTokenTypes } from "../types/LaunchTokenTypes.sol";
 /// @dev Optimized for gas efficiency with careful storage packing
 ///      Includes dual pool system and token launch management
 library LiquidityLib {
-    using SafeERC20 for PonderERC20;
+    using SafeERC20 for PonderKAP20;
     using FiveFiveFiveLauncherTypes for FiveFiveFiveLauncherTypes.LaunchInfo;
 
 
@@ -423,9 +423,9 @@ library LiquidityLib {
     ) internal returns (uint256 amount) {
         if (pair == address(0)) return 0;
 
-        amount = PonderERC20(pair).balanceOf(address(this));
+        amount = PonderKAP20(pair).balanceOf(address(this));
         if (amount > 0) {
-            PonderERC20(pair).safeTransfer(recipient, amount);
+            PonderKAP20(pair).safeTransfer(recipient, amount);
         }
 
         return amount;

@@ -295,8 +295,8 @@ contract FiveFiveFiveLauncherTest is Test {
         assertTrue(memePonderPair != address(0), "PONDER pool not created");
         assertTrue(hasSecondaryPool, "Secondary pool flag not set");
 
-        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
-        assertGt(PonderERC20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
+        assertGt(PonderKAP20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+        assertGt(PonderKAP20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
     }
 
     function testTokenAllocation() public {
@@ -545,8 +545,8 @@ contract FiveFiveFiveLauncherTest is Test {
         (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
 
         // Verify liquidity was added to existing pairs
-        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
-        assertGt(PonderERC20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
+        assertGt(PonderKAP20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+        assertGt(PonderKAP20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
     }
 
     function testPartialPreExistingPairs() public {
@@ -575,8 +575,8 @@ contract FiveFiveFiveLauncherTest is Test {
         (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
 
         assertTrue(hasSecondaryPool, "Secondary pool should exist");
-        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
-        assertGt(PonderERC20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
+        assertGt(PonderKAP20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+        assertGt(PonderKAP20(memePonderPair).totalSupply(), 0, "No PONDER pool liquidity");
         assertTrue(memePonderPair != address(0), "PONDER pair should be created");
     }
 
@@ -597,11 +597,11 @@ contract FiveFiveFiveLauncherTest is Test {
         (address memeKubPair, address memePonderPair, bool hasSecondaryPool) = launcher.getPoolInfo(launchId);
 
         assertFalse(hasSecondaryPool, "Should not have secondary pool with no PONDER contribution");
-        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
+        assertGt(PonderKAP20(memeKubPair).totalSupply(), 0, "No KUB pool liquidity");
 
         // Check if memePonderPair exists but has no liquidity
         if (memePonderPair != address(0)) {
-            assertEq(PonderERC20(memePonderPair).totalSupply(), 0, "Should not have PONDER pool liquidity");
+            assertEq(PonderKAP20(memePonderPair).totalSupply(), 0, "Should not have PONDER pool liquidity");
         }
     }
 
@@ -740,7 +740,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // If pool was created, verify liquidity
         if (hasSecondaryPool) {
-            uint256 ponderLiquidity = PonderERC20(address(ponder)).balanceOf(memePonderPair);
+            uint256 ponderLiquidity = PonderKAP20(address(ponder)).balanceOf(memePonderPair);
             assertGt(ponderLiquidity, 0, "PONDER pool should have liquidity if created");
         }
         vm.stopPrank();
@@ -761,7 +761,7 @@ contract FiveFiveFiveLauncherTest is Test {
 
         // Verify KUB pool is still created and valid
         assertTrue(memeKubPair != address(0), "KUB pool should exist");
-        assertGt(PonderERC20(memeKubPair).totalSupply(), 0, "KUB pool should have liquidity");
+        assertGt(PonderKAP20(memeKubPair).totalSupply(), 0, "KUB pool should have liquidity");
     }
 
     function testNoReentrancyInRefund() public {
@@ -1746,7 +1746,7 @@ contract FiveFiveFiveLauncherTest is Test {
         assertTrue(memeKubPair != address(0), "Pool should be created");
 
         // Verify pool has minimum liquidity
-        uint256 liquidity = PonderERC20(memeKubPair).totalSupply();
+        uint256 liquidity = PonderKAP20(memeKubPair).totalSupply();
         assertTrue(liquidity >= minPoolLiquidity, "Pool liquidity too low");
 
         // Verify reserves are properly set

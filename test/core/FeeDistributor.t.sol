@@ -12,8 +12,8 @@ import "../../src/periphery/router/PonderRouter.sol";
 /**
  * @title Mock ERC20 Token for Testing
  */
-contract ERC20Mock is PonderERC20 {
-    constructor(string memory name, string memory symbol) PonderERC20(name, symbol) {}
+contract ERC20Mock is PonderKAP20 {
+    constructor(string memory name, string memory symbol) PonderKAP20(name, symbol) {}
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -25,11 +25,11 @@ contract ERC20Mock is PonderERC20 {
     }
 }
 
-contract ReentrantToken is PonderERC20 {
+contract ReentrantToken is PonderKAP20 {
     FeeDistributor public distributor;
     bool private _isReentering;
 
-    constructor(address _distributor) PonderERC20("Reentrant", "RENT") {
+    constructor(address _distributor) PonderKAP20("Reentrant", "RENT") {
         distributor = FeeDistributor(_distributor);
     }
 
@@ -106,8 +106,8 @@ contract ReentrantPair {
  * @title Mock Token that fails transfers
  * @dev Used to test error handling
  */
-contract MockFailingToken is PonderERC20 {
-    constructor() PonderERC20("Failing", "FAIL") {}
+contract MockFailingToken is PonderKAP20 {
+    constructor() PonderKAP20("Failing", "FAIL") {}
 
     function transfer(address, uint256) public pure override returns (bool) {
         return false;

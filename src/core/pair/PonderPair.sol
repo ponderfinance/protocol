@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import { PonderERC20 } from "../token/PonderERC20.sol";
+import { PonderKAP20 } from "../token/PonderKAP20.sol";
 import { IPonderPair } from "./IPonderPair.sol";
+import { PonderFeesLib } from "./libraries/PonderFeesLib.sol";
 import { PonderPairStorage } from "./storage/PonderPairStorage.sol";
 import { PonderPairTypes } from "./types/PonderPairTypes.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
@@ -23,7 +24,7 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 /// @notice Core AMM implementation for Ponder protocol
 /// @dev Manages liquidity provision, swaps, and fee collection
 /// @dev Implements constant product formula (x * y = k)
-contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", "PONDER-LP"), ReentrancyGuard {
+contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", "PONDER-LP"), ReentrancyGuard {
     using UQ112x112 for uint224;
     using PonderPairTypes for PonderPairTypes.SwapData;
     using SafeERC20 for IERC20;
@@ -134,9 +135,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     /// @param token0_ First token address (lower sort order)
     /// @param token1_ Second token address (higher sort order)
     function initialize(address token0_, address token1_) external override {
-        if (msg.sender != _FACTORY) revert IPonderPair.Forbidden();
-        if (token0_ == address(0)) revert IPonderPair.ZeroAddress();
-        if (token1_ == address(0)) revert IPonderPair.ZeroAddress();
+        if (msg.sender != _FACTORY || token0_ == address(0) || token1_ == address(0)) {
+            revert IPonderPair.Auth();
+        }
 
         _token0 = token0_;
         _token1 = token1_;
@@ -214,8 +215,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         }
 
         // INTERACTIONS - External calls last
-        _safeTransfer(_token0, to, amount0);
-        _safeTransfer(_token1, to, amount1);
+        IERC20(_token0).safeTransfer(to, amount0);
+        IERC20(_token1).safeTransfer(to, amount1);
 
         emit Burn(msg.sender, amount0, amount1, to);
     }
@@ -301,11 +302,14 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
             reserve1: state.reserve1
         });
 
-        if (!_validateKValue(swapData)) {
+        // Use library for K-value validation instead of internal function
+        if (!PonderFeesLib.validateKValue(swapData)) {
             revert IPonderPair.KValueCheckFailed();
         }
 
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
+
+        // Handle fees with simplified logic
         _handleFees(state);
 
         _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
@@ -317,17 +321,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
                        INTERNAL FUNCTIONS
    //////////////////////////////////////////////////////////////*/
 
-    /// @notice Safely transfers tokens using low-level calls
-    /// @dev Uses SafeERC20 for transfer safety
-    /// @param token Token address to transfer
-    /// @param to Recipient address
-    /// @param value Amount to transfer
-    function _safeTransfer(address token, address to, uint256 value) private {
-        if (token == address(0)) revert IPonderPair.ZeroAddress();
-        if (to == address(0)) revert IPonderPair.ZeroAddress();
-
-        IERC20(token).safeTransfer(to, value);
-    }
 
     /// @notice Handles token transfers and flash loan callbacks
     /// @dev Executes transfers then optional callback
@@ -337,120 +330,55 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 amount1Out,
         bytes calldata data
     ) private {
-        if (to == address(0)) revert IPonderPair.ZeroAddress();
+        if (to == address(0)) revert PonderKAP20.ZeroAddress();
 
-        if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out);
-        if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out);
+        if (amount0Out > 0) IERC20(_token0).safeTransfer(to, amount0Out);
+        if (amount1Out > 0) IERC20(_token1).safeTransfer(to, amount1Out);
         if (data.length > 0) {
             IPonderCallee(to).ponderCall(msg.sender, amount0Out, amount1Out, data);
         }
     }
 
-    /// @notice Processes fees for token swaps
-    /// @dev Handles protocol, creator, and LP fees
-    function _handleTokenFees(
+    /// @notice Handles fees for a single token
+    /// @dev Extracted function to reduce duplicate code
+    /// @param token Token address
+    /// @param amountIn Amount of token swapped
+    /// @param isPonderPair Whether this is a PONDER pair
+    /// @param isToken0 Whether this is token0 or token1
+    function _handleTokenFee(
         address token,
         uint256 amountIn,
         bool isPonderPair,
-        address token0Address,
-        address token1Address,
-        uint256 amount0Out,
-        uint256 amount1Out
+        bool isToken0
     ) private {
-        if (token == address(0)) revert IPonderPair.ZeroAddress();
-        if (token0Address == address(0)) revert IPonderPair.ZeroAddress();
-        if (token1Address == address(0)) revert IPonderPair.ZeroAddress();
+        if (amountIn == 0) return;
 
-        if (amountIn <= 0) return;
+        // Use library for fee calculation
+        (uint256 protocolFeeAmount, uint256 creatorFeeAmount) = PonderFeesLib.calculateFees(
+            token,
+            amountIn,
+            isPonderPair,
+            launcher()
+        );
 
-        address feeTo = IPonderFactory(_FACTORY).feeTo();
-        if (feeTo == address(0)) return;
+        // Update accumulated fees
+        if (isToken0) _accumulatedFee0 += protocolFeeAmount;
+        else _accumulatedFee1 += protocolFeeAmount;
 
-        bool isTokenOutput = (token == token0Address && amount0Out > 0) ||
-            (token == token1Address && amount1Out > 0);
-        if (isTokenOutput) return;
-
-        uint256 protocolFeeAmount = 0;
-        uint256 creatorFeeAmount = 0;
-
-        // Calculate fees first
-        try ILaunchToken(token).isLaunchToken() returns (bool isLaunch) {
-            if (isLaunch && ILaunchToken(token).launcher() == launcher() && amountIn > 0) {
-                if (isPonderPair) {
-                    protocolFeeAmount = (amountIn * PonderPairTypes.PONDER_PROTOCOL_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                    creatorFeeAmount = (amountIn * PonderPairTypes.PONDER_CREATOR_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                } else {
-                    protocolFeeAmount = (amountIn * PonderPairTypes.KUB_PROTOCOL_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                    creatorFeeAmount = (amountIn * PonderPairTypes.KUB_CREATOR_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                }
-            } else {
-                protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                                PonderPairTypes.FEE_DENOMINATOR;
-            }
-        } catch {
-            protocolFeeAmount = (amountIn * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                            PonderPairTypes.FEE_DENOMINATOR;
-        }
-
-        // Update state before external calls
-        if (token == _token0) {
-            _accumulatedFee0 += protocolFeeAmount;
-        } else {
-            _accumulatedFee1 += protocolFeeAmount;
-        }
-
-        // External calls last
+        // Handle creator fee transfer only if necessary
         if (creatorFeeAmount > 0) {
-            _safeTransfer(token, ILaunchToken(token).creator(), creatorFeeAmount);
+            address creator;
+            bool hasCreator = false;
+
+            try ILaunchToken(token).creator() returns (address c) {
+                creator = c;
+                hasCreator = creator != address(0);
+            } catch {}
+
+            if (hasCreator) IERC20(token).safeTransfer(creator, creatorFeeAmount);
+            else if (isToken0) _accumulatedFee0 += creatorFeeAmount;
+            else _accumulatedFee1 += creatorFeeAmount;
         }
-    }
-
-    /// @notice Processes swap state and fees
-    /// @dev Internal helper for swap execution
-    function _validateAndProcessSwap(
-        PonderPairTypes.SwapState memory state,
-        uint256 amount0Out,
-        uint256 amount1Out
-    ) private {
-        // Get post-transfer balances
-        state.balance0 = IERC20(_token0).balanceOf(address(this));
-        state.balance1 = IERC20(_token1).balanceOf(address(this));
-
-        state.amount0In = state.balance0 > state.reserve0 - amount0Out ?
-            state.balance0 - (state.reserve0 - amount0Out) : 0;
-        state.amount1In = state.balance1 > state.reserve1 - amount1Out ?
-            state.balance1 - (state.reserve1 - amount1Out) : 0;
-
-        if (state.amount0In <= 0 && state.amount1In <= 0) {
-            revert IPonderPair.InsufficientInputAmount();
-        }
-
-        // Create SwapData struct and validate
-        PonderPairTypes.SwapData memory swapData = PonderPairTypes.SwapData({
-            amount0Out: amount0Out,
-            amount1Out: amount1Out,
-            amount0In: state.amount0In,
-            amount1In: state.amount1In,
-            balance0: state.balance0,
-            balance1: state.balance1,
-            reserve0: state.reserve0,
-            reserve1: state.reserve1
-        });
-
-        if (!_validateKValue(swapData)) {
-            revert IPonderPair.KValueCheckFailed();
-        }
-
-        // Update state before external interactions
-        _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
-
-        // External interactions last
-        state.isPonderPair = _token0 == ponder() || _token1 == ponder();
-        _handleFees(state);
     }
 
     /// @notice Handles token fees in swap operations
@@ -458,102 +386,23 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
     function _handleFees(
         PonderPairTypes.SwapState memory state
     ) private {
-        if (state.amount0In > 0) {
-            uint256 protocolFeeAmount = 0;
-            uint256 creatorFeeAmount = 0;
+        // Handle token0 fees with library function
+        _accumulatedFee0 = PonderFeesLib.handleTokenFee(
+            _token0,
+            state.amount0In,
+            state.isPonderPair,
+            launcher(),
+            _accumulatedFee0
+        );
 
-            // Calculate fees first
-            try ILaunchToken(_token0).isLaunchToken() returns (bool isLaunch) {
-                if (isLaunch && ILaunchToken(_token0).launcher() == launcher()) {
-                    if (state.isPonderPair) {
-                        protocolFeeAmount = (state.amount0In * PonderPairTypes.PONDER_PROTOCOL_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                        creatorFeeAmount = (state.amount0In * PonderPairTypes.PONDER_CREATOR_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                    } else {
-                        protocolFeeAmount = (state.amount0In * PonderPairTypes.KUB_PROTOCOL_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                        creatorFeeAmount = (state.amount0In * PonderPairTypes.KUB_CREATOR_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                    }
-                } else {
-                    protocolFeeAmount = (state.amount0In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                }
-            } catch {
-                protocolFeeAmount = (state.amount0In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                                PonderPairTypes.FEE_DENOMINATOR;
-            }
-
-            // Update accumulated fees
-            _accumulatedFee0 += protocolFeeAmount;
-
-            // Handle creator fee transfer immediately
-            if (creatorFeeAmount > 0) {
-                try ILaunchToken(_token0).creator() returns (address creator) {
-                    if (creator != address(0)) {
-                        _safeTransfer(_token0, creator, creatorFeeAmount);
-                    }
-                } catch {
-                    // If creator call fails, add to protocol fee
-                    _accumulatedFee0 += creatorFeeAmount;
-                }
-            }
-        }
-
-        if (state.amount1In > 0) {
-            uint256 protocolFeeAmount = 0;
-            uint256 creatorFeeAmount = 0;
-
-            try ILaunchToken(_token1).isLaunchToken() returns (bool isLaunch) {
-                if (isLaunch && ILaunchToken(_token1).launcher() == launcher()) {
-                    if (state.isPonderPair) {
-                        protocolFeeAmount = (state.amount1In * PonderPairTypes.PONDER_PROTOCOL_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                        creatorFeeAmount = (state.amount1In * PonderPairTypes.PONDER_CREATOR_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                    } else {
-                        protocolFeeAmount = (state.amount1In * PonderPairTypes.KUB_PROTOCOL_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                        creatorFeeAmount = (state.amount1In * PonderPairTypes.KUB_CREATOR_FEE) /
-                                        PonderPairTypes.FEE_DENOMINATOR;
-                    }
-                } else {
-                    protocolFeeAmount = (state.amount1In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                                    PonderPairTypes.FEE_DENOMINATOR;
-                }
-            } catch {
-                protocolFeeAmount = (state.amount1In * PonderPairTypes.STANDARD_PROTOCOL_FEE) /
-                                PonderPairTypes.FEE_DENOMINATOR;
-            }
-
-            // Update accumulated fees
-            _accumulatedFee1 += protocolFeeAmount;
-
-            // Handle creator fee transfer immediately
-            if (creatorFeeAmount > 0) {
-                try ILaunchToken(_token1).creator() returns (address creator) {
-                    if (creator != address(0)) {
-                        _safeTransfer(_token1, creator, creatorFeeAmount);
-                    }
-                } catch {
-                    // If creator call fails, add to protocol fee
-                    _accumulatedFee1 += creatorFeeAmount;
-                }
-            }
-        }
-    }
-
-    /// @notice Validates constant product invariant
-    /// @dev Ensures K value doesn't decrease after fees
-    /// @param swapData Swap parameters and state
-    /// @return bool True if K value is valid
-    function _validateKValue(PonderPairTypes.SwapData memory swapData) private pure returns (bool) {
-        uint256 balance0Adjusted = swapData.balance0 * 1000 - (swapData.amount0In * 3);
-        uint256 balance1Adjusted = swapData.balance1 * 1000 - (swapData.amount1In * 3);
-
-        return balance0Adjusted * balance1Adjusted >=
-            uint256(swapData.reserve0) * uint256(swapData.reserve1) * (1000 * 1000);
+        // Handle token1 fees with library function
+        _accumulatedFee1 = PonderFeesLib.handleTokenFee(
+            _token1,
+            state.amount1In,
+            state.isPonderPair,
+            launcher(),
+            _accumulatedFee1
+        );
     }
 
     /// @notice Updates reserves and price accumulators
@@ -642,11 +491,11 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
 
         if (feeTo != address(0)) {
             if (fee0 > 0) {
-                _safeTransfer(_token0, feeTo, fee0);
+                IERC20(_token0).safeTransfer(feeTo, fee0);
                 _accumulatedFee0 = 0;
             }
             if (fee1 > 0) {
-                _safeTransfer(_token1, feeTo, fee1);
+                IERC20(_token1).safeTransfer(feeTo, fee1);
                 _accumulatedFee1 = 0;
             }
         }
@@ -659,10 +508,10 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderERC20("Ponder LP", 
         uint256 excess1 = balance1After > reserve1Current ? balance1After - reserve1Current : 0;
 
         if (excess0 > 0) {
-            _safeTransfer(_token0, to, excess0);
+            IERC20(_token0).safeTransfer(to, excess0);
         }
         if (excess1 > 0) {
-            _safeTransfer(_token1, to, excess1);
+            IERC20(_token1).safeTransfer(to, excess1);
         }
 
         _update(

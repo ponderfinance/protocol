@@ -27,7 +27,7 @@ abstract contract PonderStakingStorage {
     /// @notice Address authorized to perform administrative functions
     /// @dev Has exclusive access to privileged operations
     /// @dev Can be transferred via two-step ownership transfer
-    address public owner;
+    address public stakingOwner;
 
     /// @notice Address proposed in ownership transfer
     /// @dev Part of two-step ownership transfer pattern

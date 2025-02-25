@@ -2,10 +2,10 @@
 pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
-import "../mocks/PonderERC20Test.sol";
+import "../mocks/PonderKAP20Test.sol";
 
-contract PonderERC20Test is Test {
-    TestPonderERC20 token;
+contract PonderKAP20Test is Test {
+    TestPonderKAP20 token;
     address alice = address(0x1);
     address bob = address(0x2);
     uint256 constant INITIAL_SUPPLY = 1000e18;
@@ -14,7 +14,7 @@ contract PonderERC20Test is Test {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
     function setUp() public {
-        token = new TestPonderERC20();
+        token = new TestPonderKAP20();
     }
 
     function testMetadata() public {
