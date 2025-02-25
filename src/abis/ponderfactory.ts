@@ -148,19 +148,6 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "function",
-    "name": "launcherDelay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "pendingLauncher",
     "inputs": [],
     "outputs": [
@@ -217,19 +204,6 @@ export const ponderfactoryAbi = [
     "inputs": [
       {
         "name": "newLauncher",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPonder",
-    "inputs": [
-      {
-        "name": "newPonder",
         "type": "address",
         "internalType": "address"
       }
@@ -352,7 +326,7 @@ export const ponderfactoryAbi = [
   },
   {
     "type": "error",
-    "name": "TimelockNotFinished",
+    "name": "TimeLocked",
     "inputs": []
   },
   {
