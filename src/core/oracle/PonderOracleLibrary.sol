@@ -5,7 +5,6 @@ import { IPonderPair } from "../../core/pair/IPonderPair.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";
 import { IPonderPriceOracle } from "../../core/oracle/IPonderPriceOracle.sol";
 
-
 /*//////////////////////////////////////////////////////////////
                     PONDER ORACLE LIBRARY
 //////////////////////////////////////////////////////////////*/
@@ -104,7 +103,6 @@ library PonderOracleLibrary {
 
         // Calculate price difference
         uint256 priceDiff = priceCumulativeEnd - priceCumulativeStart;
-
 
         return (priceDiff * amountIn) / (timeElapsed * UQ112x112.Q112);
     }

@@ -7,15 +7,22 @@ import { PonderFactoryTypes } from "./types/PonderFactoryTypes.sol";
 import { PonderPair } from "../pair/PonderPair.sol";
 import { PonderFactoryLib } from "./libraries/PonderFactoryLib.sol";
 
+/// @title PonderFactory
+/// @author taayyohh
+/// @notice Factory contract for creating and managing Ponder trading pairs
+/// @dev Implements core functionality for pair creation and protocol configuration
 contract PonderFactory is IPonderFactory, PonderFactoryStorage {
     using PonderFactoryLib for address;
 
+    /// @notice Initializes the factory with essential protocol addresses
+    /// @param feeToSetter_ Address authorized to update fee recipient
+    /// @param launcher_ Address authorized for specialized deployments
+    /// @param ponder_ Address of the PONDER token
     constructor(
         address feeToSetter_,
         address launcher_,
         address ponder_
     ) {
-        // Validate core addresses
         PonderFactoryLib.validateAddress(feeToSetter_);
         PonderFactoryLib.validateAddress(ponder_);
 
@@ -24,38 +31,61 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         _ponder = ponder_;
     }
 
+    /// @notice Returns current protocol fee recipient
+    /// @return Address receiving protocol fees
     function feeTo() external view returns (address) {
         return _feeTo;
     }
 
+    /// @notice Returns current fee management admin
+    /// @return Address with fee configuration permissions
     function feeToSetter() external view returns (address) {
         return _feeToSetter;
     }
 
+    /// @notice Returns current protocol launcher
+    /// @return Address of the launcher contract
     function launcher() external view returns (address) {
         return _launcher;
     }
 
+    /// @notice Returns protocol governance token
+    /// @return Address of the PONDER token contract
     function ponder() external view returns (address) {
         return _ponder;
     }
 
+    /// @notice Returns pending launcher update if in process
+    /// @return Address of the pending launcher
     function pendingLauncher() external view returns (address) {
         return _pendingLauncher;
     }
 
+    /// @notice Retrieves pair address for given tokens
+    /// @param tokenA First token address
+    /// @param tokenB Second token address
+    /// @return Address of the pair contract
     function getPair(address tokenA, address tokenB) external view returns (address) {
         return _getPair[tokenA][tokenB];
     }
 
+    /// @notice Gets pair address by index
+    /// @param index Position in the allPairs array
+    /// @return Address of the indexed pair
     function allPairs(uint256 index) external view returns (address) {
         return _allPairs[index];
     }
 
+    /// @notice Returns total number of created pairs
+    /// @return Total count of deployed pairs
     function allPairsLength() external view returns (uint256) {
         return _allPairs.length;
     }
 
+    /// @notice Creates new trading pair for provided tokens
+    /// @param tokenA First token address
+    /// @param tokenB Second token address
+    /// @return pair Address of the created pair contract
     function createPair(address tokenA, address tokenB) external returns (address pair) {
         if (tokenA == tokenB) revert IPonderFactory.IdenticalAddresses();
 
@@ -73,6 +103,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit PairCreated(token0, token1, pair, _allPairs.length);
     }
 
+    /// @notice Updates protocol fee recipient
+    /// @param newFeeTo New fee collection address
     function setFeeTo(address newFeeTo) external {
         // Access control
         PonderFactoryLib.verifyAccess(msg.sender, _feeToSetter);
@@ -83,6 +115,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit FeeToUpdated(oldFeeTo, newFeeTo);
     }
 
+    /// @notice Updates fee management admin
+    /// @param newFeeToSetter New fee admin address
     function setFeeToSetter(address newFeeToSetter) external {
         // Access control
         PonderFactoryLib.verifyAccess(msg.sender, _feeToSetter);
@@ -93,6 +127,8 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         emit FeeToSetterUpdated(oldFeeToSetter, newFeeToSetter);
     }
 
+    /// @notice Initiates launcher update process
+    /// @param newLauncher Proposed new launcher address
     function setLauncher(address newLauncher) external {
         // Access control
         PonderFactoryLib.verifyAccess(msg.sender, _feeToSetter);
@@ -108,6 +144,7 @@ contract PonderFactory is IPonderFactory, PonderFactoryStorage {
         }
     }
 
+    /// @notice Completes launcher update after timelock
     function applyLauncher() external {
         // Access control
         PonderFactoryLib.verifyAccess(msg.sender, _feeToSetter);

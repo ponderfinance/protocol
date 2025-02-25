@@ -3,39 +3,32 @@ pragma solidity 0.8.24;
 
 import { IPonderFactory } from "../IPonderFactory.sol";
 
+/// @title PonderFactoryLib
+/// @author taayyohh
+/// @notice Library containing helper functions for PonderFactory validation
 library PonderFactoryLib {
-    function handleAddressUpdate(
-        address sender,
-        address currentAdmin,
-        address newValue
-    ) internal pure returns (bool) {
-        verifyAccess(sender, currentAdmin);
-        validateAddress(newValue);
-        return true;
-    }
-
-
-    function validateConstructorParams(
-        address feeToSetter_,
-        address ponder_
-    ) internal pure {
-        validateAddress(feeToSetter_);
-        validateAddress(ponder_);
-    }
-
+    /// @notice Ensures an address is not the zero address
+    /// @param addr Address to validate
     function validateAddress(address addr) internal pure {
         if (addr == address(0)) revert IPonderFactory.ZeroAddress();
     }
 
+    /// @notice Validates the fee recipient address
+    /// @param addr Address of proposed fee recipient
     function validateFeeTo(address addr) internal pure {
-        if (addr == address(0)) revert IPonderFactory.InvalidFeeReceiver();
+        validateAddress(addr);
     }
 
+    /// @notice Validates the launcher address
+    /// @param addr Address of proposed launcher
     function validateLauncher(address addr) internal pure {
-        if (addr == address(0)) revert IPonderFactory.InvalidLauncher();
+        validateAddress(addr);
     }
 
-    function verifyAccess(address sender, address feeToSetter) internal pure {
-        if (sender != feeToSetter) revert IPonderFactory.Forbidden();
+    /// @notice Verifies the sender has appropriate permissions
+    /// @param sender Address attempting the operation
+    /// @param authorizedAddress Address with admin permissions
+    function verifyAccess(address sender, address authorizedAddress) internal pure {
+        if (sender != authorizedAddress) revert IPonderFactory.Forbidden();
     }
 }

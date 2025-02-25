@@ -95,13 +95,17 @@ library PonderFeesLib {
 
         // Handle creator fee transfer only if necessary
         if (creatorFeeAmount > 0) {
-            address creator;
+            address creator = address(0);
             bool hasCreator = false;
 
+            // Try to get creator, but continue with default values if it fails
             try ILaunchToken(token).creator() returns (address c) {
                 creator = c;
                 hasCreator = creator != address(0);
-            } catch {}
+            } catch (bytes memory /* reason */) {
+                // Keep default values (creator = address(0), hasCreator = false)
+                hasCreator = false;
+            }
 
             if (hasCreator) IERC20(token).safeTransfer(creator, creatorFeeAmount);
             else newAccumulatedFee += creatorFeeAmount;
@@ -140,15 +144,13 @@ library PonderFeesLib {
         return balance0 <= type(uint112).max && balance1 <= type(uint112).max;
     }
 
-    /**
-     * @notice Validates swap outputs against reserves
-     * @dev Simple validation to ensure output amounts don't exceed reserves
-     * @param amount0Out Amount of token0 to output
-     * @param amount1Out Amount of token1 to output
-     * @param reserve0 Current reserve of token0
-     * @param reserve1 Current reserve of token1
-     * @return isValid Whether the swap amounts are valid
-     */
+    /// @notice Validates swap outputs against reserves
+    /// @dev Simple validation to ensure output amounts don't exceed reserves
+    /// @param amount0Out Amount of token0 to output
+    /// @param amount1Out Amount of token1 to output
+    /// @param reserve0 Current reserve of token0
+    /// @param reserve1 Current reserve of token1
+    /// @return isValid Whether the swap amounts are valid
     function validateOutputAmounts(
         uint256 amount0Out,
         uint256 amount1Out,
@@ -158,15 +160,14 @@ library PonderFeesLib {
         // Check that outputs don't exceed reserves
         return (amount0Out < reserve0 && amount1Out < reserve1);
     }
-    /**
-     * @notice Validates sync operation requirements
-     * @dev Checks that balances are sufficient for accumulated fees
-     * @param balance0 Current balance of token0
-     * @param balance1 Current balance of token1
-     * @param accumulatedFee0 Accumulated fees for token0
-     * @param accumulatedFee1 Accumulated fees for token1
-     * @return isValid Whether the sync operation is valid
-     */
+
+    /// @notice Validates sync operation requirements
+    /// @dev Checks that balances are sufficient for accumulated fees
+    /// @param balance0 Current balance of token0
+    /// @param balance1 Current balance of token1
+    /// @param accumulatedFee0 Accumulated fees for token0
+    /// @param accumulatedFee1 Accumulated fees for token1
+    /// @return isValid Whether the sync operation is valid
     function validateSync(
         uint256 balance0,
         uint256 balance1,
@@ -179,5 +180,4 @@ library PonderFeesLib {
         balance0 > 0 &&
             balance1 > 0;
     }
-
 }

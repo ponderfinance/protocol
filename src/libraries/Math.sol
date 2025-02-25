@@ -19,6 +19,8 @@ library Math {
         } else if (y != 0) {
             z = 1;
         }
+
+        return z;
     }
 
     /// @notice Returns the minimum of two numbers

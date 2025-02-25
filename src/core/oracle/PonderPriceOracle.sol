@@ -186,8 +186,6 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         revert IPonderPriceOracle.InvalidToken();
     }
 
-
-
     /// @notice Get current spot price
     /// @dev Uses current reserves without TWAP
     /// @param pair Address of trading pair
@@ -230,7 +228,6 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         // in their native decimal precision in the pair
         return quote;
     }
-
 
     /*//////////////////////////////////////////////////////////////
                        INTERNAL HELPERS
@@ -314,8 +311,6 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
             IPonderPair(pair).token1()
         ) == pair;
     }
-
-
 
     /*//////////////////////////////////////////////////////////////
                             VIEWS

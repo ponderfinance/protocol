@@ -244,11 +244,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
         address to,
         bytes calldata data
     ) external override nonReentrant {
-        // CHECKS
         if (amount0Out == 0 && amount1Out == 0) revert IPonderPair.InsufficientOutputAmount();
         if (to == _token0 || to == _token1) revert IPonderPair.InvalidToAddress();
 
-        // Initialize state struct with default values
         PonderPairTypes.SwapState memory state = PonderPairTypes.SwapState({
             reserve0: 0,
             reserve1: 0,
@@ -265,7 +263,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
             revert IPonderPair.InsufficientLiquidity();
         }
 
-        // INITIAL EFFECTS - Flash loan protection
+        // Flash loan protection
         _update(
             uint256(state.reserve0) - amount0Out,
             uint256(state.reserve1) - amount1Out,
@@ -273,10 +271,8 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
             state.reserve1
         );
 
-        // INTERACTIONS
         _executeTransfers(to, amount0Out, amount1Out, data);
 
-        // POST-INTERACTION VALIDATION & EFFECTS
         // Get actual balances after transfer
         state.balance0 = IERC20(_token0).balanceOf(address(this));
         state.balance1 = IERC20(_token1).balanceOf(address(this));
@@ -302,14 +298,12 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
             reserve1: state.reserve1
         });
 
-        // Use library for K-value validation instead of internal function
         if (!PonderFeesLib.validateKValue(swapData)) {
             revert IPonderPair.KValueCheckFailed();
         }
 
         state.isPonderPair = _token0 == ponder() || _token1 == ponder();
 
-        // Handle fees with simplified logic
         _handleFees(state);
 
         _update(state.balance0, state.balance1, state.reserve0, state.reserve1);
@@ -353,7 +347,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
     ) private {
         if (amountIn == 0) return;
 
-        // Use library for fee calculation
         (uint256 protocolFeeAmount, uint256 creatorFeeAmount) = PonderFeesLib.calculateFees(
             token,
             amountIn,
@@ -361,19 +354,19 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
             launcher()
         );
 
-        // Update accumulated fees
         if (isToken0) _accumulatedFee0 += protocolFeeAmount;
         else _accumulatedFee1 += protocolFeeAmount;
 
-        // Handle creator fee transfer only if necessary
         if (creatorFeeAmount > 0) {
-            address creator;
+            address creator = address(0);
             bool hasCreator = false;
 
             try ILaunchToken(token).creator() returns (address c) {
                 creator = c;
                 hasCreator = creator != address(0);
-            } catch {}
+            } catch (bytes memory /* reason */) {
+                hasCreator = false;
+            }
 
             if (hasCreator) IERC20(token).safeTransfer(creator, creatorFeeAmount);
             else if (isToken0) _accumulatedFee0 += creatorFeeAmount;
@@ -386,7 +379,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
     function _handleFees(
         PonderPairTypes.SwapState memory state
     ) private {
-        // Handle token0 fees with library function
         _accumulatedFee0 = PonderFeesLib.handleTokenFee(
             _token0,
             state.amount0In,
@@ -395,7 +387,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
             _accumulatedFee0
         );
 
-        // Handle token1 fees with library function
         _accumulatedFee1 = PonderFeesLib.handleTokenFee(
             _token1,
             state.amount1In,
@@ -473,7 +464,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
 
     /*//////////////////////////////////////////////////////////////
                   MAINTENANCE OPERATIONS
-  //////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Forces balances to match reserves
     /// @dev Handles excess tokens and fee collection
