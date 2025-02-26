@@ -30,7 +30,6 @@ library PonderOracleTypes {
         uint224 price1Cumulative;
     }
 
-
     /// @notice Data structure for Time Weighted Average Price calculations
     /// @dev Packed structure used in interpolation calculations
     struct TWAPData {
@@ -58,7 +57,6 @@ library PonderOracleTypes {
         /// @dev Later cumulative price for token1
         uint224 secondPrice1;
     }
-
 
     /*//////////////////////////////////////////////////////////////
                             CONSTANTS

@@ -6,7 +6,6 @@ import { PonderRouterMathLib } from "./PonderRouterMathLib.sol";
 import { PonderRouterSwapLib } from "./PonderRouterSwapLib.sol";
 import { IPonderRouter } from "../IPonderRouter.sol";
 
-
 /*//////////////////////////////////////////////////////////////
                     ROUTER LIQUIDITY OPERATIONS
 //////////////////////////////////////////////////////////////*/
@@ -45,16 +44,13 @@ library PonderRouterLiquidityLib {
         uint256 amountBMin,
         IPonderFactory factory
     ) internal returns (uint256 amountA, uint256 amountB) {
-        // Create pair if it doesn't exist
         if (factory.getPair(tokenA, tokenB) == address(0)) {
             address pair = factory.createPair(tokenA, tokenB);
             if (pair == address(0)) revert IPonderRouter.PairCreationFailed();
         }
 
-        // Get current reserves for both tokens
         (uint256 reserveA, uint256 reserveB) = PonderRouterSwapLib.getReserves(tokenA, tokenB, factory);
 
-        // Handle initial liquidity case
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
         } else {

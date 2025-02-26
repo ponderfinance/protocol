@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 /// @title BitMath Library
+/// @author taayyohh
 /// @notice Library for computing most and least significant bits of a uint256
 library BitMath {
     /// @notice Custom error for when input value is zero

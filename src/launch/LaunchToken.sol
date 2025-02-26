@@ -10,6 +10,7 @@ import { PonderToken } from "../core/token/PonderToken.sol";
 import { PonderKAP20 } from "../core/token/PonderKAP20.sol";
 
 /// @title LaunchToken
+/// @author taayyohh
 /// @notice Implements a token with vesting, trading restrictions, and fee mechanisms
 /// @dev Inherits from PonderKAP20 and implements ILaunchToken interface
 contract LaunchToken is ILaunchToken, PonderKAP20, ReentrancyGuard {

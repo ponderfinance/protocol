@@ -3,7 +3,6 @@ pragma solidity 0.8.24;
 
 import { IPonderStaking } from "../../staking/IPonderStaking.sol";
 
-
 /*//////////////////////////////////////////////////////////////
                     PONDER TOKEN STORAGE
 //////////////////////////////////////////////////////////////*/
@@ -47,7 +46,6 @@ abstract contract PonderTokenStorage {
     /// @dev Has privileged access to specific operations
     /// @dev Used for initial token distribution
     address internal _launcher;
-
 
     /*//////////////////////////////////////////////////////////////
                         TOKEN ACCOUNTING

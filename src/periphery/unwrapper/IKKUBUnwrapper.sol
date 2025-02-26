@@ -6,8 +6,8 @@ pragma solidity 0.8.24;
 //////////////////////////////////////////////////////////////*/
 
 /// @title IKKUBUnwrapper
-/// @author Original author: [Insert author name]
-/// @notice Interface defining functionality for unwrapping KKUB tokens to ETH
+/// @author taayyohh
+/// @notice Interface defining functionality for unwrapping KKUB tokens to KUB
 /// @dev This interface outlines core unwrapping operations and administrative functions
 ///      All amounts are handled in wei (1e18) precision
 ///      Implements emergency controls and rate limiting for safety
@@ -84,7 +84,7 @@ interface IKKUBUnwrapper {
 
     /*//////////////////////////////////////////////////////////////
                     ERROR DEFINITIONS
-//////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Error for withdrawal timing violations
     /// @dev Thrown when attempting withdrawal before WITHDRAWAL_DELAY has elapsed

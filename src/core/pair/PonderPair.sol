@@ -247,7 +247,7 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
 
     /*//////////////////////////////////////////////////////////////
                        SWAP OPERATIONS
-   //////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Executes token swap with exact outputs
     /// @dev Supports flash swaps via callback
@@ -478,11 +478,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
     /// @param reserve1_ Current reserve of token1
     /// @return feeOn Whether protocol fees are enabled
     function _mintFee(uint112 reserve0_, uint112 reserve1_) private returns (bool feeOn) {
-        // Check if fees are enabled via factory
         address feeTo = IPonderFactory(_FACTORY).feeTo();
         feeOn = feeTo != address(0);
 
-        // Cache kLast to minimize SLOADs
         uint256 _kLastOld = _kLast;
 
         if (feeOn) {
@@ -508,7 +506,6 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
                 }
             }
         } else if (_kLastOld != 0) {
-            // If fees were enabled before but now disabled, reset kLast
             _kLast = 0;
         }
     }
@@ -572,11 +569,9 @@ contract PonderPair is IPonderPair, PonderPairStorage, PonderKAP20("Ponder LP", 
     /// @notice Forces reserves to match balances
     /// @dev Updates reserves without moving tokens
     function sync() external override nonReentrant {
-        // Cache storage variables
         address token0_ = _token0;
         address token1_ = _token1;
 
-        // Get current state
         uint256 balance0 = IERC20(token0_).balanceOf(address(this));
         uint256 balance1 = IERC20(token1_).balanceOf(address(this));
         (uint112 reserve0Current, uint112 reserve1Current,) = getReserves();

@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 /// @title Math Library
+/// @author taayyohh
 /// @notice A library for performing various math operations safely
 library Math {
     /// @notice Calculates the square root of a number using the Babylonian method

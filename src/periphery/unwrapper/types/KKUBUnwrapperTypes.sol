@@ -6,7 +6,7 @@ pragma solidity 0.8.24;
 //////////////////////////////////////////////////////////////*/
 
 /// @title KKUBUnwrapperTypes
-/// @author Original author: [Insert author name]
+/// @author taayyohh
 /// @notice Type definitions and constants for KKUB unwrapping system
 /// @dev Central library for all constants, errors, and type definitions
 ///      Used across the KKUB unwrapping protocol

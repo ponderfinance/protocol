@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 /// @title Fixed Point Math Library
+/// @author taayyohh
 /// @notice A library for handling fixed-point arithmetic
 library FixedPoint {
     // Custom errors

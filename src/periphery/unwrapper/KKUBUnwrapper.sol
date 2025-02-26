@@ -11,7 +11,6 @@ import { KKUBUnwrapperTypes } from "./types/KKUBUnwrapperTypes.sol";
 import { KKUBUnwrapperStorage } from "./storage/KKUBUnwrapperStorage.sol";
 import { IKKUBUnwrapper } from "./IKKUBUnwrapper.sol";
 
-
 /*//////////////////////////////////////////////////////////////
                     KKUB UNWRAPPER CONTRACT
 //////////////////////////////////////////////////////////////*/
@@ -55,7 +54,6 @@ contract KKUBUnwrapper is
         if (_kkub == address(0)) revert IKKUBUnwrapper.ZeroAddressNotAllowed();
         KKUB = _kkub;
     }
-
 
     /*//////////////////////////////////////////////////////////////
                       VIEW FUNCTIONS
@@ -134,7 +132,6 @@ contract KKUBUnwrapper is
         return true;
     }
 
-
     /*//////////////////////////////////////////////////////////////
                         ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -147,7 +144,6 @@ contract KKUBUnwrapper is
         super.transferOwnership(newOwner);
     }
 
-
     /// @notice Emergency withdrawal of excess KUB
     /// @dev Restricted to owner with time and amount limits
     /// @dev Automatically pauses contract
@@ -156,7 +152,6 @@ contract KKUBUnwrapper is
     ///      - No balance available
     ///      - Transfer fails
     function emergencyWithdraw() external override onlyOwner nonReentrant {
-        // Checks
         // - Only callable by owner
         // - Has maximum withdrawal amount limits
         // - Withdrawal delay is much longer than possible manipulation window
@@ -173,13 +168,11 @@ contract KKUBUnwrapper is
             withdrawableAmount = KKUBUnwrapperTypes.MAX_WITHDRAWAL_AMOUNT;
         }
 
-        // Effects - Update state before transfer
         lastWithdrawalTime = block.timestamp;
         if (!paused()) {
             _pause();
         }
 
-        // Interactions - Transfer after state updates
         payable(owner()).sendValue(withdrawableAmount);
 
         emit EmergencyWithdraw(withdrawableAmount, block.timestamp);

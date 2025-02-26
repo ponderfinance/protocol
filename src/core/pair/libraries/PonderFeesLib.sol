@@ -149,13 +149,11 @@ library PonderFeesLib {
         }
     }
 
-    /**
-     * @notice Checks for overflow when storing reserves
-     * @dev Prevents uint112 overflow in reserve values
-     * @param balance0 Balance of token0
-     * @param balance1 Balance of token1
-     * @return reservesValid Whether reserves can be stored without overflow
-     */
+     /// @notice Checks for overflow when storing reserves
+     /// @dev Prevents uint112 overflow in reserve values
+     /// @param balance0 Balance of token0
+     /// @param balance1 Balance of token1
+     /// @return reservesValid Whether reserves can be stored without overflow
     function validateReserveOverflow(
         uint256 balance0,
         uint256 balance1

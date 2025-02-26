@@ -6,7 +6,7 @@ pragma solidity 0.8.24;
 //////////////////////////////////////////////////////////////*/
 
 /// @title KKUBUnwrapperStorage
-/// @author Original author: [Insert author name]
+/// @author taayyohh
 /// @notice Storage layout for KKUB unwrapping system
 /// @dev Abstract contract defining state variables for unwrapper implementation
 ///      Storage slots are carefully ordered to optimize gas costs

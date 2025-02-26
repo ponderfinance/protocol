@@ -516,12 +516,10 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to stake in
     /// @param _amount Amount of LP tokens to stake
     function deposit(uint256 _pid, uint256 _amount) external nonReentrant {
-        // CHECKS
         if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
 
-        // EFFECTS - Update pool state first
         if (_amount > 0 && !_farmingStarted) {
             _startTime = block.timestamp;
             _farmingStarted = true;
@@ -534,7 +532,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         // Calculate deposit fee
         (uint256 depositFee, uint256 actualAmount) = _calculateDepositFee(_amount, pool.depositFeeBP);
 
-        // EFFECTS - Update user state
         if (actualAmount > 0) {
             user.amount += actualAmount;
             pool.totalStaked += actualAmount;
@@ -544,7 +541,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         // Update reward debt
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
-        // INTERACTIONS - Handle token transfers last
         if (pending > 0) {
             _safePonderTransfer(msg.sender, pending);
         }
@@ -624,7 +620,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         emit EmergencyWithdraw(msg.sender, _pid, amount);
     }
 
-
     /*//////////////////////////////////////////////////////////////
                     BOOST MECHANICS
     //////////////////////////////////////////////////////////////*/
@@ -634,7 +629,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to boost
     /// @param _amount Amount of PONDER to stake
     function boostStake(uint256 _pid, uint256 _amount) external nonReentrant {
-        // CHECKS
         if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         if (_amount == 0) revert IPonderMasterChef.ZeroAmount();
 
@@ -654,7 +648,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         // Record initial balance for validation
         uint256 beforeBalance = PONDER.balanceOf(address(this));
 
-        // EFFECTS - Update stake amounts
         user.ponderStaked += _amount;
 
         // Update weighted shares and validate boost
@@ -666,7 +659,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         // Update reward debt
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
-        // INTERACTIONS - Handle token transfers after all state updates
         if (!PONDER.transferFrom(msg.sender, address(this), _amount)) {
             revert IPonderMasterChef.TransferFailed();
         }
@@ -722,7 +714,7 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
     /*//////////////////////////////////////////////////////////////
                    INTERNAL HELPERS
-   //////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Calculate deposit fee and actual deposit amount
     /// @dev Uses BASIS_POINTS denominator (10000) for fee calculation
@@ -828,11 +820,9 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         }
     }
 
-
     /*//////////////////////////////////////////////////////////////
                         ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
 
     /// @notice Update fee recipient
     /// @dev Sets new address for collecting deposit fees
@@ -854,7 +844,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
 
         _massUpdatePools();
     }
-
 
     /// @notice Initialize ownership transfer
     /// @dev Starts two-step ownership transfer

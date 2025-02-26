@@ -48,10 +48,9 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         BASE_TOKEN = _baseToken;
     }
 
-
     /*//////////////////////////////////////////////////////////////
                        PAIR MANAGEMENT
-   //////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Set up new trading pair
     /// @dev Creates initial observation array
@@ -81,7 +80,6 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
 
         emit PairInitialized(pair, blockTimestamp);
     }
-
 
     /// @notice Record new price observation
     /// @dev Updates circular buffer with latest prices
@@ -118,10 +116,9 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         emit OracleUpdated(pair, price0Cumulative, price1Cumulative, blockTimestamp);
     }
 
-
     /*//////////////////////////////////////////////////////////////
                        PRICE CALCULATIONS
-   //////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Calculate TWAP for pair
     /// @dev Uses historical observations over period

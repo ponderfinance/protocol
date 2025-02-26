@@ -40,7 +40,6 @@ interface IPonderPriceOracle {
         uint256 amountIn
     ) external view returns (uint256 amountOut);
 
-
     /*//////////////////////////////////////////////////////////////
                     OBSERVATION MANAGEMENT
     //////////////////////////////////////////////////////////////*/
@@ -87,7 +86,6 @@ interface IPonderPriceOracle {
     /// @dev Returns immutable routing token reference
     function baseToken() external view returns (address);
 
-
     /*//////////////////////////////////////////////////////////////
                             EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -111,7 +109,7 @@ interface IPonderPriceOracle {
 
     /*//////////////////////////////////////////////////////////////
                     CUSTOM ERRORS
-//////////////////////////////////////////////////////////////*/
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Invalid trading pair address
     error InvalidPair();
@@ -139,7 +137,7 @@ interface IPonderPriceOracle {
 
     /// @notice Zero address provided
     error ZeroAddress();
-    
+
     /// @notice Zero time elapsed between prices
     /// @dev Prevents division by zero in TWAP
     error ElapsedTimeZero();

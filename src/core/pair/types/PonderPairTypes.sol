@@ -115,7 +115,6 @@ library PonderPairTypes {
         bytes callbackData;
     }
 
-
     /// @notice Holds internal state during swap execution
     /// @dev Used to track swap progress and maintain CEI pattern
     /// @dev Separate from SwapData to maintain clear validation boundaries

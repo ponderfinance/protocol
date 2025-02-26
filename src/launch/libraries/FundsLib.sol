@@ -399,7 +399,7 @@ library FundsLib {
         }
 
 
-    validateContributionLimits(launch, context);
+        validateContributionLimits(launch, context);
 
         return processValidatedContribution(launch, launchId, context, contributor, ponder);
     }
