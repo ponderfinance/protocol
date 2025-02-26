@@ -44,10 +44,10 @@ contract FiveFiveFiveLauncher is
     PonderPriceOracle public immutable PRICE_ORACLE;
 
     /// @notice Address with administrative privileges
-    address public immutable owner;
+    address public immutable OWNER;
 
     /// @notice Address that receives protocol fees
-    address public immutable feeCollector;
+    address public immutable FEE_COLLECTOR;
 
 
     /*//////////////////////////////////////////////////////////////
@@ -80,8 +80,8 @@ contract FiveFiveFiveLauncher is
         ROUTER = IPonderRouter(_router);
         PONDER = PonderToken(_ponder);
         PRICE_ORACLE = PonderPriceOracle(_priceOracle);
-        feeCollector = _feeCollector;
-        owner = msg.sender;
+        FEE_COLLECTOR = _feeCollector;
+        OWNER = msg.sender;
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -29,7 +29,7 @@ contract PonderToken is PonderKAP20, PonderTokenStorage, IPonderToken {
     uint256 private immutable _DEPLOYMENT_TIME;
 
     /// @notice Address for team and reserve allocations
-    address private immutable _teamReserve;
+    address private immutable _TEAM_RESERVE;
 
     /// @notice Flag for if team locked staking has been initialized
     bool private _stakingInitialized;
@@ -57,7 +57,7 @@ contract PonderToken is PonderKAP20, PonderTokenStorage, IPonderToken {
         // Set core contract parameters
         _owner = msg.sender;
         _DEPLOYMENT_TIME = block.timestamp;
-        _teamReserve = teamReserve_;
+        _TEAM_RESERVE = teamReserve_;
         _launcher = launcher_;
         _staking = IPonderStaking(staking_);
 
@@ -148,7 +148,7 @@ contract PonderToken is PonderKAP20, PonderTokenStorage, IPonderToken {
         _approve(address(this), address(_staking), PonderTokenTypes.TEAM_ALLOCATION);
 
         // Enter staking with team allocation
-        _staking.enter(PonderTokenTypes.TEAM_ALLOCATION, _teamReserve);
+        _staking.enter(PonderTokenTypes.TEAM_ALLOCATION, _TEAM_RESERVE);
     }
 
     /// @notice Sets the staking contract address
@@ -213,7 +213,7 @@ contract PonderToken is PonderKAP20, PonderTokenStorage, IPonderToken {
     /// @notice Team allocation recipient
     /// @return Address receiving vested tokens
     function teamReserve() external view returns (address) {
-        return _teamReserve;
+        return _TEAM_RESERVE;
     }
 
     /// @notice Protocol launcher address

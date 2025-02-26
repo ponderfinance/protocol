@@ -8,7 +8,6 @@ import { PonderPairStorage } from "./storage/PonderPairStorage.sol";
 import { PonderPairTypes } from "./types/PonderPairTypes.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
 import { IPonderCallee } from "./IPonderCallee.sol";
-import { ILaunchToken } from "../../launch/ILaunchToken.sol";
 import { Math } from "../../libraries/Math.sol";
 import { UQ112x112 } from "../../libraries/UQ112x112.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";

@@ -27,16 +27,16 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The protocol's factory contract for managing pairs
-    IPonderFactory public immutable factory;
+    IPonderFactory public immutable FACTORY;
 
     /// @notice The protocol's router contract for swap operations
-    IPonderRouter public immutable router;
+    IPonderRouter public immutable ROUTER;
 
     /// @notice The address of the protocol's PONDER token
-    address public immutable ponder;
+    address public immutable PONDER;
 
     /// @notice The protocol's staking contract for PONDER tokens
-    IPonderStaking public immutable staking;
+    IPonderStaking public immutable STAKING;
 
     /*//////////////////////////////////////////////////////////////
                            CONSTRUCTOR
@@ -59,10 +59,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         if (_ponder == address(0)) revert IFeeDistributor.ZeroAddress();
         if (_staking == address(0)) revert IFeeDistributor.ZeroAddress();
 
-        factory = IPonderFactory(_factory);
-        router = IPonderRouter(_router);
-        ponder = _ponder;
-        staking = IPonderStaking(_staking);
+        FACTORY = IPonderFactory(_factory);
+        ROUTER = IPonderRouter(_router);
+        PONDER = _ponder;
+        STAKING = IPonderStaking(_staking);
 
         owner = msg.sender;
 
@@ -116,7 +116,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     /// @dev Includes slippage protection and minimum output verification
     /// @param token Address of the token to convert to PONDER
     function convertFees(address token) external nonReentrant {
-        if (token == ponder) return;
+        if (token == PONDER) return;
 
         uint256 amount = IERC20(token).balanceOf(address(this));
         if (amount < FeeDistributorTypes.MINIMUM_AMOUNT) revert IFeeDistributor.InvalidAmount();
@@ -125,17 +125,17 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 minOutAmount = _calculateMinimumPonderOut(token, amount);
 
         // Approve router
-        if (!IERC20(token).approve(address(router), amount)) {
+        if (!IERC20(token).approve(address(ROUTER), amount)) {
             revert IFeeDistributor.ApprovalFailed();
         }
 
         // Setup path
         address[] memory path = new address[](2);
         path[0] = token;
-        path[1] = ponder;
+        path[1] = PONDER;
 
         // Perform swap with strict output requirements
-        try router.swapExactTokensForTokens(
+        try ROUTER.swapExactTokensForTokens(
             amount,
             minOutAmount,
             path,
@@ -168,14 +168,14 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
             }
         }
 
-        uint256 totalAmount = IERC20(ponder).balanceOf(address(this));
+        uint256 totalAmount = IERC20(PONDER).balanceOf(address(this));
         if (totalAmount < FeeDistributorTypes.MINIMUM_AMOUNT) revert IFeeDistributor.InvalidAmount();
 
         // Update timestamp BEFORE transfers
         lastDistributionTimestamp = block.timestamp;
 
         // Send 100% to staking as team has separate allocation
-        if (!IERC20(ponder).transfer(address(staking), totalAmount)) {
+        if (!IERC20(PONDER).transfer(address(STAKING), totalAmount)) {
             revert IFeeDistributor.TransferFailed();
         }
 
@@ -220,7 +220,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
 
         markPairsForProcessing(pairs);
 
-        uint256 preConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
+        uint256 preConversionPonderBalance = IERC20(PONDER).balanceOf(address(this));
         bool anyFeesConverted = false;
 
         address[] memory uniqueTokens = _getUniqueTokens(pairs);
@@ -234,7 +234,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         // Then process all unique tokens
         for (uint256 i = 0; i < uniqueTokens.length; i++) {
             address token = uniqueTokens[i];
-            if (token != ponder) {
+            if (token != PONDER) {
                 // Cache balance check
                 uint256 tokenBalance = IERC20(token).balanceOf(address(this));
                 if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
@@ -247,7 +247,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
 
         // Check final state
-        uint256 postConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
+        uint256 postConversionPonderBalance = IERC20(PONDER).balanceOf(address(this));
 
         if (postConversionPonderBalance >= FeeDistributorTypes.MINIMUM_AMOUNT &&
             (anyFeesConverted || postConversionPonderBalance > preConversionPonderBalance)) {
@@ -268,7 +268,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         address token,
         uint256 amountIn
     ) internal view returns (uint256 minOut) {
-        address pair = factory.getPair(token, ponder);
+        address pair = FACTORY.getPair(token, PONDER);
         if (pair == address(0)) revert IFeeDistributor.PairNotFound();
 
         // Cache all external calls
@@ -284,7 +284,7 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 reserveRatio = (uint256(tokenReserve) * 1e18) / uint256(ponderReserve);
         if (reserveRatio > 100e18 || reserveRatio < 1e16) revert IFeeDistributor.SwapFailed();
 
-        uint256 amountOut = router.getAmountsOut(amountIn, _getPath(token, ponder))[1];
+        uint256 amountOut = ROUTER.getAmountsOut(amountIn, _getPath(token, PONDER))[1];
         return (amountOut * 995) / 1000;
     }
 
@@ -313,21 +313,21 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         uint256 amountIn,
         uint256 minOutAmount
     ) internal {
-        if (token == ponder) return;
+        if (token == PONDER) return;
         if (amountIn > type(uint96).max) revert AmountTooLarge();
 
         // Check and update approval in one step if needed
-        uint256 currentAllowance = IERC20(token).allowance(address(this), address(router));
+        uint256 currentAllowance = IERC20(token).allowance(address(this), address(ROUTER));
         if (currentAllowance < amountIn) {
-            if (!IERC20(token).approve(address(router), type(uint256).max)) {
+            if (!IERC20(token).approve(address(ROUTER), type(uint256).max)) {
                 revert ApprovalFailed();
             }
         }
 
         // Cache path creation
-        address[] memory path = _getPath(token, ponder);
+        address[] memory path = _getPath(token, PONDER);
 
-        try router.swapExactTokensForTokens(
+        try ROUTER.swapExactTokensForTokens(
             amountIn,
             minOutAmount,
             path,
@@ -364,10 +364,10 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
                 if (tempTokens[j] == token1) found1 = true;
             }
 
-            if (!found0 && token0 != ponder) {
+            if (!found0 && token0 != PONDER) {
                 tempTokens[count++] = token0;
             }
-            if (!found1 && token1 != ponder) {
+            if (!found1 && token1 != PONDER) {
                 tempTokens[count++] = token1;
             }
         }

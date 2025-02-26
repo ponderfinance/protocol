@@ -85,11 +85,10 @@ library PonderFeesLib {
         (protocolFee, creatorFee) = calculateFees(token, amountIn, isPonderPair, launcherAddress);
 
         if (creatorFee > 0) {
-            // Attempt to get creator, return address(0) if it fails
             try ILaunchToken(token).creator() returns (address c) {
                 creator = c != address(0) ? c : address(0);
             } catch {
-                // Keep creator as address(0)
+                creator = address(0);
             }
         }
 
@@ -97,7 +96,7 @@ library PonderFeesLib {
     }
 
     /// @notice Handles fees for a single token
-    /// @dev Legacy function kept for compatibility - new implementations should use calculateAndReturnProtocolFee
+    /// @dev Legacy function kept for compatibility
     /// @param token Token address
     /// @param amountIn Amount of token swapped
     /// @param isPonderPair Whether this is a PONDER pair

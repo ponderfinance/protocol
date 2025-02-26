@@ -277,10 +277,10 @@ contract FeeDistributorTest is Test {
      * @notice Test initial contract state
      */
     function test_InitialState() public {
-        assertEq(address(distributor.factory()), address(factory));
-        assertEq(address(distributor.router()), address(router));
-        assertEq(address(distributor.ponder()), address(ponder));
-        assertEq(address(distributor.staking()), address(staking));
+        assertEq(address(distributor.FACTORY()), address(factory));
+        assertEq(address(distributor.ROUTER()), address(router));
+        assertEq(address(distributor.PONDER()), address(ponder));
+        assertEq(address(distributor.STAKING()), address(staking));
     }
 
     /**
