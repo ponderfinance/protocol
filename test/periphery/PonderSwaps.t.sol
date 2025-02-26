@@ -466,4 +466,324 @@ contract PonderRouterTest is Test {
 
         vm.stopPrank();
     }
+
+    function testKKUBUnwrappingInSwap() public {
+        // Setup: Add liquidity to the KKUB pair
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token0),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Record balances before swap
+        uint256 aliceETHBalanceBefore = alice.balance;
+        uint256 aliceToken0BalanceBefore = token0.balanceOf(alice);
+
+        // Create path for swapping token0 to native KUB (which uses unwrapper)
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(weth); // This should trigger unwrapping
+
+        // Perform swap that requires unwrapping
+        router.swapExactTokensForETH(
+            SWAP_AMOUNT,
+            0,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Verify alice received native KUB
+        assertGt(alice.balance - aliceETHBalanceBefore, 0, "Should receive native KUB");
+        assertLt(token0.balanceOf(alice), aliceToken0BalanceBefore, "Should spend token0");
+
+        vm.stopPrank();
+    }
+
+    // Tests exact output amount unwrapping
+    function testExactOutputUnwrapping() public {
+        // Setup: Add liquidity to the KKUB pair
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token0),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Record balances before swap
+        uint256 aliceETHBalanceBefore = alice.balance;
+
+        // Get required input for exact output
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(weth);
+
+        uint256 exactETHAmount = 0.5 ether;
+        uint256[] memory amounts = router.getAmountsIn(exactETHAmount, path);
+
+        // Execute swap with exact output
+        router.swapTokensForExactETH(
+            exactETHAmount,
+            amounts[0],
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Verify alice received exactly the requested amount of ETH
+        assertEq(alice.balance - aliceETHBalanceBefore, exactETHAmount, "Should receive exact ETH amount");
+
+        vm.stopPrank();
+    }
+
+// Tests unwrapping to a different recipient
+    function testUnwrappingToDifferentRecipient() public {
+        // Setup: Add liquidity to the KKUB pair
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token0),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Record bob's balance before swap
+        uint256 bobETHBalanceBefore = bob.balance;
+
+        // Create path for swapping token0 to native KUB
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(weth);
+
+        // Perform swap with bob as recipient
+        router.swapExactTokensForETH(
+            SWAP_AMOUNT,
+            0,
+            path,
+            bob,
+            block.timestamp + 1
+        );
+
+        // Verify bob received native KUB
+        assertGt(bob.balance - bobETHBalanceBefore, 0, "Recipient should receive native KUB");
+
+        vm.stopPrank();
+    }
+
+// Tests multi-hop route ending with unwrapping
+    function testMultiHopUnwrapping() public {
+        vm.startPrank(alice);
+
+        // Setup two pairs for multi-hop: token0->token1->KKUB
+        router.addLiquidity(
+            address(token0),
+            address(token1),
+            INITIAL_LIQUIDITY_AMOUNT,
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token1),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Record balances before swap
+        uint256 aliceETHBalanceBefore = alice.balance;
+
+        // Create multi-hop path ending with unwrapping
+        address[] memory path = new address[](3);
+        path[0] = address(token0);
+        path[1] = address(token1);
+        path[2] = address(weth);
+
+        // Perform swap
+        router.swapExactTokensForETH(
+            SWAP_AMOUNT,
+            0,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Verify alice received native KUB
+        assertGt(alice.balance - aliceETHBalanceBefore, 0, "Should receive native KUB after multi-hop");
+
+        vm.stopPrank();
+    }
+
+// Tests slippage protection during unwrapping
+    function testUnwrappingSlippageProtection() public {
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token0),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(weth);
+
+        // Get expected amount out
+        uint256[] memory amountsOut = router.getAmountsOut(SWAP_AMOUNT, path);
+
+        // Set minimum output higher than possible
+        uint256 unreachableMinimum = amountsOut[1] * 2;
+
+        // Expect revert due to insufficient output amount
+        vm.expectRevert(abi.encodeWithSelector(IPonderRouter.InsufficientOutputAmount.selector));
+        router.swapExactTokensForETH(
+            SWAP_AMOUNT,
+            unreachableMinimum,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
+
+// Tests deadline enforcement for unwrapping
+    function testUnwrappingDeadline() public {
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token0),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(weth);
+
+        // Set deadline in the past
+        uint256 pastDeadline = block.timestamp - 1;
+
+        // Expect revert due to expired deadline
+        vm.expectRevert(abi.encodeWithSelector(IPonderRouter.ExpiredDeadline.selector));
+        router.swapExactTokensForETH(
+            SWAP_AMOUNT,
+            0,
+            path,
+            alice,
+            pastDeadline
+        );
+
+        vm.stopPrank();
+    }
+
+// Tests fee-on-transfer tokens with unwrapping
+    function testFeeOnTransferUnwrapping() public {
+        // Assuming launchToken has fee-on-transfer mechanics
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(launchToken),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Record balances before swap
+        uint256 aliceETHBalanceBefore = alice.balance;
+
+        // Create path for swapping fee-on-transfer token to native KUB
+        address[] memory path = new address[](2);
+        path[0] = address(launchToken);
+        path[1] = address(weth);
+
+        // Perform swap with supporting fee-on-transfer
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            SWAP_AMOUNT,
+            0,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        // Verify alice received native KUB despite fee-on-transfer
+        assertGt(alice.balance - aliceETHBalanceBefore, 0, "Should receive native KUB after fee-on-transfer");
+
+        vm.stopPrank();
+    }
+
+// Tests behavior with very small amounts
+    function testSmallAmountUnwrapping() public {
+        vm.startPrank(alice);
+        router.addLiquidityETH{value: INITIAL_LIQUIDITY_AMOUNT}(
+            address(token0),
+            INITIAL_LIQUIDITY_AMOUNT,
+            0,
+            0,
+            alice,
+            block.timestamp + 1
+        );
+
+        address[] memory path = new address[](2);
+        path[0] = address(token0);
+        path[1] = address(weth);
+
+        // Swap a very small amount
+        uint256 tinyAmount = 1; // 1 wei of token0
+
+        // Expect the appropriate error for amounts too small
+        vm.expectRevert(abi.encodeWithSelector(IPonderRouter.InsufficientOutputAmount.selector));
+        router.swapExactTokensForETH(
+            tinyAmount,
+            0,
+            path,
+            alice,
+            block.timestamp + 1
+        );
+
+        vm.stopPrank();
+    }
+
+// Tests direct unwrapping through MockKKUBUnwrapper
+    function testDirectKKUBUnwrapping() public {
+        vm.startPrank(alice);
+
+        // Get KKUB tokens by depositing ETH
+        weth.deposit{value: 1 ether}();
+
+        // Approve the unwrapper to spend KKUB
+        weth.approve(address(unwrapper), 1 ether);
+
+        // Record balances before unwrap
+        uint256 aliceETHBalanceBefore = alice.balance;
+        uint256 aliceKKUBBalanceBefore = weth.balanceOf(alice);
+
+        // Directly unwrap through the unwrapper
+        unwrapper.unwrapKKUB(0.5 ether, alice);
+
+        // Verify balances
+        assertEq(weth.balanceOf(alice), aliceKKUBBalanceBefore - 0.5 ether, "Should spend KKUB");
+        assertEq(alice.balance, aliceETHBalanceBefore + 0.5 ether, "Should receive exact ETH amount");
+
+        vm.stopPrank();
+    }
 }

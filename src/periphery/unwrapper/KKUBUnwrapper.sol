@@ -6,7 +6,7 @@ import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { IKKUB } from "./IKKUB.sol";
+import { IKKUB, IKYC } from "./IKKUB.sol";
 import { KKUBUnwrapperTypes } from "./types/KKUBUnwrapperTypes.sol";
 import { KKUBUnwrapperStorage } from "./storage/KKUBUnwrapperStorage.sol";
 import { IKKUBUnwrapper } from "./IKKUBUnwrapper.sol";
@@ -91,14 +91,14 @@ contract KKUBUnwrapper is
         uint256 amount,
         address recipient
     ) external override nonReentrant whenNotPaused returns (bool) {
-        // CHECKS
         if (amount == 0) revert IKKUBUnwrapper.ZeroAmount();
         if (recipient == address(0)) revert IKKUBUnwrapper.ZeroAddressNotAllowed();
 
-        // Validate KYC and blacklist status
-        if (IKKUB(KKUB).kycsLevel(address(this)) <= KKUBUnwrapperTypes.REQUIRED_KYC_LEVEL) {
+        IKYC kyc = IKKUB(KKUB).kyc();
+        if (kyc.kycsLevel(address(this)) <= IKKUB(KKUB).kycsLevel()) {
             revert IKKUBUnwrapper.InsufficientKYCLevel();
         }
+
         if (IKKUB(KKUB).blacklist(recipient)) {
             revert IKKUBUnwrapper.BlacklistedAddress();
         }

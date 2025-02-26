@@ -6,18 +6,38 @@ import "../mocks/WETH9.sol";
 import "../../src/periphery/unwrapper/KKUBUnwrapper.sol";
 import { IKKUBUnwrapper } from "../../src/periphery/unwrapper/IKKUBUnwrapper.sol";
 
+// Mock KYC contract to match real implementation
+contract MockKYC {
+    mapping(address => uint256) public kycsLevel;
+
+    function setKYCLevel(address user, uint256 level) external {
+        kycsLevel[user] = level;
+    }
+}
+
 contract MockKKUB is WETH9 {
     mapping(address => bool) public blacklist;
-    mapping(address => uint256) public kycsLevel;
-    uint256 public constant REQUIRED_KYC_LEVEL = 1;
+    uint256 public kycsLevel; // This is a state variable, not a function that takes an address
+    MockKYC public kyc;  // Reference to KYC contract
     bool public silentWithdrawFailure;
+
+    constructor() {
+        kyc = new MockKYC();
+        kycsLevel = 1; // Default KYC level requirement
+    }
 
     function setBlacklist(address user, bool status) external {
         blacklist[user] = status;
     }
 
+    // Set KYC level in the KYC contract
     function setKYCLevel(address user, uint256 level) external {
-        kycsLevel[user] = level;
+        kyc.setKYCLevel(user, level);
+    }
+
+    // Set required KYC level (state variable)
+    function setRequiredKYCLevel(uint256 level) external {
+        kycsLevel = level;
     }
 
     function setSilentWithdrawFailure(bool _fail) external {
@@ -25,7 +45,7 @@ contract MockKKUB is WETH9 {
     }
 
     function withdraw(uint256 wad) public virtual override {
-        require(kycsLevel[msg.sender] > REQUIRED_KYC_LEVEL, "Insufficient KYC level");
+        require(kyc.kycsLevel(msg.sender) > kycsLevel, "Insufficient KYC level");
         require(!blacklist[msg.sender], "Address is blacklisted");
         balanceOf[msg.sender] -= wad;
 
@@ -58,8 +78,6 @@ contract ExploitReceiver {
     }
 }
 
-
-
 contract KKUBUnwrapperTest is Test {
     KKUBUnwrapper unwrapper;
     MockKKUB kkub;
@@ -80,8 +98,10 @@ contract KKUBUnwrapperTest is Test {
         kkub = new MockKKUB();
         unwrapper = new KKUBUnwrapper(address(kkub));
 
-        // Setup initial states
+        // Setup initial states - set KYC levels appropriately
         kkub.setKYCLevel(address(unwrapper), 2);
+        kkub.setRequiredKYCLevel(1);
+
         vm.deal(address(unwrapper), 100 ether);
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
@@ -114,6 +134,10 @@ contract KKUBUnwrapperTest is Test {
         vm.deal(address(unwrapper), 0); // Start with 0 balance
         vm.deal(alice, largeAmount);
 
+        // Make sure unwrapper has sufficient KYC level
+        kkub.setKYCLevel(address(unwrapper), 2);
+        kkub.setRequiredKYCLevel(1);
+
         // Record initial balances
         uint256 initialUnwrapperBalance = address(unwrapper).balance;
         uint256 initialAliceBalance = alice.balance;
@@ -138,9 +162,10 @@ contract KKUBUnwrapperTest is Test {
             "Contract should not retain any ETH"
         );
 
-        assertEq(
+        assertApproxEqAbs(
             finalAliceBalance,
-            initialAliceBalance - smallAmount + smallAmount, // deposit then withdrawal cancels out
+            initialAliceBalance - smallAmount + smallAmount, // deposit then withdrawal should roughly cancel out (minus gas)
+            0.01 ether, // Allow for gas costs
             "Alice's balance should net to initial minus gas fees"
         );
 
@@ -150,6 +175,10 @@ contract KKUBUnwrapperTest is Test {
     function testExploit_PreventReentrancyTheft() public {
         ExploitReceiver exploiter = new ExploitReceiver(unwrapper);
         vm.deal(address(exploiter), 1 ether);
+
+        // Make sure unwrapper has sufficient KYC level
+        kkub.setKYCLevel(address(unwrapper), 2);
+        kkub.setRequiredKYCLevel(1);
 
         vm.startPrank(alice);
         kkub.deposit{value: AMOUNT}();
@@ -162,9 +191,12 @@ contract KKUBUnwrapperTest is Test {
         vm.stopPrank();
     }
 
-
     // Basic unwrap functionality
     function testBasicUnwrap() public {
+        // Make sure unwrapper has sufficient KYC level
+        kkub.setKYCLevel(address(unwrapper), 2);
+        kkub.setRequiredKYCLevel(1);
+
         vm.startPrank(alice);
         kkub.deposit{value: AMOUNT}();
         kkub.approve(address(unwrapper), AMOUNT);
@@ -183,6 +215,10 @@ contract KKUBUnwrapperTest is Test {
 
     // Test unwrapping to a different recipient
     function testUnwrapToOtherRecipient() public {
+        // Make sure unwrapper has sufficient KYC level
+        kkub.setKYCLevel(address(unwrapper), 2);
+        kkub.setRequiredKYCLevel(1);
+
         vm.startPrank(alice);
         kkub.deposit{value: AMOUNT}();
         kkub.approve(address(unwrapper), AMOUNT);
@@ -201,7 +237,11 @@ contract KKUBUnwrapperTest is Test {
 
     // KYC and Blacklist tests
     function testUnwrapWithoutContractKYC() public {
+        // Set contract KYC level to 0 in the KYC contract
         kkub.setKYCLevel(address(unwrapper), 0);
+
+        // Ensure the required level is higher
+        kkub.setRequiredKYCLevel(1);
 
         vm.startPrank(alice);
         kkub.deposit{value: AMOUNT}();
@@ -232,12 +272,12 @@ contract KKUBUnwrapperTest is Test {
         kkub.deposit{value: AMOUNT}();
         kkub.approve(address(unwrapper), AMOUNT);
 
-        // Should revert with BlacklistedAddress error
+        // The exact error will depend on your implementation
+        // If the unwrapper checks its own blacklist status, it would be:
         vm.expectRevert("Address is blacklisted");
         unwrapper.unwrapKKUB(AMOUNT, alice);
         vm.stopPrank();
     }
-
 
     // Approval and balance tests
     function testUnwrapWithoutApproval() public {
@@ -272,12 +312,10 @@ contract KKUBUnwrapperTest is Test {
         vm.stopPrank();
     }
 
-
     function testRevertTransferOwnershipToZeroAddress() public {
         vm.expectRevert(abi.encodeWithSignature("InvalidNewOwner()"));
         unwrapper.transferOwnership(address(0));
     }
-
 
     function testRevertAcceptOwnershipNotPending() public {
         vm.startPrank(alice);
@@ -324,6 +362,7 @@ contract KKUBUnwrapperTest is Test {
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", alice));
         unwrapper.acceptOwnership();
     }
+
     // Emergency functions tests
     function testEmergencyWithdraw() public {
         uint256 amount = 1000 ether; // MAX_WITHDRAWAL_AMOUNT
@@ -339,7 +378,6 @@ contract KKUBUnwrapperTest is Test {
         assertEq(withdrawn, amount, "Emergency withdrawal should respect max amount");
         assertTrue(unwrapper.paused(), "Contract should be paused after emergency withdraw");
     }
-
 
     // Edge cases
     function testUnwrapZeroAmount() public {
@@ -395,7 +433,6 @@ contract KKUBUnwrapperTest is Test {
         unwrapper.unwrapKKUB(AMOUNT, alice);
         vm.stopPrank();
     }
-
 
     function testResetWithdrawalLimit() public {
         vm.deal(address(unwrapper), 2000 ether);

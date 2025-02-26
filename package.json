@@ -1,6 +1,6 @@
 {
   "name": "@ponderfinance/dex",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "type": "module",
   "description": "Core smart contracts for Ponder DEX & 555 Launcher",
   "files": [

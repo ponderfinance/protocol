@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import { Script } from "forge-std/Script.sol";
 import { console } from "forge-std/console.sol";
 
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { PonderFactory } from "../../src/core/factory/PonderFactory.sol";
 import { PonderToken } from "../../src/core/token/PonderToken.sol";
 import { PonderMasterChef } from "../../src/core/masterchef/PonderMasterChef.sol";
@@ -18,14 +19,17 @@ import { FiveFiveFiveLauncher } from "../../src/launch/FiveFiveFiveLauncher.sol"
 contract DeployBitkubScript is Script {
     uint256 constant public INITIAL_PONDER_PER_SECOND = 3168000000000000000;
     uint256 constant public INITIAL_KUB_AMOUNT = 1000 ether;
-    uint256 constant public INITIAL_LIQUIDITY_ALLOCATION = 200_000_000 ether;
+    uint256 constant public INITIAL_LIQUIDITY_ALLOCATION = 1_000_000 ether;
+
+    address constant public TRANSFER_ROUTER = 0xFbf5b70ef07AE6F64D3796f8a0fE83A3579FAb6f;
+    uint256 constant public ACCEPTED_KYC_LEVEL = 4;
 
     // KAP20 specific parameters - Bitkub Mainnet checksummed addresses
 //    address constant public ADMIN_PROJECT_ROUTER = 0x15122c945763da4435b45E082234108361B64eBA;
 //    address constant public COMMITTEE = 0xA755a1F6a35ba92835c0A23d3e5292e101d32716;
 //    address constant public KYC = 0x409CF41ee862Df7024f289E9F2Ea2F5d0D7f3eb4;
-    address constant public TRANSFER_ROUTER = 0xFbf5b70ef07AE6F64D3796f8a0fE83A3579FAb6f;
-    uint256 constant public ACCEPTED_KYC_LEVEL = 4;
+//    address constant public KKUB =0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5;
+//
 
     //// TEST NET Bitkub Chain
     address constant public ADMIN_PROJECT_ROUTER = 0xE4088E1f199287B1146832352aE5Fc3726171d41;
@@ -191,20 +195,28 @@ contract DeployBitkubScript is Script {
         require(state.core.ponder != address(0), "PONDER token not deployed");
         require(state.core.router != address(0), "Router not deployed");
 
+        // Define KKUB token amount
+        uint256 kkubAmount = INITIAL_KUB_AMOUNT;
+
         // Approve router for PONDER spending
         PonderToken(state.core.ponder).approve(state.core.router, INITIAL_LIQUIDITY_ALLOCATION);
 
-        try IPonderRouter(state.core.router).addLiquidityETH{value: INITIAL_KUB_AMOUNT}(
+        // Approve router for KKUB spending
+        IERC20(KKUB).approve(state.core.router, kkubAmount);
+
+        try IPonderRouter(state.core.router).addLiquidity(
             state.core.ponder,
+            KKUB,  // Use KKUB address directly
             INITIAL_LIQUIDITY_ALLOCATION,
+            kkubAmount,
             INITIAL_LIQUIDITY_ALLOCATION,
-            INITIAL_KUB_AMOUNT,
+            kkubAmount,
             state.participants.deployer,
             block.timestamp + 300
-        ) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
-            emit LiquidityAdded(amountETH, amountToken);
+        ) returns (uint256 amountToken, uint256 amountKKUB, uint256 liquidity) {
+            emit LiquidityAdded(amountKKUB, amountToken);
             console.log("Initial liquidity added successfully:");
-            console.log("- KUB added:", amountETH);
+            console.log("- KKUB added:", amountKKUB);
             console.log("- PONDER added:", amountToken);
             console.log("- LP tokens received:", liquidity);
         } catch Error(string memory reason) {
