@@ -20,7 +20,7 @@ Ponder is a decentralized exchange protocol built specifically for Bitkub Chain,
 - Constant product formula (x * y = k)
 - 0.3% total trading fee split:
   - 0.25% to Liquidity Providers via k=xy formula
-  - 0.05% protocol fee split between xKOI stakers (80%) and team (20%)
+  - 0.05% protocol fee, 100% distributed to xKOI stakers
   - Special fee structure for launch tokens
 - Time-weighted price oracle system
 - Permissionless liquidity provision
@@ -140,7 +140,7 @@ The 555 Launch platform introduces a novel token launch mechanism designed to cr
 - LP rewards via 0.25% direct fee
 - Launch creator incentives through fees
 
-### Token Distribution
+### KOI Token Distribution
 **Total Supply: 1,000,000,000 KOI**
 
 - 40% (400M) - Initial Liquidity
