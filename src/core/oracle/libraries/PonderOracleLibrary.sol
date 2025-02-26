@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import { IPonderPair } from "../../core/pair/IPonderPair.sol";
-import { UQ112x112 } from "../../libraries/UQ112x112.sol";
-import { IPonderPriceOracle } from "../../core/oracle/IPonderPriceOracle.sol";
+import { IPonderPair } from "../../../core/pair/IPonderPair.sol";
+import { UQ112x112 } from "../../../libraries/UQ112x112.sol";
+import { IPonderPriceOracle } from "../../../core/oracle/IPonderPriceOracle.sol";
 
 /*//////////////////////////////////////////////////////////////
                     PONDER ORACLE LIBRARY

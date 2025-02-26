@@ -28,6 +28,9 @@ contract PonderToken is PonderKAP20, PonderTokenStorage, IPonderToken {
     /// @dev Immutable to prevent manipulation
     uint256 private immutable _DEPLOYMENT_TIME;
 
+    /// @notice Address for team and reserve allocations
+    address private immutable _teamReserve;
+
     /// @notice Flag for if team locked staking has been initialized
     bool private _stakingInitialized;
 

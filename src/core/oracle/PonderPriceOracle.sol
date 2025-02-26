@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 import { IPonderPriceOracle } from "./IPonderPriceOracle.sol";
 import { PonderOracleStorage } from "./storage/PonderOracleStorage.sol";
 import { PonderOracleTypes } from "./types/PonderOracleTypes.sol";
-import { PonderOracleLibrary } from "./PonderOracleLibrary.sol";
+import { PonderOracleLibrary } from "./libraries/PonderOracleLibrary.sol";
 import { IPonderPair } from "../pair/IPonderPair.sol";
 import { IPonderFactory } from "../factory/IPonderFactory.sol";
 
@@ -246,10 +246,10 @@ contract PonderPriceOracle is IPonderPriceOracle, PonderOracleStorage {
         PonderOracleTypes.Observation[] storage history = _observations[pair];
         uint256 currentIdx = _currentIndex[pair];
 
-        uint256 beforeIdx;
-        uint256 afterIdx;
-        bool foundBefore;
-        bool foundAfter;
+        uint256 beforeIdx = 0;
+        uint256 afterIdx = 0;
+        bool foundBefore = false;
+        bool foundAfter = false;
 
         for (uint16 i = 0; i < PonderOracleTypes.OBSERVATION_CARDINALITY; i++) {
             uint256 index = (currentIdx + PonderOracleTypes.OBSERVATION_CARDINALITY - i) %

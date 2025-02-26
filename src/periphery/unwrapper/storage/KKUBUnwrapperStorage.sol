@@ -31,15 +31,4 @@ abstract contract KKUBUnwrapperStorage {
     /// @dev Increases when unwrap is initiated, decreases when completed
     /// @dev Critical for preventing over-commitment of ETH
     uint256 internal _lockedBalance;
-
-    /*//////////////////////////////////////////////////////////////
-                        UPGRADE GAP
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Gap for future storage variables
-    /// @dev Reserved storage slots for future versions
-    /// @dev Prevents storage collision in upgrades
-    /// @dev Contains 48 slots of uint256
-    /// @dev DO NOT MODIFY the gap size without careful consideration
-    uint256[48] private __gap;
 }

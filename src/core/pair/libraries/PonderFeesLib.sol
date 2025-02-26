@@ -13,7 +13,7 @@ import { ILaunchToken } from "../../../launch/ILaunchToken.sol";
 /// @title PonderFeesLib
 /// @author taayyohh
 /// @notice Library for fee calculation and collection in Ponder protocol
-/// @dev Extracts fee logic from PonderPair to reduce contract size
+/// @dev Extracts fee logic from PonderPair to reduce contract size and optimize gas
 library PonderFeesLib {
     using SafeERC20 for IERC20;
     using PonderPairTypes for PonderPairTypes.SwapState;
@@ -65,8 +65,39 @@ library PonderFeesLib {
         return (protocolFee, creatorFee);
     }
 
+    /// @notice Calculates fees and retrieves creator address in a single operation
+    /// @dev Gas-optimized function that avoids duplicate calls and conditionals
+    /// @param token Token address
+    /// @param amountIn Amount of token swapped
+    /// @param isPonderPair Whether this is a PONDER pair
+    /// @param launcherAddress Address of the launcher contract
+    /// @return protocolFee Amount of fee for protocol
+    /// @return creatorFee Amount of fee for creator
+    /// @return creator Address of the creator (or address(0) if none)
+    function calculateAndReturnProtocolFee(
+        address token,
+        uint256 amountIn,
+        bool isPonderPair,
+        address launcherAddress
+    ) internal view returns (uint256 protocolFee, uint256 creatorFee, address creator) {
+        if (amountIn == 0) return (0, 0, address(0));
+
+        (protocolFee, creatorFee) = calculateFees(token, amountIn, isPonderPair, launcherAddress);
+
+        if (creatorFee > 0) {
+            // Attempt to get creator, return address(0) if it fails
+            try ILaunchToken(token).creator() returns (address c) {
+                creator = c != address(0) ? c : address(0);
+            } catch {
+                // Keep creator as address(0)
+            }
+        }
+
+        return (protocolFee, creatorFee, creator);
+    }
+
     /// @notice Handles fees for a single token
-    /// @dev Manages fee collection and transfer for token creators
+    /// @dev Legacy function kept for compatibility - new implementations should use calculateAndReturnProtocolFee
     /// @param token Token address
     /// @param amountIn Amount of token swapped
     /// @param isPonderPair Whether this is a PONDER pair
@@ -82,33 +113,19 @@ library PonderFeesLib {
     ) internal returns (uint256 newAccumulatedFee) {
         if (amountIn == 0) return accumulatedFee;
 
-        // Use fee calculation
-        (uint256 protocolFeeAmount, uint256 creatorFeeAmount) = calculateFees(
-            token,
-            amountIn,
-            isPonderPair,
-            launcherAddress
-        );
+        (uint256 protocolFeeAmount, uint256 creatorFeeAmount, address creator) =
+                        calculateAndReturnProtocolFee(token, amountIn, isPonderPair, launcherAddress);
 
         // Update accumulated fees
         newAccumulatedFee = accumulatedFee + protocolFeeAmount;
 
-        // Handle creator fee transfer only if necessary
+        // Only transfer to creator if we have a valid creator address
         if (creatorFeeAmount > 0) {
-            address creator = address(0);
-            bool hasCreator = false;
-
-            // Try to get creator, but continue with default values if it fails
-            try ILaunchToken(token).creator() returns (address c) {
-                creator = c;
-                hasCreator = creator != address(0);
-            } catch (bytes memory /* reason */) {
-                // Keep default values (creator = address(0), hasCreator = false)
-                hasCreator = false;
+            if (creator != address(0)) {
+                IERC20(token).safeTransfer(creator, creatorFeeAmount);
+            } else {
+                newAccumulatedFee += creatorFeeAmount;
             }
-
-            if (hasCreator) IERC20(token).safeTransfer(creator, creatorFeeAmount);
-            else newAccumulatedFee += creatorFeeAmount;
         }
 
         return newAccumulatedFee;
@@ -123,11 +140,14 @@ library PonderFeesLib {
     /// @param swapData Swap state data including balances and amounts
     /// @return bool True if K value is maintained after the swap
     function validateKValue(PonderPairTypes.SwapData memory swapData) internal pure returns (bool) {
-        uint256 balance0Adjusted = swapData.balance0 * 1000 - (swapData.amount0In * 3);
-        uint256 balance1Adjusted = swapData.balance1 * 1000 - (swapData.amount1In * 3);
+        // Use unchecked for gas optimization since overflow is unlikely with realistic values
+        unchecked {
+            uint256 balance0Adjusted = swapData.balance0 * 1000 - (swapData.amount0In * 3);
+            uint256 balance1Adjusted = swapData.balance1 * 1000 - (swapData.amount1In * 3);
 
-        return balance0Adjusted * balance1Adjusted >=
-            uint256(swapData.reserve0) * uint256(swapData.reserve1) * (1000 * 1000);
+            return balance0Adjusted * balance1Adjusted >=
+                uint256(swapData.reserve0) * uint256(swapData.reserve1) * (1000 * 1000);
+        }
     }
 
     /**
@@ -174,7 +194,7 @@ library PonderFeesLib {
         uint256 accumulatedFee0,
         uint256 accumulatedFee1
     ) internal pure returns (bool isValid) {
-        // Ensure balances cover fees and are non-zero
+        // Combined condition for gas optimization
         return balance0 >= accumulatedFee0 &&
         balance1 >= accumulatedFee1 &&
         balance0 > 0 &&

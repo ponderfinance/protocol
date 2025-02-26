@@ -10,7 +10,6 @@ import { KKUBUnwrapper } from "../unwrapper/KKUBUnwrapper.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { PonderRouterTypes } from "./types/PonderRouterTypes.sol";
-import { PonderRouterStorage } from "./storage/PonderRouterStorage.sol";
 import { IPonderRouter } from "./IPonderRouter.sol";
 import { PonderRouterSwapLib } from "./libraries/PonderRouterSwapLib.sol";
 import { PonderRouterLiquidityLib } from "./libraries/PonderRouterLiquidityLib.sol";
@@ -27,7 +26,7 @@ import { PonderRouterMathLib } from "./libraries/PonderRouterMathLib.sol";
 /// @dev Implements core DEX functionality with ETH and token support
 ///      Includes support for fee-on-transfer tokens
 ///      Uses external libraries for math and swap logic
-contract PonderRouter is IPonderRouter, PonderRouterStorage, ReentrancyGuard {
+contract PonderRouter is IPonderRouter, ReentrancyGuard {
     using PonderRouterTypes for *;
     using PonderRouterSwapLib for *;
     using PonderRouterLiquidityLib for *;

@@ -15,22 +15,6 @@ import { IPonderStaking } from "../../staking/IPonderStaking.sol";
 /// @dev Abstract contract that defines the storage layout for fee distribution
 abstract contract FeeDistributorStorage {
     /*//////////////////////////////////////////////////////////////
-                        PROTOCOL STATE
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice The protocol's factory contract for managing pairs
-    IPonderFactory public factory;
-
-    /// @notice The protocol's router contract for swap operations
-    IPonderRouter public router;
-
-    /// @notice The address of the protocol's PONDER token
-    address public ponder;
-
-    /// @notice The protocol's staking contract for PONDER tokens
-    IPonderStaking public staking;
-
-    /*//////////////////////////////////////////////////////////////
                         DISTRIBUTION TRACKING
     //////////////////////////////////////////////////////////////*/
 

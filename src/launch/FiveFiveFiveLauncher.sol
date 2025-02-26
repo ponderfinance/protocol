@@ -43,6 +43,13 @@ contract FiveFiveFiveLauncher is
     /// @notice Oracle for PONDER price data
     PonderPriceOracle public immutable PRICE_ORACLE;
 
+    /// @notice Address with administrative privileges
+    address public immutable owner;
+
+    /// @notice Address that receives protocol fees
+    address public immutable feeCollector;
+
+
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -325,24 +332,6 @@ contract FiveFiveFiveLauncher is
     /// @return The launch deadline as uint40
     function getLaunchDeadline(uint256 launchId) external view returns (uint40) {
         return launches[launchId].base.launchDeadline;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Calculate KUB value of PONDER amount
-    /// @param amount Amount of PONDER to value
-    /// @return KUB value of PONDER amount
-    /// @dev Uses price oracle with validation checks
-    function _getPonderValue(uint256 amount) internal view returns (uint256) {
-        address ponderKubPair = FACTORY.getPair(address(PONDER), ROUTER.kkub());
-        return SetupLib.validatePonderPrice(
-            ponderKubPair,
-            PRICE_ORACLE,
-            address(PONDER),
-            amount
-        );
     }
 
     /// @notice Accept KUB payments

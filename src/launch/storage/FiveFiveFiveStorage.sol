@@ -17,20 +17,6 @@ abstract contract FiveFiveFiveLauncherStorage {
     using FiveFiveFiveLauncherTypes for *;
 
     /*//////////////////////////////////////////////////////////////
-                        ADMIN CONFIGURATION
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Address with administrative privileges
-    /// @dev Can update protocol parameters and roles
-    /// @dev Stored in first storage slot
-    address public owner;
-
-    /// @notice Address that receives protocol fees
-    /// @dev Can be updated by owner
-    /// @dev Stored in second storage slot
-    address public feeCollector;
-
-    /*//////////////////////////////////////////////////////////////
                         LAUNCH MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 

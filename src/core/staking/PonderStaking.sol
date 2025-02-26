@@ -118,46 +118,42 @@ contract PonderStaking is IPonderStaking, PonderStakingStorage, PonderKAP20("Sta
     /// @return amount Amount of PONDER tokens returned
     function leave(uint256 shares) external returns (uint256 amount) {
         if (msg.sender == IPonderToken(address(PONDER)).teamReserve()) {
+            // This check enforces team token lockup period which is intentionally using block.timestamp
+            // The TEAM_LOCK_DURATION is a long-term duration (days/months) making this resistant to manipulation
+            // slither-disable-next-line timestamp
             if (block.timestamp < DEPLOYMENT_TIME + PonderStakingTypes.TEAM_LOCK_DURATION) {
                 revert IPonderStaking.TeamStakingLocked();
             }
         }
 
-        // CHECKS
         if (shares == 0) revert IPonderStaking.InvalidAmount();
         if (shares > balanceOf(msg.sender)) revert IPonderStaking.InvalidSharesAmount();
 
-        // Calculate base withdrawal amount
         uint256 totalShares = totalSupply();
         amount = (shares * PONDER.balanceOf(address(this))) / totalShares;
 
         if (amount < PonderStakingTypes.MINIMUM_WITHDRAW)
             revert IPonderStaking.MinimumSharesRequired();
 
-        // Handle pending fees before burn
         uint256 pendingFees = _getPendingFees(msg.sender, shares);
 
-        // EFFECTS - Update all state variables before transfers
         userFeeDebt[msg.sender] = ((balanceOf(msg.sender) - shares) * accumulatedFeesPerShare)
             / PonderStakingTypes.FEE_PRECISION;
-
         _burn(msg.sender, shares);
-        totalDepositedPonder -= amount;
 
+        totalDepositedPonder -= amount;
         if (pendingFees > 0) {
             totalUnclaimedFees -= pendingFees;
         }
 
         emit Withdrawn(msg.sender, amount, shares);
+        if (pendingFees > 0) {
+            emit FeesClaimed(msg.sender, pendingFees);
+        }
 
-        // INTERACTIONS - External calls last
-        // Transfer base amount
         PONDER.safeTransfer(msg.sender, amount);
-
-        // Handle fee transfer if applicable
         if (pendingFees > 0) {
             PONDER.safeTransfer(msg.sender, pendingFees);
-            emit FeesClaimed(msg.sender, pendingFees);
         }
     }
 

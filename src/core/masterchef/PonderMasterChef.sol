@@ -405,14 +405,15 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         address token1 = IPonderPair(_lpToken).token1();
         if (FACTORY.getPair(token0, token1) != _lpToken) revert IPonderMasterChef.InvalidPair();
 
-        // Update pools first before changing allocation points to ensure proper reward distribution
+        // Keep the massUpdatePools here to update existing pools BEFORE adding the new one
+        // This is important for reward calculations
         _massUpdatePools();
 
         // Calculate last reward time
         uint256 lastRewardTime = _farmingStarted ? block.timestamp : 0;
 
-        // Effects
-        _poolInfo.push(PonderMasterChefTypes.PoolInfo({
+        // Create the new pool info struct in memory first (not affecting state yet)
+        PonderMasterChefTypes.PoolInfo memory newPool = PonderMasterChefTypes.PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
             lastRewardTime: lastRewardTime,
@@ -421,11 +422,13 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
             totalWeightedShares: 0,
             depositFeeBP: _depositFeeBP,
             boostMultiplier: _boostMultiplier
-        }));
+        });
 
-        // Update total allocation points after adding pool
+        // Update state
+        _poolInfo.push(newPool);
         _totalAllocPoint += _allocPoint;
 
+        // Emit event
         emit PoolAdded(_poolInfo.length - 1, _lpToken, _allocPoint);
     }
 
@@ -441,16 +444,14 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     ) external onlyOwner {
         if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
 
-        // Effects: Update state variables before external calls
         _totalAllocPoint = _totalAllocPoint - _poolInfo[_pid].allocPoint + _allocPoint;
         _poolInfo[_pid].allocPoint = _allocPoint;
 
-        // Interactions: External calls last
+        emit PoolUpdated(_pid, _allocPoint);
+
         if (_withUpdate) {
             _massUpdatePools();
         }
-
-        emit PoolUpdated(_pid, _allocPoint);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -571,29 +572,23 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @param _pid Pool ID to withdraw from
     /// @param _amount Amount of LP tokens to withdraw
     function withdraw(uint256 _pid, uint256 _amount) external nonReentrant {
-        // CHECKS
         if (_pid >= _poolInfo.length) revert IPonderMasterChef.InvalidPool();
         PonderMasterChefTypes.PoolInfo storage pool = _poolInfo[_pid];
         PonderMasterChefTypes.UserInfo storage user = _userInfo[_pid][msg.sender];
         if (user.amount < _amount) revert IPonderMasterChef.InsufficientAmount();
 
-        // EFFECTS - Update pool state first
         _updatePool(_pid);
 
-        // Calculate pending rewards after pool update
         uint256 pending = (user.weightedShares * pool.accPonderPerShare / 1e12) - user.rewardDebt;
 
-        // EFFECTS - Update user and pool state
         if (_amount > 0) {
             user.amount -= _amount;
             pool.totalStaked -= _amount;
         }
 
-        // EFFECTS - Update weighted shares and reward debt
         _updateUserWeightedShares(_pid, msg.sender);
         user.rewardDebt = (user.weightedShares * pool.accPonderPerShare) / 1e12;
 
-        // INTERACTIONS - Handle token transfers last
         if (pending > 0) {
             _safePonderTransfer(msg.sender, pending);
         }
@@ -753,41 +748,6 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
         return (depositFee, actualAmount);
     }
 
-    /// @notice Handle LP token deposit
-    /// @dev Processes deposit including fee collection
-    /// @param pool The pool info storage pointer
-    /// @param amount The amount to deposit
-    /// @return actualAmount The actual amount staked after fees
-    function _handleDeposit(
-        PonderMasterChefTypes.PoolInfo storage pool,
-        uint256 amount
-    ) internal returns (uint256) {
-        if (amount == 0) return 0;
-
-        uint256 beforeBalance = IERC20(pool.lpToken).balanceOf(address(this));
-
-        // Transfer tokens
-        if (!IERC20(pool.lpToken).transferFrom(msg.sender, address(this), amount)) {
-            revert IPonderMasterChef.TransferFailed();
-        }
-
-        uint256 afterBalance = IERC20(pool.lpToken).balanceOf(address(this));
-        uint256 receivedAmount = afterBalance - beforeBalance;
-        if (receivedAmount == 0) revert IPonderMasterChef.NoTokensTransferred();
-
-        // Handle deposit fee
-        (uint256 depositFee, uint256 actualAmount) = _calculateDepositFee(receivedAmount, pool.depositFeeBP);
-
-        if (depositFee > 0) {
-            if (!IERC20(pool.lpToken).transfer(_teamReserve, depositFee)) {
-                revert IPonderMasterChef.TransferFailed();
-            }
-        }
-
-        return actualAmount;
-    }
-
-
     /// @notice Update user's weighted shares
     /// @dev Recalculates boost and updates pool totals
     /// @param _pid Pool ID to update
@@ -888,13 +848,11 @@ contract PonderMasterChef is IPonderMasterChef, PonderMasterChefStorage, Reentra
     /// @dev Updates PONDER tokens distributed per second
     /// @param _newPonderPerSecond New emission rate
     function setPonderPerSecond(uint256 _newPonderPerSecond) external onlyOwner {
-        // Effects: Update state variables before external calls
         _ponderPerSecond = _newPonderPerSecond;
 
-        // Interactions: External calls last
-        _massUpdatePools();
-
         emit PonderPerSecondUpdated(_ponderPerSecond);
+
+        _massUpdatePools();
     }
 
 

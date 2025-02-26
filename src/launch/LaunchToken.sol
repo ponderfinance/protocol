@@ -300,7 +300,7 @@ contract LaunchToken is ILaunchToken, PonderKAP20, ReentrancyGuard {
 
         // Transfer any remaining balance using internal _transfer
         uint256 remainingBalance = balanceOf(oldLauncher);
-        if (remainingBalance > 0) {
+        if (remainingBalance != 0) {
             _transfer(oldLauncher, newLauncher, remainingBalance);
         }
 

@@ -23,6 +23,22 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
     using FeeDistributorTypes for *;
 
     /*//////////////////////////////////////////////////////////////
+                    PROTOCOL STATE
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The protocol's factory contract for managing pairs
+    IPonderFactory public immutable factory;
+
+    /// @notice The protocol's router contract for swap operations
+    IPonderRouter public immutable router;
+
+    /// @notice The address of the protocol's PONDER token
+    address public immutable ponder;
+
+    /// @notice The protocol's staking contract for PONDER tokens
+    IPonderStaking public immutable staking;
+
+    /*//////////////////////////////////////////////////////////////
                            CONSTRUCTOR
    //////////////////////////////////////////////////////////////*/
 
@@ -197,81 +213,16 @@ contract FeeDistributor is IFeeDistributor, FeeDistributorStorage, ReentrancyGua
         }
     }
 
-    /// @notice Processes fee collection for multiple pairs
-    /// @dev Handles individual pair failures without reverting entire batch
-    /// @param pairs Array of pair addresses to collect from
-    function collectFeesFromPairs(address[] calldata pairs) internal {
-        for (uint256 i = 0; i < pairs.length; i++) {
-            address currentPair = pairs[i];
-            processedPairs[currentPair] = false;
-
-            // INTERACTIONS - Make external call after state updates
-            // If collection fails for a pair, continue to next one
-            if (!_tryCollectFees(currentPair)) continue;
-        }
-    }
-
-    /// @dev Attempts to collect fees from a single pair, returns success status
-    /// @param pair Address of the pair to collect from
-    /// @return success True if collection succeeded, false otherwise
-    function _tryCollectFees(address pair) private returns (bool) {
-        try this.collectFeesFromPair(pair) {
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    /// @notice Converts collected fees with extra validation
-    /// @param uniqueTokens Array of unique token addresses to convert
-    /// @return preBalance PONDER balance before conversions
-    /// @return postBalance PONDER balance after conversions
-    function convertCollectedFees(address[] memory uniqueTokens)
-    internal
-    returns (uint256 preBalance, uint256 postBalance)
-    {
-        preBalance = IERC20(ponder).balanceOf(address(this));
-
-        for (uint256 i = 0; i < uniqueTokens.length; i++) {
-            address token = uniqueTokens[i];
-            if (token == ponder) continue;
-
-            uint256 tokenBalance = IERC20(token).balanceOf(address(this));
-            if (tokenBalance >= FeeDistributorTypes.MINIMUM_AMOUNT) {
-                // Get pre-conversion pair state
-                address pair = factory.getPair(token, ponder);
-                if (pair != address(0)) {
-                    (uint112 reserveBefore,,) = IPonderPair(pair).getReserves();
-
-                    uint256 minOutAmount = _calculateMinimumPonderOut(token, tokenBalance);
-                    _convertFeesWithSlippage(token, tokenBalance, minOutAmount);
-
-                    // Validate post-conversion state
-                    (uint112 reserveAfter,,) = IPonderPair(pair).getReserves();
-                    if (reserveAfter < reserveBefore) {
-                        revert InvalidReserveState();
-                    }
-                }
-            }
-        }
-
-        postBalance = IERC20(ponder).balanceOf(address(this));
-    }
-
     /// @notice Processes complete fee distribution cycle for multiple pairs
     /// @param pairs Array of pair addresses to process
     function distributePairFees(address[] calldata pairs) external nonReentrant {
-        // CHECKS
         validatePairs(pairs);
 
-        // EFFECTS
         markPairsForProcessing(pairs);
 
-        // Batch process pairs
         uint256 preConversionPonderBalance = IERC20(ponder).balanceOf(address(this));
-        bool anyFeesConverted;
+        bool anyFeesConverted = false;
 
-        // Get all unique tokens first to avoid nested loops
         address[] memory uniqueTokens = _getUniqueTokens(pairs);
 
         // Process all pairs first
