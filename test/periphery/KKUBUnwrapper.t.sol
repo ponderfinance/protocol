@@ -530,5 +530,70 @@ contract KKUBUnwrapperTest is Test {
         unwrapper.unwrapKKUB(AMOUNT, alice);
     }
 
+    function testUnwrapWithExactReceivedAmount() public {
+        // Setup
+        uint256 existingBalance = 5 ether;
+        vm.deal(address(unwrapper), existingBalance);
+
+        // Make sure unwrapper has sufficient KYC level
+        kkub.setKYCLevel(address(unwrapper), 2);
+        kkub.setRequiredKYCLevel(1);
+
+        // Setup mock KKUB behavior to return slightly less ETH
+        kkub.setSilentWithdrawFailure(false); // Make sure normal withdraw works
+
+        vm.startPrank(alice);
+        kkub.deposit{value: AMOUNT}();
+        kkub.approve(address(unwrapper), AMOUNT);
+
+        uint256 initialAliceBalance = alice.balance;
+        uint256 initialUnwrapperBalance = address(unwrapper).balance;
+
+        // Execute unwrap operation
+        unwrapper.unwrapKKUB(AMOUNT, alice);
+
+        // Verify balances
+        assertGe(alice.balance, initialAliceBalance, "Alice should receive ETH");
+        assertEq(unwrapper.getLockedBalance(), 0, "Locked balance should be reset");
+        assertApproxEqAbs(
+            address(unwrapper).balance,
+            initialUnwrapperBalance,
+            0.001 ether,
+            "Unwrapper should not retain significant ETH"
+        );
+
+        // Try a second unwrap to verify balance tracking works correctly
+        kkub.deposit{value: AMOUNT}();
+        kkub.approve(address(unwrapper), AMOUNT);
+        unwrapper.unwrapKKUB(AMOUNT, alice);
+
+        // Verify locked balance is reset correctly
+        assertEq(unwrapper.getLockedBalance(), 0, "Locked balance should be reset after second unwrap");
+        vm.stopPrank();
+    }
+
+    function testConsecutiveUnwrapsAfterError() public {
+        // Setup
+        vm.startPrank(alice);
+        kkub.deposit{value: AMOUNT * 2}();
+        kkub.approve(address(unwrapper), AMOUNT * 2);
+
+        // First try an unwrap that will fail
+        kkub.setSilentWithdrawFailure(true);
+        vm.expectRevert(); // This should revert
+        unwrapper.unwrapKKUB(AMOUNT, alice);
+
+        // Verify locked balance is properly reset even after error
+        assertEq(unwrapper.getLockedBalance(), 0, "Locked balance should be reset after error");
+
+        // Now try a normal unwrap
+        kkub.setSilentWithdrawFailure(false);
+        unwrapper.unwrapKKUB(AMOUNT, alice);
+
+        // Verify it succeeded and balance tracking is correct
+        assertEq(unwrapper.getLockedBalance(), 0, "Locked balance should be reset after successful unwrap");
+        vm.stopPrank();
+    }
+
     receive() external payable {}
 }

@@ -126,7 +126,7 @@ contract KKUBUnwrapper is
         _lockedBalance -= amount;
 
         // Final transfer
-        payable(recipient).sendValue(amount);
+        payable(recipient).sendValue(ethReceived);
 
         emit UnwrappedKKUB(recipient, amount);
         return true;
