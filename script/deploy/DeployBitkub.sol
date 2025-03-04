@@ -25,18 +25,18 @@ contract DeployBitkubScript is Script {
     uint256 constant public ACCEPTED_KYC_LEVEL = 4;
 
     // KAP20 specific parameters - Bitkub Mainnet checksummed addresses
-//    address constant public ADMIN_PROJECT_ROUTER = 0x15122c945763da4435b45E082234108361B64eBA;
-//    address constant public COMMITTEE = 0xA755a1F6a35ba92835c0A23d3e5292e101d32716;
-//    address constant public KYC = 0x409CF41ee862Df7024f289E9F2Ea2F5d0D7f3eb4;
-//    address constant public KKUB =0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5;
-//
+    address constant public ADMIN_PROJECT_ROUTER = 0x15122c945763da4435b45E082234108361B64eBA;
+    address constant public COMMITTEE = 0xA755a1F6a35ba92835c0A23d3e5292e101d32716;
+    address constant public KYC = 0x409CF41ee862Df7024f289E9F2Ea2F5d0D7f3eb4;
+    address constant public KKUB =0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5;
+
 
     //// TEST NET Bitkub Chain
-    address constant public ADMIN_PROJECT_ROUTER = 0xE4088E1f199287B1146832352aE5Fc3726171d41;
-    address constant public COMMITTEE = 0xEE4464a2055d2346FacF7813E862B92ffa91dcaE;
-    address constant public KYC = 0x2C8aBd9c61D4E973CA8db5545C54c90E44A2445c;
-    address constant public KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
-
+//    address constant public ADMIN_PROJECT_ROUTER = 0xE4088E1f199287B1146832352aE5Fc3726171d41;
+//    address constant public COMMITTEE = 0xEE4464a2055d2346FacF7813E862B92ffa91dcaE;
+//    address constant public KYC = 0x2C8aBd9c61D4E973CA8db5545C54c90E44A2445c;
+//    address constant public KKUB = 0xBa71efd94be63bD47B78eF458DE982fE29f552f7;
+//
 
 
     struct CoreAddresses {
