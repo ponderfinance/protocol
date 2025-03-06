@@ -830,9 +830,6 @@ contract PonderMasterChefTest is Test {
         uint256 minBoostAmount = masterChef.getRequiredPonderForBoost(depositAmount, 20000); // 2x
         uint256 maxBoostAmount = masterChef.getRequiredPonderForBoost(depositAmount, 30000); // 3x
 
-        console.log("Min boost (2x):", minBoostAmount);
-        console.log("Max boost (3x):", maxBoostAmount);
-
         // Verify boost calculations
         uint256 minMultiplier = masterChef.previewBoostMultiplier(0, minBoostAmount, depositAmount);
         uint256 maxMultiplier = masterChef.previewBoostMultiplier(0, maxBoostAmount, depositAmount);
