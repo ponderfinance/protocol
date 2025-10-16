@@ -4,7 +4,19 @@ pragma solidity 0.8.24;
 import "forge-std/Test.sol";
 import "../../src/libraries/FixedPoint.sol";
 
+// Wrapper contract for external calls to fix revert depth issues
+contract FixedPointWrapper {
+    function div(FixedPoint.UQ112x112 memory self, uint112 y) external pure returns (FixedPoint.UQ112x112 memory) {
+        return FixedPoint.div(self, y);
+    }
+}
+
 contract FixedPointTest is Test {
+    FixedPointWrapper wrapper;
+
+    function setUp() public {
+        wrapper = new FixedPointWrapper();
+    }
     function testEncode() public {
         FixedPoint.UQ112x112 memory encoded = FixedPoint.encode(1);
         assertEq(encoded._x, 0x10000000000000000000000000000);
@@ -42,6 +54,6 @@ contract FixedPointTest is Test {
     function testRevert_DivByZero() public {
         FixedPoint.UQ112x112 memory encoded = FixedPoint.encode(1);
         vm.expectRevert(abi.encodeWithSignature("DivisionByZero()"));
-        FixedPoint.div(encoded, 0);
+        wrapper.div(encoded, 0);
     }
 }

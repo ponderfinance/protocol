@@ -76,15 +76,27 @@ contract LaunchTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testFailSetPairsUnauthorized() public {
+    function test_RevertWhen_SetPairsUnauthorized() public {
         vm.prank(alice);
+        vm.expectRevert();
         token.setPairs(address(0x123), address(0x456));
     }
 
-    function testFailSetPairsTwice() public {
+    function test_RevertWhen_SetPairsTwice() public {
+        // Deploy a new token that hasn't had setPairs called yet
+        LaunchToken newToken = new LaunchToken(
+            "Test Token",
+            "TEST",
+            launcher,
+            address(factory),
+            payable(address(router)),
+            address(ponder)
+        );
+
         vm.startPrank(launcher);
-        token.setPairs(address(0x123), address(0x456));
-        token.setPairs(address(0x789), address(0xabc));
+        newToken.setPairs(address(0x123), address(0x456));
+        vm.expectRevert(abi.encodeWithSelector(LaunchTokenTypes.PairAlreadySet.selector));
+        newToken.setPairs(address(0x789), address(0xabc));
         vm.stopPrank();
     }
 

@@ -154,7 +154,9 @@ contract DeployBitkubScript is Script {
             state.core.factory,
             state.core.router,
             state.core.ponder,
-            state.core.staking
+            state.core.staking,
+            state.core.oracle,
+            KKUB
         ));
         emit ContractDeployed("FeeDistributor", state.core.feeDistributor);
 

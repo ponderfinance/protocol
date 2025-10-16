@@ -171,16 +171,17 @@ contract PonderTokenTest is Test {
         token.acceptOwnership();
     }
 
-    function testFailTransferOwnershipUnauthorized() public {
+    function test_RevertWhen_TransferOwnershipUnauthorized() public {
         address unauthorized = address(0x123);
 
         // Try to transfer ownership from unauthorized account
         vm.prank(unauthorized);
+        vm.expectRevert();
         token.transferOwnership(address(0x456));
     }
 
 
-    function testFailAcceptOwnershipUnauthorized() public {
+    function test_RevertWhen_AcceptOwnershipUnauthorized() public {
         address newOwner = address(0x123);
         address unauthorized = address(0x456);
 
@@ -189,6 +190,7 @@ contract PonderTokenTest is Test {
 
         // Try to accept from unauthorized account
         vm.prank(unauthorized);
+        vm.expectRevert();
         token.acceptOwnership();
     }
 

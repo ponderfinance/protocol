@@ -154,10 +154,11 @@ contract PonderRouterETHTest is Test {
         vm.stopPrank();
     }
 
-    function testFailAddLiquidityETHWithExpiredDeadline() public {
+    function test_RevertWhen_AddLiquidityETHWithExpiredDeadline() public {
         vm.startPrank(alice);
         vm.warp(2);
 
+        vm.expectRevert();
         router.addLiquidityETH{value: INITIAL_LIQUIDITY}(
             address(token),
             INITIAL_LIQUIDITY,
@@ -170,9 +171,10 @@ contract PonderRouterETHTest is Test {
         vm.stopPrank();
     }
 
-    function testFailAddLiquidityETHWithInsufficientETH() public {
+    function test_RevertWhen_AddLiquidityETHWithInsufficientETH() public {
         vm.startPrank(alice);
 
+        vm.expectRevert();
         router.addLiquidityETH{value: INITIAL_LIQUIDITY / 2}(
             address(token),
             INITIAL_LIQUIDITY,
@@ -185,9 +187,10 @@ contract PonderRouterETHTest is Test {
         vm.stopPrank();
     }
 
-    function testFailAddLiquidityETHToZeroAddress() public {
+    function test_RevertWhen_AddLiquidityETHToZeroAddress() public {
         vm.startPrank(alice);
 
+        vm.expectRevert();
         router.addLiquidityETH{value: INITIAL_LIQUIDITY}(
             address(token),
             INITIAL_LIQUIDITY,

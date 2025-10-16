@@ -4,7 +4,23 @@ pragma solidity 0.8.24;
 import "forge-std/Test.sol";
 import "../../src/libraries/BitMath.sol";
 
+// Wrapper contract for external calls to fix revert depth issues
+contract BitMathWrapper {
+    function mostSignificantBit(uint256 x) external pure returns (uint8) {
+        return BitMath.mostSignificantBit(x);
+    }
+
+    function leastSignificantBit(uint256 x) external pure returns (uint8) {
+        return BitMath.leastSignificantBit(x);
+    }
+}
+
 contract BitMathTest is Test {
+    BitMathWrapper wrapper;
+
+    function setUp() public {
+        wrapper = new BitMathWrapper();
+    }
     function testMostSignificantBitSimple() public {
         assertEq(BitMath.mostSignificantBit(1), 0);
         assertEq(BitMath.mostSignificantBit(2), 1);
@@ -39,18 +55,18 @@ contract BitMathTest is Test {
 
     function testRevertOnZeroMSB() public {
         vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
-        BitMath.mostSignificantBit(0);
+        wrapper.mostSignificantBit(0);
     }
 
     function testRevertOnZeroLSB() public {
         vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
-        BitMath.leastSignificantBit(0);
+        wrapper.leastSignificantBit(0);
     }
 
     function testFuzz_MostSignificantBit(uint256 value) public {
         if (value == 0) {
             vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
-            BitMath.mostSignificantBit(value);
+            wrapper.mostSignificantBit(value);
         } else {
             uint8 result = BitMath.mostSignificantBit(value);
 
@@ -70,7 +86,7 @@ contract BitMathTest is Test {
     function testFuzz_LeastSignificantBit(uint256 value) public {
         if (value == 0) {
             vm.expectRevert(abi.encodeWithSelector(BitMath.ZeroValue.selector));
-            BitMath.leastSignificantBit(value);
+            wrapper.leastSignificantBit(value);
         } else {
             uint8 result = BitMath.leastSignificantBit(value);
             assertTrue(value & (uint256(1) << result) != 0);

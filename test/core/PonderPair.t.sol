@@ -321,9 +321,10 @@ contract PonderPairTest is Test {
         return liquidity;
     }
 
-    function testFailSwapInsufficientLiquidity() public {
+    function test_RevertWhen_SwapInsufficientLiquidity() public {
         vm.startPrank(alice);
         token0.transfer(address(standardPair), SWAP_AMOUNT);
+        vm.expectRevert();
         standardPair.swap(0, SWAP_AMOUNT, alice, "");
         vm.stopPrank();
     }
@@ -340,8 +341,9 @@ contract PonderPairTest is Test {
         assertEq(standardPair.balanceOf(alice), burnAmount, "Should have half LP tokens remaining");
     }
 
-    function testFailBurnInsufficientLiquidity() public {
+    function test_RevertWhen_BurnInsufficientLiquidity() public {
         vm.startPrank(alice);
+        vm.expectRevert();
         standardPair.burn(alice);
         vm.stopPrank();
     }

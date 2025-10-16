@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "../../src/core/oracle/libraries/PonderOracleLibrary.sol";
+import "../../src/core/oracle/IPonderPriceOracle.sol";
 import "../../src/core/factory/PonderFactory.sol";
 import "../../src/core/pair/PonderPair.sol";
 import "../mocks/ERC20Mint.sol";
@@ -157,14 +158,36 @@ contract PonderOracleLibraryTest is Test {
         }
     }
 
-    function testFailComputeAmountOutZeroElapsed() public {
+    function test_RevertWhen_ComputeAmountOutZeroElapsed() public {
         (uint256 price0CumulativeStart,,) = PonderOracleLibrary.currentCumulativePrices(address(pair));
 
-        PonderOracleLibrary.computeAmountOut(
+        // Use try/catch since it's a library call (internal execution context)
+        try this.externalComputeAmountOut(
             price0CumulativeStart,
             price0CumulativeStart,
             0, // Zero time elapsed
             1e18
+        ) {
+            revert("Expected revert");
+        } catch (bytes memory reason) {
+            // Verify it's the correct error
+            bytes4 errorSelector = bytes4(reason);
+            assertEq(errorSelector, IPonderPriceOracle.ElapsedTimeZero.selector, "Wrong error");
+        }
+    }
+
+    // External wrapper for library call to enable try/catch
+    function externalComputeAmountOut(
+        uint256 priceCumulativeStart,
+        uint256 priceCumulativeEnd,
+        uint32 timeElapsed,
+        uint256 amountIn
+    ) external pure returns (uint256) {
+        return PonderOracleLibrary.computeAmountOut(
+            priceCumulativeStart,
+            priceCumulativeEnd,
+            timeElapsed,
+            amountIn
         );
     }
 }

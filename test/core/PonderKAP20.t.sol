@@ -100,21 +100,23 @@ contract PonderKAP20Test is Test {
         assertEq(token.nonces(owner), 1);
     }
 
-    function testFailTransferInsufficientBalance() public {
+    function test_RevertWhen_TransferInsufficientBalance() public {
         token.mint(alice, INITIAL_SUPPLY);
         vm.prank(alice);
+        vm.expectRevert();
         token.transfer(bob, INITIAL_SUPPLY + 1);
     }
 
-    function testFailTransferFromInsufficientAllowance() public {
+    function test_RevertWhen_TransferFromInsufficientAllowance() public {
         token.mint(alice, INITIAL_SUPPLY);
         vm.prank(alice);
         token.approve(bob, 50);
         vm.prank(bob);
+        vm.expectRevert();
         token.transferFrom(alice, bob, 100);
     }
 
-    function testFailPermitExpired() public {
+    function test_RevertWhen_PermitExpired() public {
         uint256 privateKey = 0xBEEF;
         address owner = vm.addr(privateKey);
 
@@ -138,14 +140,17 @@ contract PonderKAP20Test is Test {
             )
         );
 
+        vm.expectRevert();
         token.permit(owner, bob, 100, block.timestamp - 1, v, r, s);
     }
 
-    function testFailMintToZero() public {
+    function test_RevertWhen_MintToZero() public {
+        vm.expectRevert();
         token.mint(address(0), 100);
     }
 
-    function testFailBurnFromZero() public {
+    function test_RevertWhen_BurnFromZero() public {
+        vm.expectRevert();
         token.burn(address(0), 100);
     }
 }

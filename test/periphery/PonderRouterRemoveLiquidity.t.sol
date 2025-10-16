@@ -184,7 +184,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         assertGe(amountB, expectedMinB, "Amount B less than minimum");
     }
 
-    function testFailRemoveLiquidityBelowMinimumA() public {
+    function test_RevertWhen_RemoveLiquidityBelowMinimumA() public {
         // Setup pair with liquidity
         (address pair, uint256 liquidity) = setupPair(tokenA, tokenB);
 
@@ -200,6 +200,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         uint256 tooHighMinA = expectedAmountA + 1e18;
 
         // Should fail due to insufficient A amount
+        vm.expectRevert();
         router.removeLiquidity(
             address(tokenA),
             address(tokenB),
@@ -213,7 +214,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         vm.stopPrank();
     }
 
-    function testFailRemoveLiquidityBelowMinimumB() public {
+    function test_RevertWhen_RemoveLiquidityBelowMinimumB() public {
         // Setup pair with liquidity
         (address pair, uint256 liquidity) = setupPair(tokenA, tokenB);
 
@@ -229,6 +230,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         uint256 tooHighMinB = expectedAmountB + 1e18;
 
         // Should fail due to insufficient B amount
+        vm.expectRevert();
         router.removeLiquidity(
             address(tokenA),
             address(tokenB),
@@ -242,7 +244,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         vm.stopPrank();
     }
 
-    function testFailRemoveLiquidityExpiredDeadline() public {
+    function test_RevertWhen_RemoveLiquidityExpiredDeadline() public {
         // Setup pair with liquidity
         (address pair, uint256 liquidity) = setupPair(tokenA, tokenB);
 
@@ -252,6 +254,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         vm.startPrank(alice);
 
         // Should fail due to expired deadline
+        vm.expectRevert();
         router.removeLiquidity(
             address(tokenA),
             address(tokenB),
@@ -392,7 +395,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         assertGe(amountETH, expectedMinETH, "ETH amount less than minimum");
     }
 
-    function testFailRemoveLiquidityETHBelowMinimumToken() public {
+    function test_RevertWhen_RemoveLiquidityETHBelowMinimumToken() public {
         // Setup ETH pair with liquidity
         (address pair, uint256 liquidity) = setupETHPair(tokenA);
 
@@ -408,6 +411,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         uint256 tooHighMinToken = expectedTokenAmount + 1e18;
 
         // Should fail due to insufficient token amount
+        vm.expectRevert();
         router.removeLiquidityETH(
             address(tokenA),
             halfLiquidity,
@@ -420,7 +424,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         vm.stopPrank();
     }
 
-    function testFailRemoveLiquidityETHBelowMinimumETH() public {
+    function test_RevertWhen_RemoveLiquidityETHBelowMinimumETH() public {
         // Setup ETH pair with liquidity
         (address pair, uint256 liquidity) = setupETHPair(tokenA);
 
@@ -436,6 +440,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         uint256 tooHighMinETH = expectedETHAmount + 1e18;
 
         // Should fail due to insufficient ETH amount
+        vm.expectRevert();
         router.removeLiquidityETH(
             address(tokenA),
             halfLiquidity,
@@ -558,7 +563,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         assertGt(simpleFeeToken.balanceOf(alice) - tokenBalanceBefore, 0, "Should receive tokens");
     }
 
-    function testFailRemoveLiquidityETHSupportingFeeOnTransferBelowMinimumETH() public {
+    function test_RevertWhen_RemoveLiquidityETHSupportingFeeOnTransferBelowMinimumETH() public {
         // Use regular ERC20 token for this test since the failure is about ETH amount
         ERC20Mint testToken = new ERC20Mint("Test Token", "TEST");
         testToken.mint(alice, INITIAL_LIQUIDITY * 2);
@@ -584,6 +589,7 @@ contract PonderRouterRemoveLiquidityTest is Test {
         uint256 tooHighMinETH = INITIAL_LIQUIDITY; // Full amount is too high, we can only get half
 
         // Should fail due to insufficient ETH
+        vm.expectRevert();
         router.removeLiquidityETHSupportingFeeOnTransferTokens(
             address(testToken),
             liquidity / 2,

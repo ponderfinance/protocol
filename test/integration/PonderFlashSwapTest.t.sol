@@ -90,7 +90,7 @@ contract PonderFlashSwapTest is Test {
         assertGe(newK, k, "K should not decrease");
     }
 
-    function testFailFlashSwapWithoutRepay() public {
+    function test_RevertWhen_FlashSwapWithoutRepay() public {
         uint256 flashAmount = INITIAL_LIQUIDITY / 100;
         bytes memory data = abi.encode(address(tokenA));  // Added this line
 
@@ -101,6 +101,7 @@ contract PonderFlashSwapTest is Test {
         );
 
         // This should fail because no repayment
+        vm.expectRevert();
         pair.swap(flashAmount, 0, address(flashSwapper), data);
     }
 }

@@ -71,16 +71,19 @@ contract PonderFactoryTest is Test {
         assertEq(factory.getPair(address(tokenB), address(tokenA)), pair1);
     }
 
-    function testFailCreatePairZeroAddress() public {
+    function test_RevertWhen_CreatePairZeroAddress() public {
+        vm.expectRevert();
         factory.createPair(address(0), address(tokenA));
     }
 
-    function testFailCreatePairIdenticalTokens() public {
+    function test_RevertWhen_CreatePairIdenticalTokens() public {
+        vm.expectRevert();
         factory.createPair(address(tokenA), address(tokenA));
     }
 
-    function testFailCreatePairExistingPair() public {
+    function test_RevertWhen_CreatePairExistingPair() public {
         factory.createPair(address(tokenA), address(tokenB));
+        vm.expectRevert();
         factory.createPair(address(tokenA), address(tokenB));
     }
 
@@ -107,8 +110,9 @@ contract PonderFactoryTest is Test {
         assertEq(factory.feeToSetter(), newFeeToSetter);
     }
 
-    function testFailSetFeeToSetterUnauthorized() public {
+    function test_RevertWhen_SetFeeToSetterUnauthorized() public {
         address newFeeToSetter = address(0x1);
+        vm.expectRevert();
         factory.setFeeToSetter(newFeeToSetter);
     }
 
@@ -138,8 +142,9 @@ contract PonderFactoryTest is Test {
         vm.stopPrank();
     }
 
-    function testFailSetLauncherUnauthorized() public {
+    function test_RevertWhen_SetLauncherUnauthorized() public {
         address newLauncher = address(0x123);
+        vm.expectRevert();
         factory.setLauncher(newLauncher);
     }
 
@@ -158,8 +163,9 @@ contract PonderFactoryTest is Test {
         assertEq(factory.feeTo(), newFeeTo);
     }
 
-    function testFailSetFeeToZeroAddress() public {
+    function test_RevertWhen_SetFeeToZeroAddress() public {
         vm.prank(feeToSetter);
+        vm.expectRevert();
         factory.setFeeTo(address(0));
     }
 
@@ -185,8 +191,9 @@ contract PonderFactoryTest is Test {
     }
 
     // Existing unauthorized access test
-    function testFailSetFeeToUnauthorized() public {
+    function test_RevertWhen_SetFeeToUnauthorized() public {
         address newFeeTo = address(0x1);
+        vm.expectRevert();
         factory.setFeeTo(newFeeTo);
     }
 
@@ -225,17 +232,19 @@ contract PonderFactoryTest is Test {
     }
 
 
-    function testFailSetLauncherToZeroAddress() public {
+    function test_RevertWhen_SetLauncherToZeroAddress() public {
         vm.prank(feeToSetter);
+        vm.expectRevert();
         factory.setLauncher(address(0));
     }
 
-    function testFailApplyLauncherWithoutPending() public {
+    function test_RevertWhen_ApplyLauncherWithoutPending() public {
         vm.prank(feeToSetter);
+        vm.expectRevert();
         factory.applyLauncher();
     }
 
-    function testFailApplyLauncherBeforeTimelock() public {
+    function test_RevertWhen_ApplyLauncherBeforeTimelock() public {
         address newLauncher = address(0x123);
 
         vm.startPrank(feeToSetter);
@@ -250,6 +259,7 @@ contract PonderFactoryTest is Test {
         vm.warp(currentTime + PonderFactoryTypes.LAUNCHER_TIMELOCK - 1);
 
         // This should revert with TimelockNotFinished
+        vm.expectRevert();
         factory.applyLauncher();
 
         vm.stopPrank();
@@ -291,7 +301,7 @@ contract PonderFactoryTest is Test {
         vm.stopPrank();
     }
 
-    function testFailApplyLauncherUnauthorized() public {
+    function test_RevertWhen_ApplyLauncherUnauthorized() public {
         address newLauncher = address(0x123);
 
         vm.prank(feeToSetter);
@@ -302,6 +312,7 @@ contract PonderFactoryTest is Test {
 
         // Try to apply from unauthorized address
         vm.prank(address(0xdeadbeef));
+        vm.expectRevert();
         factory.applyLauncher();
     }
 
